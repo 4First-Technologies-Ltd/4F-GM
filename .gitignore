@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+web-build/
+.expo/
+expo-env.d.ts
+*.tsbuildinfo
+
+# Environment files
+.env
+.env*.local
+
+# Native generated folders
+/gas-monitor/ios
+/gas-monitor/android
+/gas-monitor/.kotlin
+
+# Expo
+app-example/
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Keys & certs
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
