@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4FG Waitlist — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg:           #EDF7ED;
+      --card:         #FFFFFF;
+      --surface:      #F5FBF5;
+      --border:       #E0EEE0;
+      --text:         #1A2E1A;
+      --muted:        #7A9A7A;
+      --accent:       #2D7450;
+      --accent-hover: #245f43;
+      --accent-light: #E8F5E8;
+      --danger:       #D32F2F;
+      --danger-light: #FFF0F0;
+      --font: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'Fira Code', monospace;
+      --r-sm: 8px;
+      --r-md: 16px;
+      --r-lg: 24px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Auth gate ── */
+    .auth-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .auth-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 44px 40px 40px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 32px rgba(0,0,0,.07);
+    }
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .auth-logo {
+      width: 44px; height: 44px;
+      background: var(--accent);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .auth-brand-text { line-height: 1.2; }
+    .auth-brand-name { font-size: 16px; font-weight: 700; }
+    .auth-brand-sub  { font-size: 12px; color: var(--muted); }
+
+    .auth-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .auth-card .auth-desc { font-size: 14px; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+
+    .field + .field { margin-top: 16px; }
+    .field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 7px;
+    }
+    .field-input-wrap { position: relative; }
+    .field-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--surface);
+      outline: none;
+      transition: border-color .15s, background .15s;
+    }
+    .field-input:focus { border-color: var(--accent); background: var(--card); }
+    .field-input.has-toggle { padding-right: 44px; }
+
+    .toggle-pw {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      line-height: 1;
+      transition: color .15s;
+    }
+    .toggle-pw:hover { color: var(--text); }
+
+    .auth-err {
+      margin-top: 16px;
+      padding: 11px 14px;
+      background: var(--danger-light);
+      border: 1px solid #f5c6c6;
+      border-radius: var(--r-sm);
+      font-size: 13px;
+      color: var(--danger);
+      display: none;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .15s, transform .1s;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-primary:active:not(:disabled) { transform: scale(.98); }
+    .btn-primary:disabled { opacity: .65; cursor: not-allowed; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Header ── */
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo-mark {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .header-title { font-weight: 600; font-size: 15px; }
+    .header-sub   { font-size: 12px; color: var(--muted); }
+    .header-user  { font-size: 13px; color: var(--muted); margin-right: 12px; }
+
+    .btn-logout {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-logout:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-light); }
+
+    /* ── Main layout ── */
+    .page { display: none; }
+    .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 20px 22px;
+    }
+    .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-value { font-size: 32px; font-weight: 700; color: var(--accent); margin-top: 4px; line-height: 1.1; }
+    .stat-sub   { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 200px;
+      max-width: 360px;
+    }
+    .search-icon {
+      position: absolute;
+      left: 12px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      padding: 9px 12px 9px 36px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--card);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+
+    .city-select {
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--card);
+      outline: none;
+      cursor: pointer;
+    }
+    .city-select:focus { border-color: var(--accent); }
+
+    .btn-icon {
+      display: flex; align-items: center; gap: 6px;
+      padding: 9px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+    .btn-icon.spinning svg { animation: spin .7s linear infinite; }
+
+    .btn-csv {
+      display: flex; align-items: center; gap: 6px;
+      padding: 9px 16px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      cursor: pointer;
+      transition: background .15s;
+      margin-left: auto;
+    }
+    .btn-csv:hover { background: var(--accent-hover); }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: var(--surface); }
+    th {
+      text-align: left;
+      padding: 12px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    th:hover { color: var(--accent); }
+    th.active { color: var(--accent); }
+
+    td {
+      padding: 14px 18px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--surface); }
+
+    .td-num   { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .td-name  { font-weight: 500; }
+    .td-email { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+    .td-city .pill {
+      display: inline-block;
+      padding: 3px 10px;
+      background: var(--accent-light);
+      color: var(--accent);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .td-city .pill-empty { color: var(--muted); font-size: 12px; }
+    .td-date { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--muted);
+    }
+    .empty-state p { font-size: 15px; margin-top: 12px; }
+
+    /* ── City breakdown ── */
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .city-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .city-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .city-name  { font-size: 13px; font-weight: 500; }
+    .city-count {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    .page-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 600px) {
+      .main { padding: 20px 16px 48px; }
+      th:nth-child(1), td:nth-child(1) { display: none; }
+      th:nth-child(5), td:nth-child(5) { display: none; }
+      .header-user { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN ═══════════════════ -->
+<div class="auth-wrap" id="authWrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-logo">4FG</div>
+      <div class="auth-brand-text">
+        <div class="auth-brand-name">4FG Smart Gas Monitor</div>
+        <div class="auth-brand-sub">Waitlist Admin</div>
+      </div>
+    </div>
+
+    <h1>Sign in</h1>
+    <p class="auth-desc">Use your Supabase account credentials to access the waitlist.</p>
+
+    <div class="field">
+      <label class="field-label" for="emailInput">Email address</label>
+      <div class="field-input-wrap">
+        <input
+          class="field-input"
+          id="emailInput"
+          type="email"
+          placeholder="you@example.com"
+          autocomplete="email"
+        />
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="pwInput">Password</label>
+      <div class="field-input-wrap">
+        <input
+          class="field-input has-toggle"
+          id="pwInput"
+          type="password"
+          placeholder="••••••••"
+          autocomplete="current-password"
+        />
+        <button class="toggle-pw" type="button" id="togglePw" aria-label="Show password" onclick="togglePassword()">
+          <!-- eye icon -->
+          <svg id="eyeIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+          <svg id="eyeOffIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="auth-err" id="authErr"></div>
+
+    <button class="btn-primary" id="loginBtn" onclick="handleLogin()">
+      <span id="loginLabel">Sign in</span>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════ MAIN PAGE ═══════════════════ -->
+<div class="page" id="mainPage">
+
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-mark">4FG</div>
+      <div>
+        <div class="header-title">Waitlist Admin</div>
+        <div class="header-sub">4FG Smart Gas Monitor</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:0">
+      <span class="header-user" id="headerUser"></span>
+      <button class="btn-logout" onclick="handleLogout()">Sign out</button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Signups</div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-sub">all time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cities</div>
+        <div class="stat-value" id="statCities">—</div>
+        <div class="stat-sub">unique locations</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Today</div>
+        <div class="stat-value" id="statToday">—</div>
+        <div class="stat-sub">new signups</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">This week</div>
+        <div class="stat-value" id="statWeek">—</div>
+        <div class="stat-sub">last 7 days</div>
+      </div>
+    </div>
+
+    <!-- City breakdown -->
+    <p class="section-title">By City</p>
+    <div class="city-grid" id="cityGrid"></div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input
+          class="search-input"
+          id="searchInput"
+          type="search"
+          placeholder="Search name or email…"
+          oninput="filterTable()"
+        />
+      </div>
+
+      <select class="city-select" id="cityFilter" onchange="filterTable()">
+        <option value="">All cities</option>
+      </select>
+
+      <button class="btn-icon" id="refreshBtn" onclick="loadData()">
+        <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Refresh
+      </button>
+
+      <button class="btn-csv" onclick="exportCSV()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export CSV
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('idx')"># <span id="sort-idx">↕</span></th>
+            <th onclick="sortBy('name')">Name <span id="sort-name">↕</span></th>
+            <th onclick="sortBy('email')">Email <span id="sort-email">↕</span></th>
+            <th onclick="sortBy('city')">City <span id="sort-city">↕</span></th>
+            <th onclick="sortBy('created_at')">Joined <span id="sort-created_at">↓</span></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="5" style="text-align:center;padding:48px;color:var(--muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="page-footer" id="tableFooter"></div>
+
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL      = 'https://mhkhwlyfsulvhenwooef.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oa2h3bHlmc3Vsdmhlbndvb2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzcxMDUsImV4cCI6MjA5Mzc1MzEwNX0.9LEf-lpBbQ9j4PuQlR9SlW-ITpmfld6pn121uEY_ytI';
+
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let allRows = [];
+  let sortKey = 'created_at';
+  let sortAsc = false;
+
+  // ── Boot: restore existing session ───────────────
+  (async function boot() {
+    const { data: { session } } = await db.auth.getSession();
+    if (session) showPage(session.user.email);
+  })();
+
+  // ── Login ─────────────────────────────────────────
+  async function handleLogin() {
+    const email = document.getElementById('emailInput').value.trim();
+    const pw    = document.getElementById('pwInput').value;
+
+    if (!email || !pw) { showErr('Please enter your email and password.'); return; }
+
+    setLoading(true);
+    clearErr();
+
+    const { data, error } = await db.auth.signInWithPassword({ email, password: pw });
+
+    if (error) {
+      showErr(friendlyError(error.message));
+      setLoading(false);
+      return;
+    }
+
+    showPage(data.user.email);
+  }
+
+  function friendlyError(msg) {
+    if (/invalid login/i.test(msg))  return 'Incorrect email or password.';
+    if (/email not confirmed/i.test(msg)) return 'Please confirm your email address first.';
+    if (/too many requests/i.test(msg)) return 'Too many attempts — please wait a moment and try again.';
+    return msg;
+  }
+
+  function setLoading(on) {
+    const btn   = document.getElementById('loginBtn');
+    const label = document.getElementById('loginLabel');
+    btn.disabled = on;
+    label.innerHTML = on
+      ? '<span class="spinner"></span>'
+      : 'Sign in';
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('authErr');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function clearErr() {
+    document.getElementById('authErr').style.display = 'none';
+  }
+
+  // Enter key submits
+  ['emailInput', 'pwInput'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleLogin();
+    })
+  );
+
+  function togglePassword() {
+    const input   = document.getElementById('pwInput');
+    const eyeOn   = document.getElementById('eyeIcon');
+    const eyeOff  = document.getElementById('eyeOffIcon');
+    const showing = input.type === 'text';
+    input.type        = showing ? 'password' : 'text';
+    eyeOn.style.display  = showing ? '' : 'none';
+    eyeOff.style.display = showing ? 'none' : '';
+  }
+
+  // ── Page switch ───────────────────────────────────
+  function showPage(email) {
+    document.getElementById('authWrap').style.display  = 'none';
+    document.getElementById('mainPage').style.display  = 'block';
+    document.getElementById('headerUser').textContent  = email;
+    loadData();
+  }
+
+  // ── Sign out ──────────────────────────────────────
+  async function handleLogout() {
+    await db.auth.signOut();
+    location.reload();
+  }
+
+  // ── Data ──────────────────────────────────────────
+  async function loadData() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+
+    const { data, error } = await db
+      .from('waitlist')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    btn.classList.remove('spinning');
+
+    if (error) {
+      document.getElementById('tableBody').innerHTML =
+        `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--danger)">
+          ${esc(error.message)}
+        </td></tr>`;
+      return;
+    }
+
+    allRows = data;
+    updateStats();
+    updateCityBreakdown();
+    updateCityFilter();
+    renderTable();
+  }
+
+  // ── Stats ─────────────────────────────────────────
+  function updateStats() {
+    const now    = new Date();
+    const todayS = now.toISOString().slice(0, 10);
+    const weekAgo = new Date(now - 7 * 86400000).toISOString();
+
+    document.getElementById('statTotal').textContent  = allRows.length;
+    document.getElementById('statCities').textContent = new Set(allRows.map(r => r.city).filter(Boolean)).size;
+    document.getElementById('statToday').textContent  = allRows.filter(r => r.created_at.slice(0, 10) === todayS).length;
+    document.getElementById('statWeek').textContent   = allRows.filter(r => r.created_at >= weekAgo).length;
+  }
+
+  // ── City breakdown ────────────────────────────────
+  function updateCityBreakdown() {
+    const counts = {};
+    allRows.forEach(r => {
+      const c = (r.city || '').trim();
+      if (c) counts[c] = (counts[c] || 0) + 1;
+    });
+
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const grid   = document.getElementById('cityGrid');
+
+    grid.innerHTML = sorted.length
+      ? sorted.map(([city, count]) => `
+          <div class="city-item">
+            <span class="city-name">${esc(city)}</span>
+            <span class="city-count">${count}</span>
+          </div>`).join('')
+      : '<p style="font-size:13px;color:var(--muted)">No city data yet.</p>';
+  }
+
+  // ── City filter dropdown ──────────────────────────
+  function updateCityFilter() {
+    const cities  = [...new Set(allRows.map(r => (r.city || '').trim()).filter(Boolean))].sort();
+    const sel     = document.getElementById('cityFilter');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All cities</option>' +
+      cities.map(c => `<option value="${esc(c)}"${c === current ? ' selected' : ''}>${esc(c)}</option>`).join('');
+  }
+
+  // ── Table ─────────────────────────────────────────
+  function renderTable() {
+    const q    = document.getElementById('searchInput').value.toLowerCase();
+    const city = document.getElementById('cityFilter').value;
+
+    let rows = allRows.filter(r => {
+      const matchQ    = !q || (r.name || '').toLowerCase().includes(q) || r.email.toLowerCase().includes(q);
+      const matchCity = !city || (r.city || '').trim() === city;
+      return matchQ && matchCity;
+    });
+
+    rows.sort((a, b) => {
+      let va = sortKey === 'idx' ? allRows.indexOf(a) : (a[sortKey] ?? '');
+      let vb = sortKey === 'idx' ? allRows.indexOf(b) : (b[sortKey] ?? '');
+      if (va < vb) return sortAsc ? -1 : 1;
+      if (va > vb) return sortAsc ? 1  : -1;
+      return 0;
+    });
+
+    const tbody = document.getElementById('tableBody');
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5">
+        <div class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <p>No results found.</p>
+        </div>
+      </td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(r => {
+        const n       = allRows.indexOf(r) + 1;
+        const date    = new Date(r.created_at);
+        const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const cityEl  = r.city
+          ? `<span class="pill">${esc(r.city)}</span>`
+          : `<span class="pill-empty">—</span>`;
+
+        return `<tr>
+          <td class="td-num">${n}</td>
+          <td class="td-name">${esc(r.name || '—')}</td>
+          <td class="td-email">${esc(r.email)}</td>
+          <td class="td-city">${cityEl}</td>
+          <td class="td-date">${dateStr} <span style="opacity:.6">${timeStr}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('tableFooter').textContent = rows.length === allRows.length
+      ? `${allRows.length} total signup${allRows.length !== 1 ? 's' : ''}`
+      : `Showing ${rows.length} of ${allRows.length}`;
+  }
+
+  function filterTable() { renderTable(); }
+
+  // ── Sort ──────────────────────────────────────────
+  function sortBy(key) {
+    sortAsc = sortKey === key ? !sortAsc : key !== 'created_at';
+    sortKey = key;
+
+    ['idx','name','email','city','created_at'].forEach(k => {
+      const el = document.getElementById('sort-' + k);
+      if (el) el.textContent = k === key ? (sortAsc ? '↑' : '↓') : '↕';
+    });
+
+    renderTable();
+  }
+
+  // ── CSV export ────────────────────────────────────
+  function exportCSV() {
+    const rows = allRows.map((r, i) => [
+      i + 1,
+      `"${(r.name || '').replace(/"/g, '""')}"`,
+      r.email,
+      `"${(r.city || '').replace(/"/g, '""')}"`,
+      new Date(r.created_at).toISOString(),
+    ].join(','));
+
+    const csv  = ['#,Name,Email,City,Signed Up', ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), {
+      href: url,
+      download: `4fg-waitlist-${new Date().toISOString().slice(0,10)}.csv`
+    });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Util ──────────────────────────────────────────
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>

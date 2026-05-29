@@ -39,6 +39,20 @@ const MAPPING = {
   'lock.fill': 'lock',
   'eye.fill': 'visibility',
   'eye.slash.fill': 'visibility-off',
+  'cart.fill': 'shopping-cart',
+  'shippingbox.fill': 'local-shipping',
+  'mappin.fill': 'location-on',
+  'tag.fill': 'local-offer',
+  'storefront.fill': 'storefront',
+  'line.3.horizontal': 'menu',
+  'list.bullet': 'format-list-bulleted',
+  'phone.fill': 'phone',
+  'doc.fill': 'insert-drive-file',
+  'building.2.fill': 'business',
+  'hourglass': 'hourglass-empty',
+  'tray.fill': 'inbox',
+  'chevron.down': 'expand-more',
+  'trash.fill': 'delete',
 } as IconMapping;
 
 export function IconSymbol({

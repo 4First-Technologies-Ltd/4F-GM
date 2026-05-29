@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi } from '@/lib/api';
+import { authApi, ApiUser } from '@/lib/api';
+import { getSavedUser } from '@/lib/storage';
 
 const C = {
   bg: '#FFFFFF',
@@ -114,7 +115,12 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await authApi.login(email.trim(), password);
-      router.replace('/(tabs)');
+      const user = await getSavedUser<ApiUser>();
+      if (user?.role === 'VENDOR') {
+        router.replace(user.vendorStatus === 'APPROVED' ? '/(vendor)' : '/vendor-pending');
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (err) {
       setApiErr(err instanceof Error ? err.message : 'Sign in failed. Try again.');
     } finally {

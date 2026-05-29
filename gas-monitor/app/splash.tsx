@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { getAccessToken } from '@/lib/storage';
+import { getAccessToken, getSavedUser } from '@/lib/storage';
+import type { ApiUser } from '@/lib/api';
 
 const C = {
   bg: '#EDF7ED',
@@ -42,7 +43,16 @@ export default function SplashScreen() {
 
     const timer = setTimeout(async () => {
       const token = await getAccessToken();
-      router.replace(token ? '/(tabs)' : '/onboarding');
+      if (!token) {
+        router.replace('/onboarding');
+        return;
+      }
+      const user = await getSavedUser<ApiUser>();
+      if (user?.role === 'VENDOR') {
+        router.replace(user.vendorStatus === 'APPROVED' ? '/(vendor)' : '/vendor-pending');
+      } else {
+        router.replace('/(tabs)');
+      }
     }, 2200);
 
     return () => clearTimeout(timer);

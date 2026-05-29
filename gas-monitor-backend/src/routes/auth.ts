@@ -18,6 +18,7 @@ const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  role: z.enum(['CONSUMER', 'VENDOR']).optional().default('CONSUMER'),
 });
 
 const loginSchema = z.object({
@@ -55,7 +56,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const { name, email, password } = result.data;
+  const { name, email, password, role } = result.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -66,8 +67,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.create({
-    data: { name, email, password: hashedPassword },
-    select: { id: true, name: true, email: true, createdAt: true },
+    data: { name, email, password: hashedPassword, role },
+    select: { id: true, name: true, email: true, role: true, createdAt: true },
   });
 
   const tokens = await issueTokenPair(user.id, user.email);
@@ -86,7 +87,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
   const { email, password } = result.data;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { vendorProfile: { select: { status: true } } },
+  });
   if (!user) {
     res.status(401).json({ error: 'Invalid email or password' });
     return;
@@ -101,7 +105,14 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   const tokens = await issueTokenPair(user.id, user.email);
 
   res.json({
-    user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      vendorStatus: user.vendorProfile?.status ?? undefined,
+      createdAt: user.createdAt,
+    },
     ...tokens,
   });
 });
@@ -164,7 +175,15 @@ router.post('/logout', async (req: Request, res: Response): Promise<void> => {
 router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.sub },
-    select: { id: true, name: true, email: true, createdAt: true, updatedAt: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      updatedAt: true,
+      vendorProfile: { select: { status: true } },
+    },
   });
 
   if (!user) {
@@ -172,7 +191,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
     return;
   }
 
-  res.json({ user });
+  const { vendorProfile, ...userData } = user;
+  res.json({ user: { ...userData, vendorStatus: vendorProfile?.status ?? undefined } });
 });
 
 export default router;

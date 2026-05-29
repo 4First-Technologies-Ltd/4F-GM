@@ -33,7 +33,11 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="vendor-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="vendor-pending" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="(vendor)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="order" options={{ headerShown: false, animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />

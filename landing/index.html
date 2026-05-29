@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="4FG Smart Gas Monitor — Real-time gas level monitoring, AI-powered refill alerts, and on-demand vendor ordering. Join the waitlist for early access.">
+  <title>4FG Smart Gas Monitor — Join the Waitlist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:           #EDF7ED;
+      --card:         #FFFFFF;
+      --surface:      #F5FBF5;
+      --border:       #E0EEE0;
+      --text:         #1A2E1A;
+      --muted:        #7A9A7A;
+      --accent:       #2D7450;
+      --accent-hover: #245f43;
+      --accent-light: #E8F5E8;
+      --danger:       #D32F2F;
+      --font: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --r-sm: 8px;
+      --r-md: 16px;
+      --r-lg: 24px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─── Utility ─── */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* ─── Nav ─── */
+    nav[aria-label="Primary navigation"] {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(237,247,237,0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1120px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text);
+    }
+    .logo-mark {
+      width: 36px; height: 36px; background: var(--accent);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-name { font-weight: 700; font-size: 17px; letter-spacing: -0.3px; }
+    .nav-pill {
+      background: var(--accent); color: #fff; border: none;
+      padding: 10px 20px; border-radius: var(--r-sm);
+      font-family: var(--font); font-size: 14px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: background 0.15s ease, transform 0.1s ease;
+      min-height: 44px; display: flex; align-items: center;
+    }
+    .nav-pill:hover  { background: var(--accent-hover); }
+    .nav-pill:active { transform: scale(0.97); }
+
+    /* ─── Hero ─── */
+    .hero {
+      padding: 88px 24px 72px;
+    }
+    .hero-inner {
+      max-width: 1120px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 64px; align-items: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent-light); color: var(--accent);
+      border: 1px solid var(--border);
+      padding: 7px 16px; border-radius: 100px;
+      font-size: 13px; font-weight: 600; margin-bottom: 28px;
+    }
+    .badge-dot {
+      width: 7px; height: 7px; background: var(--accent);
+      border-radius: 50%; animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .hero h1 {
+      font-size: clamp(34px, 5vw, 60px);
+      font-weight: 700; line-height: 1.12; letter-spacing: -1.6px;
+      max-width: 600px; margin: 0 0 20px;
+    }
+    .hero h1 em { font-style: normal; color: var(--accent); }
+    .hero-sub {
+      font-size: 17px; color: var(--muted); line-height: 1.65;
+      max-width: 460px; margin: 0 0 36px;
+    }
+
+    /* Inline waitlist form */
+    .inline-form {
+      display: flex; gap: 10px;
+      max-width: 480px; margin: 0 0 14px; flex-wrap: wrap;
+    }
+    .inline-form input[type="email"] {
+      flex: 1; min-width: 200px;
+      padding: 14px 18px;
+      font-family: var(--font); font-size: 15px;
+      border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      background: var(--card); color: var(--text);
+      outline: none; transition: border-color 0.15s;
+      min-height: 50px;
+    }
+    .inline-form input[type="email"]:focus { border-color: var(--accent); }
+    .inline-form input[type="email"]::placeholder { color: var(--muted); }
+
+    .btn-primary {
+      background: var(--accent); color: #fff; border: none;
+      padding: 14px 24px; border-radius: var(--r-sm);
+      font-family: var(--font); font-size: 15px; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, transform 0.1s;
+      min-height: 50px; min-width: 44px; display: inline-flex;
+      align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-primary:hover    { background: var(--accent-hover); }
+    .btn-primary:active   { transform: scale(0.97); }
+    .btn-primary:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+    .btn-primary.full     { width: 100%; font-size: 16px; padding: 16px; }
+
+    .form-hint { font-size: 13px; color: var(--muted); }
+
+    .success-toast {
+      display: none; align-items: center; gap: 8px;
+      background: var(--accent-light); color: var(--accent);
+      border: 1px solid var(--border); border-radius: var(--r-sm);
+      padding: 14px 20px; font-weight: 600; font-size: 15px;
+      max-width: 480px; margin: 0 0 14px;
+    }
+    .success-toast.visible { display: flex; }
+
+    /* ─── Phone demo (hero right column) ─── */
+    .hero-demo {
+      display: flex; justify-content: center; align-items: center;
+    }
+    .phone-frame {
+      width: 285px;
+      background: #1C1C1E;
+      border-radius: 50px;
+      padding: 14px;
+      box-shadow:
+        0 0 0 2px #3A3A3C,
+        inset 0 0 0 1px rgba(255,255,255,0.06),
+        0 32px 80px rgba(0,0,0,0.35),
+        0 8px 24px rgba(0,0,0,0.2);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .phone-island {
+      width: 88px; height: 28px;
+      background: #000; border-radius: 20px;
+      margin: 0 auto 8px;
+    }
+    .phone-screen {
+      background: var(--bg);
+      border-radius: 38px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      height: 580px;
+    }
+    .phone-status-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 18px 4px;
+      font-size: 11px; font-weight: 700; color: var(--text);
+      flex-shrink: 0;
+    }
+    .phone-status-icons {
+      display: flex; align-items: center; gap: 4px;
+    }
+    /* ─── Scrollable app shell ─── */
+    .app-scroll {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      -ms-overflow-style: none; scrollbar-width: none;
+    }
+    .app-scroll::-webkit-scrollbar { display: none; }
+
+    /* ─── Hero zone (green bg) ─── */
+    .az-hero {
+      background: #EDF7ED; padding: 10px 14px 30px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .az-header {
+      display: flex; justify-content: space-between; align-items: center; width: 100%;
+    }
+    .az-header-title { font-size: 15px; font-weight: 800; color: #1A2E1A; letter-spacing: -0.3px; }
+    .az-header-sub   { font-size: 9px; color: #7A9A7A; margin-top: 1px; }
+    .az-bell {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: #fff; border: 1px solid #E0EEE0;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    /* ─── Gauge ring ─── */
+    .az-gauge-ring {
+      width: 200px; height: 200px; position: relative; flex-shrink: 0;
+    }
+    .az-gauge-bar {
+      position: absolute; width: 7px; height: 18px; border-radius: 2px;
+      top: 91px; left: 96.5px; transform-origin: center center;
+    }
+    .az-gauge-inner {
+      position: absolute; width: 156px; height: 156px; border-radius: 50%;
+      background: #fff; top: 22px; left: 22px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.13);
+    }
+    .az-gauge-pct { font-size: 36px; font-weight: 800; color: #1A2E1A; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .az-gauge-lbl { font-size: 11px; font-weight: 700; }
+    .az-gauge-kg  { font-size: 10px; color: #7A9A7A; font-variant-numeric: tabular-nums; }
+
+    /* ─── Status badge ─── */
+    .az-status-badge {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 13px; border-radius: 20px; border: 1px solid;
+    }
+    .az-status-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .az-status-text { font-size: 11px; font-weight: 700; }
+
+    /* ─── Hero buttons ─── */
+    .az-hero-btns { display: flex; gap: 6px; width: 100%; align-items: center; }
+    .az-btn-sec {
+      padding: 8px 12px; border-radius: 20px;
+      background: #fff; border: 1px solid #E0EEE0;
+      font-family: var(--font); font-size: 11px; font-weight: 600; color: #1A2E1A; cursor: pointer;
+    }
+    .az-btn-pri {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 8px 8px; border-radius: 20px;
+      background: #2D7450; border: none;
+      font-family: var(--font); font-size: 11px; font-weight: 700; color: #fff; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .az-btn-ico {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #fff; border: 1px solid #E0EEE0;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+    }
+
+    /* ─── White content zone ─── */
+    .az-content {
+      background: #fff; border-radius: 22px 22px 0 0;
+      margin-top: -22px; padding: 20px 12px 0;
+      display: flex; flex-direction: column; gap: 12px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+    }
+
+    /* ─── Stats row ─── */
+    .az-stats-row {
+      display: flex; align-items: center;
+      background: #F5FBF5; border-radius: 14px; border: 1px solid #E0EEE0; padding: 10px 0;
+    }
+    .az-stat     { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .az-stat-num { font-size: 19px; font-weight: 800; color: #1A2E1A; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+    .az-stat-lbl { font-size: 7.5px; font-weight: 700; color: #7A9A7A; letter-spacing: 0.6px; text-transform: uppercase; }
+    .az-stat-div { width: 1px; height: 26px; background: #E0EEE0; }
+
+    /* ─── Cards ─── */
+    .az-card {
+      border: 1px solid #E0EEE0; border-radius: 16px; overflow: hidden;
+      background: #fff; box-shadow: 0 2px 8px rgba(45,116,80,0.05);
+    }
+    .az-card-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 13px 7px;
+    }
+    .az-card-title { font-size: 12px; font-weight: 800; color: #1A2E1A; }
+    .az-live-chip {
+      display: flex; align-items: center; gap: 4px;
+      background: #E8F5E8; border: 1px solid rgba(45,116,80,0.25);
+      border-radius: 20px; padding: 2px 7px;
+      font-size: 7.5px; font-weight: 700; color: #2D7450; letter-spacing: 0.5px;
+    }
+    .az-live-dot { width: 5px; height: 5px; background: #2D7450; border-radius: 50%; animation: pulse 2s infinite; }
+
+    /* ─── Alert banner ─── */
+    .az-alert-banner {
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(211,47,47,0.07);
+      border-top: 1px solid rgba(211,47,47,0.18); border-bottom: 1px solid rgba(211,47,47,0.18);
+      padding: 7px 13px; font-size: 9.5px; font-weight: 600; color: #D32F2F; line-height: 1.4;
+    }
+    .az-alert-icon {
+      width: 16px; height: 16px; border-radius: 50%; background: #D32F2F;
+      color: #fff; font-size: 10px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    /* ─── Insight rows ─── */
+    .az-insight-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 9px 13px; border-top: 1px solid #EEF7EE;
+    }
+    .az-insight-ico {
+      width: 28px; height: 28px; border-radius: 8px; background: #F5FBF5;
+      display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+    }
+    .az-insight-lbl { font-size: 7.5px; font-weight: 700; color: #AECAAE; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
+    .az-insight-val { font-size: 10px; font-weight: 500; line-height: 1.4; }
+
+    /* ─── Refill reminder ─── */
+    .az-reminder-sub { font-size: 9.5px; color: #7A9A7A; padding: 0 13px 7px; }
+    .az-reminder-grid { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 13px 9px; }
+    .az-reminder-opt {
+      flex: 1; min-width: 44%; padding: 7px 4px; border-radius: 9px;
+      border: 1px solid #E0EEE0; background: #F5FBF5;
+      font-family: var(--font); font-size: 9px; font-weight: 500; color: #7A9A7A; cursor: pointer; text-align: center;
+    }
+    .az-reminder-opt-active { border-color: rgba(45,116,80,0.5); background: #E8F5E8; color: #2D7450; font-weight: 700; }
+    .az-get-rem-btn {
+      margin: 0 13px 13px; width: calc(100% - 26px);
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      background: #2D7450; border: none; border-radius: 10px; padding: 9px;
+      font-family: var(--font); font-size: 10px; font-weight: 700; color: #fff; cursor: pointer;
+    }
+
+    /* ─── Demo controls ─── */
+    .az-demo-lbl { font-size: 7.5px; font-weight: 700; color: #AECAAE; letter-spacing: 0.8px; text-transform: uppercase; padding: 11px 13px 6px; }
+    .az-demo-row { display: flex; gap: 7px; padding: 0 13px 13px; }
+    .az-drain-btn {
+      flex: 1; background: #2D7450; border: none; border-radius: 10px;
+      padding: 9px; font-family: var(--font); font-size: 10px; font-weight: 700; color: #fff;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .az-drain-btn.draining { background: #D32F2F; }
+    .az-reset-ico {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: #E8F5E8; border: 1px solid #E0EEE0;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+    }
+
+    /* ─── Tab bar ─── */
+    .az-tab-bar {
+      background: #fff; border-top: 1px solid #E0EEE0;
+      display: flex; padding: 5px 0 2px; flex-shrink: 0;
+    }
+    .az-tab {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      font-size: 7.5px; font-weight: 600; color: #9EBA9E; cursor: pointer;
+    }
+    .az-tab-active { color: #2D7450; }
+
+    /* ─── Home indicator ─── */
+    .phone-home-bar {
+      width: 80px; height: 4px;
+      background: rgba(0,0,0,0.18); border-radius: 2px;
+      margin: 5px auto 8px; flex-shrink: 0;
+    }
+
+    /* ─── Social proof strip ─── */
+    .proof-strip {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 22px 24px;
+    }
+    .proof-inner {
+      max-width: 1120px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      gap: 40px; flex-wrap: wrap;
+    }
+    .proof-item { text-align: center; }
+    .proof-num   { font-size: 22px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .proof-label { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .proof-sep   { width: 1px; height: 36px; background: var(--border); }
+
+    /* ─── Section base ─── */
+    .section       { padding: 88px 24px; }
+    .section-inner { max-width: 1120px; margin: 0 auto; }
+    .section-head  { text-align: center; margin-bottom: 56px; }
+    .eyebrow {
+      display: inline-block; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 700; letter-spacing: -0.8px; line-height: 1.2; margin-bottom: 14px;
+    }
+    .section-sub {
+      font-size: 17px; color: var(--muted); max-width: 560px;
+      margin: 0 auto; line-height: 1.65;
+    }
+
+    /* ─── Features ─── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r-md); padding: 28px 24px;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .feature-card:hover {
+      box-shadow: 0 8px 36px rgba(45,116,80,0.11);
+      transform: translateY(-3px);
+    }
+    .feat-icon {
+      width: 48px; height: 48px; background: var(--accent-light);
+      border-radius: 12px; display: flex; align-items: center;
+      justify-content: center; margin-bottom: 16px;
+    }
+    .feat-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .feat-desc  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ─── How it works ─── */
+    .how-section {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 88px 24px;
+    }
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 48px;
+    }
+    .step { text-align: center; }
+    .step-num {
+      width: 56px; height: 56px; background: var(--accent); color: #fff;
+      border-radius: 50%; font-size: 20px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 18px;
+    }
+    .step-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .step-desc  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ─── Testimonials ─── */
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .testimonial-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r-md); padding: 24px;
+    }
+    .stars { color: var(--accent); font-size: 16px; letter-spacing: 2px; margin-bottom: 12px; }
+    .quote { font-size: 15px; color: var(--text); line-height: 1.65; margin-bottom: 16px; }
+    .reviewer { display: flex; align-items: center; gap: 10px; }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--accent-light); display: flex; align-items: center;
+      justify-content: center; font-size: 14px; font-weight: 700; color: var(--accent);
+      flex-shrink: 0;
+    }
+    .reviewer-name  { font-size: 14px; font-weight: 700; }
+    .reviewer-city  { font-size: 12px; color: var(--muted); }
+
+    /* ─── Waitlist section ─── */
+    .waitlist-section {
+      padding: 100px 24px;
+      background: linear-gradient(160deg, #E3F4E3 0%, #C8E6C9 100%);
+      text-align: center;
+    }
+    .waitlist-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 52px 44px;
+      max-width: 560px; margin: 0 auto;
+      box-shadow: 0 20px 64px rgba(45,116,80,0.13);
+    }
+    .waitlist-card h2 {
+      font-size: clamp(26px, 4vw, 34px);
+      font-weight: 700; letter-spacing: -0.6px; margin-bottom: 10px;
+    }
+    .waitlist-card > p {
+      color: var(--muted); font-size: 16px; margin-bottom: 28px; line-height: 1.6;
+    }
+
+    .field { margin-bottom: 14px; text-align: left; }
+    .field label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .field label .req { color: var(--danger); margin-left: 2px; }
+    .field input {
+      width: 100%; padding: 13px 16px;
+      font-family: var(--font); font-size: 15px;
+      border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      background: var(--surface); color: var(--text);
+      outline: none; transition: border-color 0.15s;
+      min-height: 50px;
+    }
+    .field input:focus   { border-color: var(--accent); }
+    .field input::placeholder { color: var(--muted); }
+
+    .error-box {
+      display: none; margin-bottom: 12px;
+      background: #FFF5F5; border: 1px solid #FFCDD2;
+      border-radius: var(--r-sm); padding: 10px 14px;
+      color: var(--danger); font-size: 13px; text-align: left;
+    }
+    .error-box.visible { display: block; }
+
+    .form-footer { margin-top: 12px; font-size: 12px; color: var(--muted); }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--text); color: rgba(255,255,255,0.55);
+      padding: 44px 24px;
+    }
+    .footer-inner { max-width: 1120px; margin: 0 auto; text-align: center; }
+    .footer-brand { color: #fff; font-weight: 700; font-size: 16px; margin-bottom: 16px; }
+    .footer-links {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 24px; margin-bottom: 20px;
+    }
+    .footer-links a {
+      color: rgba(255,255,255,0.45); text-decoration: none;
+      font-size: 14px; transition: color 0.15s;
+    }
+    .footer-links a:hover { color: #fff; }
+    .footer-copy { font-size: 13px; }
+
+    /* ─── Responsive: hero two-column → one-column ─── */
+    @media (max-width: 900px) {
+      .hero-inner {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+      .hero-content { text-align: center; }
+      .hero h1 { margin: 0 auto 20px; }
+      .hero-sub { margin: 0 auto 36px; }
+      .inline-form { justify-content: center; margin: 0 auto 14px; }
+      .success-toast { margin: 0 auto 14px; justify-content: center; }
+      .hero-demo { order: -1; } /* show phone above text on tablet */
+    }
+
+    @media (max-width: 640px) {
+      .hero        { padding: 60px 20px 48px; }
+      .inline-form { flex-direction: column; }
+      .inline-form input[type="email"] { min-width: unset; }
+      .waitlist-card { padding: 36px 24px; }
+      .proof-sep   { display: none; }
+      .proof-inner { gap: 20px; }
+      .section     { padding: 60px 20px; }
+      .how-section { padding: 60px 20px; }
+      .hero-demo   { order: 1; } /* text first, demo second on mobile */
+      .phone-frame { width: 260px; }
+      .phone-screen { height: 530px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+      .badge-dot, .live-dot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Navigation ─── -->
+  <nav aria-label="Primary navigation">
+    <div class="nav-inner">
+      <a href="#" class="logo" aria-label="4FG Smart Gas Monitor — Home">
+        <div class="logo-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2c0 0-5 6-5 10.5a5 5 0 0010 0C17 8 12 2 12 2z" fill="white" fill-opacity="0.95"/>
+            <path d="M9 15.5a3 3 0 006 0" stroke="rgba(45,116,80,0.6)" stroke-width="1.5" fill="none"/>
+          </svg>
+        </div>
+        <span class="logo-name">4FG Monitor</span>
+      </a>
+      <a href="#waitlist" class="nav-pill">Join Waitlist</a>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ─── -->
+  <main>
+    <section class="hero" aria-labelledby="hero-h1">
+      <div class="hero-inner">
+
+        <!-- Left: hero content -->
+        <div class="hero-content">
+          <div class="hero-badge" role="status">
+            <span class="badge-dot" aria-hidden="true"></span>
+            Now accepting early access sign-ups
+          </div>
+
+          <h1 id="hero-h1">
+            Never Get Caught<br>With <em>Empty Gas</em> Again
+          </h1>
+          <p class="hero-sub">
+            4FG Smart Gas Monitor tracks your gas level in real time, predicts refills with AI, and connects you to certified vendors — all from your phone.
+          </p>
+
+          <form class="inline-form" id="hero-form" aria-label="Early access sign-up" novalidate onsubmit="return false">
+            <label for="hero-email" class="sr-only">Email address</label>
+            <input
+              type="email" id="hero-email" name="email"
+              placeholder="Enter your email address"
+              required autocomplete="email" aria-required="true"
+              aria-describedby="hero-hint"
+            >
+            <button type="submit" class="btn-primary" id="hero-btn">
+              Get Early Access
+            </button>
+          </form>
+
+          <div class="error-box" id="hero-error" role="alert" aria-live="assertive" style="max-width:480px;"></div>
+
+          <div class="success-toast" id="hero-success" role="status" aria-live="polite">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" fill="#2D7450"/>
+              <path d="M8 12l3 3 5-5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            You're on the list! We'll be in touch soon.
+          </div>
+
+          <p class="form-hint" id="hero-hint">No spam. No credit card. Unsubscribe anytime.</p>
+        </div>
+
+        <!-- Right: animated phone demo -->
+        <div class="hero-demo" aria-hidden="true">
+          <div class="phone-frame">
+            <div class="phone-island"></div>
+            <div class="phone-screen">
+
+              <!-- Status bar -->
+              <div class="phone-status-bar">
+                <span style="font-size:12px;font-weight:700;">9:41</span>
+                <span class="phone-status-icons">
+                  <svg width="16" height="11" viewBox="0 0 16 11" fill="none">
+                    <rect x="0"  y="7" width="3" height="4" rx="0.8" fill="#1A2E1A"/>
+                    <rect x="4.5" y="4.5" width="3" height="6.5" rx="0.8" fill="#1A2E1A"/>
+                    <rect x="9"  y="2" width="3" height="9" rx="0.8" fill="#1A2E1A"/>
+                    <rect x="13.5" y="0" width="2.5" height="11" rx="0.8" fill="#1A2E1A" opacity="0.25"/>
+                  </svg>
+                  <svg width="14" height="11" viewBox="0 0 14 11" fill="none" style="margin:0 2px;">
+                    <path d="M7 9a1 1 0 100 2 1 1 0 000-2z" fill="#1A2E1A"/>
+                    <path d="M4.2 7.2a4 4 0 015.6 0" stroke="#1A2E1A" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+                    <path d="M2 4.9A7 7 0 0112 4.9" stroke="#1A2E1A" stroke-width="1.3" stroke-linecap="round" fill="none" opacity="0.45"/>
+                  </svg>
+                  <svg width="22" height="11" viewBox="0 0 22 11" fill="none">
+                    <rect x="0.5" y="0.5" width="18" height="10" rx="2.5" stroke="#1A2E1A" stroke-width="1"/>
+                    <rect x="1.5" y="1.5" width="14" height="8" rx="1.5" fill="#1A2E1A"/>
+                    <path d="M19.5 3.5v4a1.5 1.5 0 000-4z" fill="#1A2E1A" opacity="0.4"/>
+                  </svg>
+                </span>
+              </div>
+
+              <!-- Scrollable app content -->
+              <div class="app-scroll" id="phone-app-scroll">
+
+                <!-- Hero zone (green bg) -->
+                <div class="az-hero">
+                  <div class="az-header">
+                    <div>
+                      <div class="az-header-title">4F G-Monitor</div>
+                      <div class="az-header-sub">FG-2024-0047 · Connected</div>
+                    </div>
+                    <div class="az-bell">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="#2D7450" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                  </div>
+
+                  <!-- Segmented arc gauge (48 bars built by JS) -->
+                  <div class="az-gauge-ring" id="demo-gauge-ring">
+                    <div class="az-gauge-inner">
+                      <div class="az-gauge-pct" id="demo-pct">100%</div>
+                      <div class="az-gauge-lbl" id="demo-gauge-lbl" style="color:#34C759">Gas Level</div>
+                      <div class="az-gauge-kg"  id="demo-gauge-kg">12.5 kg</div>
+                    </div>
+                  </div>
+
+                  <!-- Status badge -->
+                  <div class="az-status-badge" id="demo-status-badge" style="background:rgba(52,199,89,0.09);border-color:rgba(52,199,89,0.33)">
+                    <span class="az-status-dot" id="demo-status-dot" style="background:#34C759"></span>
+                    <span class="az-status-text" id="demo-status-text" style="color:#34C759">Good Level</span>
+                  </div>
+
+                  <!-- Hero action buttons -->
+                  <div class="az-hero-btns">
+                    <button class="az-btn-sec" id="demo-reset-btn">Reset</button>
+                    <button class="az-btn-pri" id="demo-action-btn">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Set Reminder
+                    </button>
+                    <button class="az-btn-ico">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="#2D7450" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- White content zone -->
+                <div class="az-content">
+
+                  <!-- Stats row -->
+                  <div class="az-stats-row">
+                    <div class="az-stat">
+                      <span class="az-stat-num" id="demo-days-num">30</span>
+                      <span class="az-stat-lbl">DAYS LEFT</span>
+                    </div>
+                    <div class="az-stat-div"></div>
+                    <div class="az-stat">
+                      <span class="az-stat-num" id="demo-kg-stat">12.5</span>
+                      <span class="az-stat-lbl">KG LEFT</span>
+                    </div>
+                    <div class="az-stat-div"></div>
+                    <div class="az-stat">
+                      <span class="az-stat-num" style="color:#2D7450">1.8</span>
+                      <span class="az-stat-lbl">KG/DAY</span>
+                    </div>
+                  </div>
+
+                  <!-- AI Insights card -->
+                  <div class="az-card">
+                    <div class="az-card-hdr">
+                      <span class="az-card-title">AI Insights</span>
+                      <span class="az-live-chip"><span class="az-live-dot"></span>LIVE</span>
+                    </div>
+                    <div class="az-alert-banner" id="demo-alert-banner" style="display:none">
+                      <div class="az-alert-icon">!</div>
+                      <span>Gas is empty — order a refill immediately.</span>
+                    </div>
+                    <div class="az-insight-row">
+                      <div class="az-insight-ico">📅</div>
+                      <div>
+                        <div class="az-insight-lbl">PREDICTED EMPTY DATE</div>
+                        <div class="az-insight-val" id="demo-pred-empty" style="color:#3D6B3D">In ~8 days at current usage</div>
+                      </div>
+                    </div>
+                    <div class="az-insight-row">
+                      <div class="az-insight-ico">📈</div>
+                      <div>
+                        <div class="az-insight-lbl">USAGE TREND</div>
+                        <div class="az-insight-val" style="color:#E65100">Using 1.8 kg/day on average this week</div>
+                      </div>
+                    </div>
+                    <div class="az-insight-row">
+                      <div class="az-insight-ico">💡</div>
+                      <div>
+                        <div class="az-insight-lbl">SMART SUGGESTION</div>
+                        <div class="az-insight-val" style="color:#7A9A7A">Order a refill to avoid running out</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Refill Reminder card -->
+                  <div class="az-card">
+                    <div class="az-card-hdr">
+                      <div style="display:flex;align-items:center;gap:5px">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="#2D7450" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span class="az-card-title">Refill Reminder</span>
+                      </div>
+                    </div>
+                    <div class="az-reminder-sub">When should we remind you to refill?</div>
+                    <div class="az-reminder-grid">
+                      <button class="az-reminder-opt">12 hrs before</button>
+                      <button class="az-reminder-opt az-reminder-opt-active">1 day before</button>
+                      <button class="az-reminder-opt">2 days before</button>
+                      <button class="az-reminder-opt">3 days before</button>
+                    </div>
+                    <button class="az-get-rem-btn">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Get Reminder
+                    </button>
+                  </div>
+
+                  <div style="height:8px"></div>
+                </div><!-- /.az-content -->
+              </div><!-- /.app-scroll -->
+
+              <!-- Tab bar (fixed at bottom) -->
+              <div class="az-tab-bar">
+                <div class="az-tab az-tab-active">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" fill="#2D7450"/><polyline points="9 22 9 12 15 12 15 22" fill="#2D7450"/></svg>
+                  <span>Home</span>
+                </div>
+                <div class="az-tab">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#9EBA9E" stroke-width="2"/><polyline points="12 6 12 12 16 14" stroke="#9EBA9E" stroke-width="2" stroke-linecap="round"/></svg>
+                  <span>History</span>
+                </div>
+                <div class="az-tab">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01" stroke="#9EBA9E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>Device</span>
+                </div>
+                <div class="az-tab">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#9EBA9E" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="#9EBA9E" stroke-width="2"/></svg>
+                  <span>Settings</span>
+                </div>
+              </div>
+
+              <div class="phone-home-bar"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ─── Social proof strip ─── -->
+    <div class="proof-strip" aria-label="Key statistics">
+      <div class="proof-inner">
+        <div class="proof-item">
+          <div class="proof-num">2,400+</div>
+          <div class="proof-label">Households protected</div>
+        </div>
+        <div class="proof-sep" aria-hidden="true"></div>
+        <div class="proof-item">
+          <div class="proof-num">99.8%</div>
+          <div class="proof-label">Sensor uptime</div>
+        </div>
+        <div class="proof-sep" aria-hidden="true"></div>
+        <div class="proof-item">
+          <div class="proof-num">&lt;5s</div>
+          <div class="proof-label">Alert response time</div>
+        </div>
+        <div class="proof-sep" aria-hidden="true"></div>
+        <div class="proof-item">
+          <div class="proof-num" id="wl-count">500+</div>
+          <div class="proof-label">Waitlist sign-ups</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Features ─── -->
+    <section class="section" aria-labelledby="features-h2">
+      <div class="section-inner">
+        <div class="section-head">
+          <span class="eyebrow">Features</span>
+          <h2 class="section-title" id="features-h2">Everything you need,<br>nothing you don't</h2>
+          <p class="section-sub">Built for households who are done worrying about gas — and done making emergency runs to refill.</p>
+        </div>
+
+        <div class="features-grid" role="list">
+          <article class="feature-card" role="listitem">
+            <div class="feat-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="#2D7450" stroke-width="2"/>
+                <path d="M12 7v5l3 3" stroke="#2D7450" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="feat-title">Real-Time Monitoring</h3>
+            <p class="feat-desc">Your gas level updates every few seconds via our compact IoT sensor. Check it from anywhere, at any time, on any device.</p>
+          </article>
+
+          <article class="feature-card" role="listitem">
+            <div class="feat-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17 5.8 21.3l2.4-7.4L2 9.4h7.6L12 2z" stroke="#2D7450" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </div>
+            <h3 class="feat-title">AI-Powered Insights</h3>
+            <p class="feat-desc">Our AI learns your household's exact usage rhythm and predicts the right refill day — before you ever run low.</p>
+          </article>
+
+          <article class="feature-card" role="listitem">
+            <div class="feat-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zm4-7v3m4-3v3m4-3v3" stroke="#2D7450" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="feat-title">Smart Refill Reminders</h3>
+            <p class="feat-desc">Set a custom reminder schedule or let the AI handle it. You'll get a notification on your phone well before the tank hits empty.</p>
+          </article>
+
+          <article class="feature-card" role="listitem">
+            <div class="feat-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4H6zm0 4h12M16 10a4 4 0 01-8 0" stroke="#2D7450" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="feat-title">Order From Vendors</h3>
+            <p class="feat-desc">Browse certified gas vendors near you, compare prices, place an order, and get delivery straight to your door — all in the app.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── How it works ─── -->
+    <section class="how-section" aria-labelledby="how-h2">
+      <div class="section-inner">
+        <div class="section-head">
+          <span class="eyebrow">How It Works</span>
+          <h2 class="section-title" id="how-h2">Up and running in minutes</h2>
+          <p class="section-sub">No complicated setup. No technical skills needed. Just clip, sync, and relax.</p>
+        </div>
+
+        <div class="steps-grid" role="list">
+          <div class="step" role="listitem">
+            <div class="step-num" aria-label="Step 1">1</div>
+            <h3 class="step-title">Place Your Cylinder on the Device</h3>
+            <p class="step-desc">No clipping or attaching — your cylinder simply sits on our device. No Wi-Fi, no Bluetooth, no infrared required.</p>
+          </div>
+          <div class="step" role="listitem">
+            <div class="step-num" aria-label="Step 2">2</div>
+            <h3 class="step-title">Download the App</h3>
+            <p class="step-desc">Install 4FG Monitor on iOS or Android, create your account, and the sensor syncs automatically.</p>
+          </div>
+          <div class="step" role="listitem">
+            <div class="step-num" aria-label="Step 3">3</div>
+            <h3 class="step-title">Monitor &amp; Order</h3>
+            <p class="step-desc">Watch your live gas level, receive smart alerts, and order a refill from a verified vendor — all from one screen.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Testimonials ─── -->
+    <section class="section" aria-labelledby="reviews-h2">
+      <div class="section-inner">
+        <div class="section-head">
+          <span class="eyebrow">Early Feedback</span>
+          <h2 class="section-title" id="reviews-h2">What beta testers are saying</h2>
+        </div>
+
+        <div class="testimonials-grid">
+          <blockquote class="testimonial-card">
+            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <p class="quote">"We used to run out of gas at least twice a month. Since installing the sensor, we haven't run out once. The AI reminder is scarily accurate."</p>
+            <div class="reviewer">
+              <div class="avatar" aria-hidden="true">A</div>
+              <div>
+                <div class="reviewer-name">Adaeze O.</div>
+                <div class="reviewer-city">Lagos, Nigeria</div>
+              </div>
+            </div>
+          </blockquote>
+
+          <blockquote class="testimonial-card">
+            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <p class="quote">"The ordering feature alone is worth it. I placed my first order at 11pm and had gas delivered by 8am. Totally changed how I manage cooking fuel."</p>
+            <div class="reviewer">
+              <div class="avatar" aria-hidden="true">K</div>
+              <div>
+                <div class="reviewer-name">Kwame A.</div>
+                <div class="reviewer-city">Accra, Ghana</div>
+              </div>
+            </div>
+          </blockquote>
+
+          <blockquote class="testimonial-card">
+            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <p class="quote">"Setup took literally three minutes. The gauge on the app is satisfying to look at and the alerts give us enough time to plan. Brilliant product."</p>
+            <div class="reviewer">
+              <div class="avatar" aria-hidden="true">F</div>
+              <div>
+                <div class="reviewer-name">Fatima Y.</div>
+                <div class="reviewer-city">Abuja, Nigeria</div>
+              </div>
+            </div>
+          </blockquote>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Waitlist section ─── -->
+    <section class="waitlist-section" id="waitlist" aria-labelledby="waitlist-h2">
+      <div class="waitlist-card">
+        <h2 id="waitlist-h2">Be First in Line</h2>
+        <p>Join over 500 households on the waitlist. Early members get priority access and an exclusive launch discount.</p>
+
+        <form id="waitlist-form" aria-label="Waitlist sign-up form" novalidate onsubmit="return false">
+          <div class="field">
+            <label for="wl-name">Your name</label>
+            <input
+              type="text" id="wl-name" name="name"
+              placeholder="Full name" autocomplete="name"
+            >
+          </div>
+
+          <div class="field">
+            <label for="wl-email">
+              Email address <span class="req" aria-hidden="true">*</span>
+            </label>
+            <input
+              type="email" id="wl-email" name="email"
+              placeholder="you@example.com"
+              required autocomplete="email" aria-required="true"
+            >
+          </div>
+
+          <div class="field">
+            <label for="wl-city">City</label>
+            <input
+              type="text" id="wl-city" name="city"
+              placeholder="e.g. Lagos, Abuja, Port Harcourt"
+              autocomplete="address-level2"
+            >
+          </div>
+
+          <div class="error-box" id="wl-error" role="alert" aria-live="assertive"></div>
+
+          <button type="submit" class="btn-primary full" id="wl-btn">
+            Join the Waitlist
+          </button>
+
+          <p class="form-footer">No spam. Unsubscribe at any time.</p>
+        </form>
+
+        <div class="success-toast" id="wl-success" role="status" aria-live="polite" style="margin:0; justify-content:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="#2D7450"/>
+            <path d="M8 12l3 3 5-5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          You're on the list! We'll reach out soon.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ─── Footer ─── -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">4FG Smart Gas Monitor</div>
+      <nav class="footer-links" aria-label="Footer links">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+        <a href="mailto:4firsttechnologieslimited@gmail.com">Contact</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 4First Technologies Ltd. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Supabase JS client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // ── Supabase config ─────────────────────────────────────────────
+    const SUPABASE_URL      = 'https://mhkhwlyfsulvhenwooef.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oa2h3bHlmc3Vsdmhlbndvb2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzcxMDUsImV4cCI6MjA5Mzc1MzEwNX0.9LEf-lpBbQ9j4PuQlR9SlW-ITpmfld6pn121uEY_ytI';
+
+    let db = null;
+    try {
+      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (_) {
+      console.error('Supabase failed to initialise — check CDN and credentials.');
+    }
+
+    // ── Form handler ────────────────────────────────────────────────
+    function wireForm({ formId, btnId, successId, errorId }) {
+      const form    = document.getElementById(formId);
+      const btn     = document.getElementById(btnId);
+      const success = document.getElementById(successId);
+      const errEl   = errorId ? document.getElementById(errorId) : null;
+      if (!form) return;
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const emailEl = form.querySelector('input[type="email"]');
+        const nameEl  = form.querySelector('input[name="name"]');
+        const cityEl  = form.querySelector('input[name="city"]');
+
+        const email = emailEl ? emailEl.value.trim() : '';
+        const name  = nameEl  ? nameEl.value.trim()  : null;
+        const city  = cityEl  ? cityEl.value.trim()  : null;
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showError(errEl, 'Please enter a valid email address to continue.');
+          emailEl && emailEl.focus();
+          return;
+        }
+        clearError(errEl);
+
+        if (!db) {
+          showError(errEl, 'Service is temporarily unavailable. Please try again shortly.');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Joining…';
+
+        const { error } = await db
+          .from('waitlist')
+          .insert({ name: name || null, email, city: city || null });
+
+        if (error) {
+          btn.disabled = false;
+          btn.textContent = btn.dataset.label || 'Join the Waitlist';
+
+          if (error.code === '23505') {
+            showError(errEl, 'This email is already on the waitlist. We\'ll be in touch!');
+          } else {
+            showError(errEl, 'Error: ' + (error.message || JSON.stringify(error)));
+            console.error('Supabase insert error:', error);
+          }
+          return;
+        }
+
+        db.functions.invoke('send-waitlist-confirmation', {
+          body: { email, name: name || null },
+        }).catch(function (err) {
+          console.warn('Confirmation email failed:', err);
+        });
+
+        form.style.display = 'none';
+        success.classList.add('visible');
+
+        const counter = document.getElementById('wl-count');
+        if (counter) {
+          const n = parseInt(counter.textContent) || 500;
+          counter.textContent = (n + 1) + '+';
+        }
+      });
+
+      btn.dataset.label = btn.textContent.trim();
+    }
+
+    function showError(el, msg) {
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+    function clearError(el) {
+      if (!el) return;
+      el.textContent = '';
+      el.classList.remove('visible');
+    }
+
+    wireForm({ formId: 'hero-form',     btnId: 'hero-btn', successId: 'hero-success', errorId: 'hero-error' });
+    wireForm({ formId: 'waitlist-form', btnId: 'wl-btn',   successId: 'wl-success',   errorId: 'wl-error'  });
+
+    // ── Phone demo (exact replica of mobile app homepage) ───────────────────
+    (function initPhoneDemo() {
+      var N           = 48;
+      var GAUGE_SIZE  = 200;
+      var GAUGE_BAR_H = 18;
+      var midR        = GAUGE_SIZE / 2 - GAUGE_BAR_H / 2;  // 91
+      var GAUGE_START = 210;
+      var GAUGE_ARC   = 300;
+      var MAX_KG      = 12.5;
+
+      // Color gradient matching app's BAR_STOPS exactly
+      var BAR_STOPS = [
+        [0,    [255, 59,  48]],
+        [0.25, [255, 149, 0]],
+        [0.50, [255, 204, 0]],
+        [0.75, [76,  217, 100]],
+        [1.0,  [52,  199, 89]],
+      ];
+
+      function getBarColor(t) {
+        for (var i = 0; i < BAR_STOPS.length - 1; i++) {
+          var t1 = BAR_STOPS[i][0],   c1 = BAR_STOPS[i][1];
+          var t2 = BAR_STOPS[i+1][0], c2 = BAR_STOPS[i+1][1];
+          if (t <= t2) {
+            var ratio = Math.max(0, Math.min(1, (t - t1) / (t2 - t1)));
+            return 'rgb(' +
+              Math.round(c1[0] + (c2[0]-c1[0]) * ratio) + ',' +
+              Math.round(c1[1] + (c2[1]-c1[1]) * ratio) + ',' +
+              Math.round(c1[2] + (c2[2]-c1[2]) * ratio) + ')';
+          }
+        }
+        return 'rgb(52,199,89)';
+      }
+
+      function getStatus(p) {
+        if (p <= 10) return { label: 'Critical — Refill Now', color: '#FF3B30' };
+        if (p <= 25) return { label: 'Low — Order Soon',      color: '#FF9500' };
+        if (p <= 60) return { label: 'Moderate Level',         color: '#CC9A00' };
+        return               { label: 'Good Level',            color: '#34C759' };
+      }
+
+      // ── Build 48 segmented bars ──────────────────────────────────────────────
+      var ring = document.getElementById('demo-gauge-ring');
+      if (!ring) return;
+      var bars = [];
+      for (var i = 0; i < N; i++) {
+        var bar = document.createElement('div');
+        bar.className = 'az-gauge-bar';
+        var angleDeg = GAUGE_START + (i / N) * GAUGE_ARC;
+        bar.style.transform = 'rotate(' + angleDeg + 'deg) translateY(-' + midR + 'px)';
+        bar.style.backgroundColor = '#C2D9C2';
+        ring.appendChild(bar);
+        bars.push(bar);
+      }
+
+      // ── Update all UI from a percentage value ────────────────────────────────
+      function updatePhoneDemo(pct) {
+        var p = Math.max(0, Math.min(100, pct));
+
+        // Gauge bars
+        var activeCount = Math.round((p / 100) * N);
+        for (var i = 0; i < N; i++) {
+          bars[i].style.backgroundColor = i < activeCount ? getBarColor(i / (N - 1)) : '#C2D9C2';
+        }
+
+        // Gauge center
+        var pctEl = document.getElementById('demo-pct');
+        if (pctEl) pctEl.textContent = Math.round(p) + '%';
+
+        var currentColor = getBarColor(p / 100);
+        var lblEl = document.getElementById('demo-gauge-lbl');
+        if (lblEl) lblEl.style.color = currentColor;
+
+        var kgVal = ((p / 100) * MAX_KG).toFixed(1);
+        var kgEl = document.getElementById('demo-gauge-kg');
+        if (kgEl) kgEl.textContent = kgVal + ' kg';
+
+        // Status badge
+        var st    = getStatus(p);
+        var badge = document.getElementById('demo-status-badge');
+        var dot   = document.getElementById('demo-status-dot');
+        var stTxt = document.getElementById('demo-status-text');
+        if (badge) { badge.style.background = st.color + '18'; badge.style.borderColor = st.color + '55'; }
+        if (dot)   dot.style.backgroundColor = st.color;
+        if (stTxt) { stTxt.textContent = st.label; stTxt.style.color = st.color; }
+
+        // Stats row
+        var daysLeft = Math.round((p / 100) * 30);
+        var daysEl = document.getElementById('demo-days-num');
+        if (daysEl) { daysEl.textContent = daysLeft; daysEl.style.color = daysLeft === 0 ? '#D32F2F' : '#1A2E1A'; }
+        var kgStatEl = document.getElementById('demo-kg-stat');
+        if (kgStatEl) kgStatEl.textContent = kgVal;
+
+        // Alert banner (≤10%)
+        var alertEl = document.getElementById('demo-alert-banner');
+        if (alertEl) alertEl.style.display = p <= 10 ? 'flex' : 'none';
+
+        // Predicted empty date
+        var predEl = document.getElementById('demo-pred-empty');
+        if (predEl) {
+          predEl.textContent = p === 0 ? 'Already empty' : 'In ~' + Math.max(1, Math.round(p / (100 / 30))) + ' days at current usage';
+          predEl.style.color = p === 0 ? '#D32F2F' : '#3D6B3D';
+        }
+
+        // Hero primary button (Set Reminder → Order Refill when empty)
+        var actionBtn = document.getElementById('demo-action-btn');
+        if (actionBtn) {
+          if (p === 0) {
+            actionBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4H6zm0 4h12M16 10a4 4 0 01-8 0" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Order Refill';
+            actionBtn.style.background = '#D32F2F';
+          } else {
+            actionBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Set Reminder';
+            actionBtn.style.background = '#2D7450';
+          }
+        }
+      }
+
+      // ── Reminder option selection ────────────────────────────────────────────
+      document.querySelectorAll('.az-reminder-opt').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.az-reminder-opt').forEach(function(b) { b.classList.remove('az-reminder-opt-active'); });
+          btn.classList.add('az-reminder-opt-active');
+        });
+      });
+
+      // ── Auto-drain animation loop ────────────────────────────────────────────
+      var DRAIN_DURATION  = 9000;
+      var PAUSE_DURATION  = 1500;
+      var REFILL_DURATION = 500;
+      var LOW_PCT = 5;
+
+      var animFrame  = null;
+      var phase      = 'drain';
+      var phaseStart = null;
+      var currentPct = 100;
+      var manualMode = false;
+      var manualTimer = null;
+
+      function easeInQuad(t) { return t * t; }
+
+      function tick(timestamp) {
+        if (phaseStart === null) phaseStart = timestamp;
+        var elapsed = timestamp - phaseStart;
+        if (phase === 'drain') {
+          var prog = Math.min(elapsed / DRAIN_DURATION, 1);
+          currentPct = 100 - (100 - LOW_PCT) * easeInQuad(prog);
+          updatePhoneDemo(currentPct);
+          if (prog >= 1) { phase = 'pause'; phaseStart = timestamp; }
+        } else if (phase === 'pause') {
+          if (elapsed >= PAUSE_DURATION) { phase = 'refill'; phaseStart = timestamp; }
+        } else if (phase === 'refill') {
+          var prog = Math.min(elapsed / REFILL_DURATION, 1);
+          currentPct = LOW_PCT + (100 - LOW_PCT) * prog;
+          updatePhoneDemo(currentPct);
+          if (prog >= 1) { phase = 'drain'; phaseStart = timestamp; currentPct = 100; }
+        }
+        animFrame = requestAnimationFrame(tick);
+      }
+
+      function startAutoAnim() {
+        if (animFrame || manualMode) return;
+        phase = 'drain'; phaseStart = null; currentPct = 100;
+        updatePhoneDemo(100);
+        animFrame = requestAnimationFrame(tick);
+      }
+
+      function stopAutoAnim() {
+        if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+        phaseStart = null;
+      }
+
+      // ── Manual drain (matches app: 100 steps × 240ms ≈ 24s) ─────────────────
+      function startManualDrain() {
+        stopAutoAnim();
+        manualMode = true;
+        currentPct = 100;
+        updatePhoneDemo(100);
+        var scrollEl = document.getElementById('phone-app-scroll');
+        if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+        var drainBtn = document.getElementById('demo-drain-btn');
+        if (drainBtn) { drainBtn.textContent = '■  Stop'; drainBtn.classList.add('draining'); }
+        manualTimer = setInterval(function() {
+          currentPct -= 1;
+          updatePhoneDemo(currentPct);
+          if (currentPct <= 0) {
+            clearInterval(manualTimer); manualTimer = null;
+            manualMode = false;
+            var db = document.getElementById('demo-drain-btn');
+            if (db) { db.textContent = '▶  Simulate Drain'; db.classList.remove('draining'); }
+            setTimeout(function() { currentPct = 100; updatePhoneDemo(100); startAutoAnim(); }, 2000);
+          }
+        }, 240);
+      }
+
+      function stopManualDrain() {
+        if (manualTimer) { clearInterval(manualTimer); manualTimer = null; }
+        manualMode = false;
+        var drainBtn = document.getElementById('demo-drain-btn');
+        if (drainBtn) { drainBtn.textContent = '▶  Simulate Drain'; drainBtn.classList.remove('draining'); }
+        startAutoAnim();
+      }
+
+      function resetToFull() {
+        stopManualDrain(); stopAutoAnim(); manualMode = false;
+        currentPct = 100; updatePhoneDemo(100);
+        setTimeout(startAutoAnim, 600);
+      }
+
+      // ── Button wiring ────────────────────────────────────────────────────────
+      var drainBtn = document.getElementById('demo-drain-btn');
+      if (drainBtn) drainBtn.addEventListener('click', function() { manualMode ? stopManualDrain() : startManualDrain(); });
+
+      var resetBtn = document.getElementById('demo-reset-btn');
+      if (resetBtn) resetBtn.addEventListener('click', resetToFull);
+
+      var resetIco = document.getElementById('demo-reset-ico');
+      if (resetIco) resetIco.addEventListener('click', resetToFull);
+
+      // ── Reduced motion ───────────────────────────────────────────────────────
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        updatePhoneDemo(78);
+        return;
+      }
+
+      updatePhoneDemo(100);
+
+      // ── Start/stop when hero is in viewport ─────────────────────────────────
+      var heroSection = document.querySelector('.hero');
+      if (!heroSection) return;
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) { startAutoAnim(); } else { stopAutoAnim(); }
+        });
+      }, { threshold: 0.1 });
+      observer.observe(heroSection);
+    })();
+  </script>
+</body>
+</html>

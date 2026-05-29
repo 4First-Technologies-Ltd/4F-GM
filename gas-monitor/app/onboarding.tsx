@@ -164,6 +164,12 @@ export default function OnboardingScreen() {
     setCurrent(next);
   }
 
+  function goBack() {
+    const prev = current - 1;
+    scrollRef.current?.scrollTo({ x: W * prev, animated: true });
+    setCurrent(prev);
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: isHero ? C.greenDark : C.white }}>
       <StatusBar style={isHero ? 'light' : 'dark'} />
@@ -195,7 +201,20 @@ export default function OnboardingScreen() {
               }}
             >
               {/* ── Top area ── */}
-              <View style={{ width: '100%', alignItems: dark ? 'center' : 'flex-end' }}>
+              <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                {idx > 0 ? (
+                  <TouchableOpacity
+                    onPress={goBack}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={[s.navBtn, dark && s.navBtnDark]}
+                  >
+                    <IconSymbol name="chevron.left" size={20} color={dark ? C.white : C.green} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={s.navBtnPlaceholder} />
+                )}
+
                 {dark ? (
                   <View style={s.heroBrand}>
                     <View style={s.heroBadge}>
@@ -207,6 +226,10 @@ export default function OnboardingScreen() {
                     </Text>
                   </View>
                 ) : (
+                  <View />
+                )}
+
+                {!dark ? (
                   <TouchableOpacity
                     onPress={() => router.replace('/sign-in')}
                     activeOpacity={0.7}
@@ -214,6 +237,8 @@ export default function OnboardingScreen() {
                   >
                     <Text style={s.skipLink}>Skip</Text>
                   </TouchableOpacity>
+                ) : (
+                  <View style={s.navBtnPlaceholder} />
                 )}
               </View>
 
@@ -252,13 +277,27 @@ export default function OnboardingScreen() {
               <View style={s.btnGroup}>
                 {dark ? (
                   <>
-                    <TouchableOpacity
-                      style={[s.primaryBtn, { backgroundColor: C.greenBright }]}
-                      activeOpacity={0.85}
-                      onPress={() => router.replace('/sign-up')}
-                    >
-                      <Text style={s.primaryBtnText}>Get Started</Text>
-                    </TouchableOpacity>
+                    <Text style={s.roleLabel}>I am a...</Text>
+                    <View style={s.roleRow}>
+                      <TouchableOpacity
+                        style={s.roleCard}
+                        activeOpacity={0.85}
+                        onPress={() => router.push('/sign-up')}
+                      >
+                        <IconSymbol name="house.fill" size={26} color={C.greenBright} />
+                        <Text style={s.roleCardTitle}>Consumer</Text>
+                        <Text style={s.roleCardSub}>Monitor my gas</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={s.roleCard}
+                        activeOpacity={0.85}
+                        onPress={() => router.push('/vendor-sign-up')}
+                      >
+                        <IconSymbol name="storefront.fill" size={26} color={C.greenBright} />
+                        <Text style={s.roleCardTitle}>Vendor</Text>
+                        <Text style={s.roleCardSub}>Sell gas cylinders</Text>
+                      </TouchableOpacity>
+                    </View>
                     <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={() => router.replace('/sign-in')}
@@ -402,6 +441,25 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
+  navBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.greenLight,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navBtnDark: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  navBtnPlaceholder: {
+    width: 40,
+    height: 40,
+  },
+
   skipLink: {
     color: C.green,
     fontSize: 15,
@@ -479,5 +537,42 @@ const s = StyleSheet.create({
     color: 'rgba(255,255,255,0.60)',
     fontSize: 14,
     fontWeight: '500',
+  },
+
+  roleLabel: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  roleCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 6,
+  },
+  roleCardTitle: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  roleCardSub: {
+    color: 'rgba(255,255,255,0.60)',
+    fontSize: 11,
+    textAlign: 'center',
   },
 });

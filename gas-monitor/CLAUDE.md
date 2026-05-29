@@ -20,44 +20,126 @@ npm run dev            # Start Express server with ts-node-dev (hot reload, port
 npm run build          # tsc compile to dist/
 npm start              # Run compiled JS (production)
 npx prisma migrate dev # Apply schema changes + regenerate client
-npx prisma studio      # Open Prisma Studio (DB browser)
+npx prisma studio      # Open Prisma Studio (DB browser, localhost:5555)
 ```
 
 No test runner is configured yet.
+
+---
 
 ## Architecture
 
 This is an **Expo SDK 54** app using **expo-router** (file-based routing), React Native 0.81.5, and React 19 with the React Compiler and new architecture both enabled.
 
-### Routing & Navigation flow
+---
+
+## User types
+
+The app supports two distinct user roles set at registration:
+
+| Role | Value | Journey |
+|---|---|---|
+| Consumer | `CONSUMER` | Monitors gas level, browses vendors, places orders |
+| Vendor | `VENDOR` | Lists gas products, receives and manages orders, paid via Paystack |
+
+Role is stored on `User.role` in the database and in SecureStore as part of the saved user object. All role-based routing reads `getSavedUser<ApiUser>()` after login — never hardcode `/(tabs)` as the post-login destination.
+
+---
+
+## Routing & Navigation
 
 `app/` maps directly to URL routes. `unstable_settings.anchor = 'splash'` so the stack always starts at splash.
 
-**Full user flow:**
+### Full user flow
+
 ```
-splash.tsx → (checks token) → onboarding.tsx → sign-in.tsx or sign-up.tsx → (tabs)
+splash.tsx
+  ├── no token → /onboarding
+  │     └── role picker (slide 3) → /sign-up (consumer) | /vendor-sign-up (vendor)
+  └── token exists → check role
+        ├── CONSUMER → /(tabs)
+        └── VENDOR
+              ├── APPROVED → /(vendor)
+              └── PENDING/REJECTED → /vendor-pending
 ```
 
-Splash reads the stored access token via `getAccessToken()` — if a token exists it skips onboarding and goes straight to `/(tabs)`. All auth/onboarding → tabs transitions use `router.replace` (no back navigation into auth).
+Sign-in applies the same role check after `authApi.login()` resolves.
+
+### Route table
 
 | File | Route | Notes |
 |---|---|---|
-| `app/splash.tsx` | `/splash` | Animated logo, token check, auto-navigates after 2.2s |
-| `app/onboarding.tsx` | `/onboarding` | 3-slide horizontal paging carousel |
-| `app/sign-in.tsx` | `/sign-in` | Email + password, calls `authApi.login()` |
-| `app/sign-up.tsx` | `/sign-up` | Name + email + password, calls `authApi.register()` |
-| `app/(tabs)/` | `/(tabs)` | Tab group — main app |
+| `app/splash.tsx` | `/splash` | Animated logo, token + role check, auto-navigates after 2.2s |
+| `app/onboarding.tsx` | `/onboarding` | 3-slide carousel; slide 3 shows role picker cards |
+| `app/sign-in.tsx` | `/sign-in` | Email + password; routes to `/(tabs)` or `/(vendor)` based on role |
+| `app/sign-up.tsx` | `/sign-up` | Consumer registration → `/(tabs)` |
+| `app/vendor-sign-up.tsx` | `/vendor-sign-up` | 3-step vendor registration → `/vendor-pending` |
+| `app/vendor-pending.tsx` | `/vendor-pending` | Holding screen shown until admin approves vendor |
+| `app/(tabs)/` | `/(tabs)` | Consumer tab group |
 | `app/(tabs)/_layout.tsx` | — | `<Tabs>` navigator |
-| `app/(tabs)/index.tsx` | `/(tabs)/` | Dashboard (Home) |
+| `app/(tabs)/index.tsx` | `/(tabs)/` | Consumer dashboard (gas gauge, AI insights, refill reminder) |
 | `app/(tabs)/history.tsx` | `/(tabs)/history` | Usage history |
 | `app/(tabs)/device.tsx` | `/(tabs)/device` | Sensor status |
 | `app/(tabs)/settings.tsx` | `/(tabs)/settings` | Account & preferences, sign-out |
 | `app/(tabs)/explore.tsx` | — | Hidden from tab bar (`href: null`) |
-| `app/modal.tsx` | `/modal` | Presented modally |
+| `app/(vendor)/` | `/(vendor)` | Vendor route group — custom slide-in drawer |
+| `app/(vendor)/_layout.tsx` | — | Drawer layout + `DrawerCtx` / `useDrawer()` context |
+| `app/(vendor)/index.tsx` | `/(vendor)/` | Incoming orders (vendor home) |
+| `app/(vendor)/listings.tsx` | `/(vendor)/listings` | Gas listing CRUD |
+| `app/(vendor)/earnings.tsx` | `/(vendor)/earnings` | Earnings placeholder |
+| `app/(vendor)/settings.tsx` | `/(vendor)/settings` | Vendor account settings + sign-out |
+| `app/order.tsx` | `/order` | Consumer order flow (presented from consumer dashboard) |
+| `app/modal.tsx` | `/modal` | Generic modal |
 
-Stack animation config: `splash` = none, `onboarding` = fade (gestureEnabled: false), `sign-in/sign-up` = slide_from_right, `(tabs)` = fade (gestureEnabled: false).
+Stack animation config: `splash` = none, `onboarding` = fade (gestureEnabled: false), `sign-in/sign-up/vendor-sign-up` = slide_from_right, `vendor-pending/(tabs)/(vendor)` = fade (gestureEnabled: false).
 
-### Auth & Storage layer
+---
+
+## Vendor sign-up (`app/vendor-sign-up.tsx`)
+
+3-step form with a progress indicator:
+
+| Step | Fields |
+|---|---|
+| 1 — Account | Personal name, business name, email, password |
+| 2 — Business | Phone number, business address (multiline), GPS location (optional) |
+| 3 — Verify | Identity document upload via `expo-image-picker` (skip allowed) |
+
+On submit (step 3), three sequential API calls are made:
+1. `authApi.register(name, email, password, 'VENDOR')` — creates user + saves session
+2. `vendorApi.createProfile(...)` — creates `VendorProfile` (status = PENDING)
+3. `vendorApi.uploadDocuments(...)` — only if files were selected
+
+After submit → `router.replace('/vendor-pending')`.
+
+---
+
+## Vendor app (`app/(vendor)/`)
+
+### Drawer navigation
+
+No `@react-navigation/drawer` dependency. The drawer is a custom `Animated.View` panel (width = 78% of screen, max 320px) that slides in from the left, with a semi-transparent backdrop. Controlled by `DrawerCtx`:
+
+```tsx
+import { useDrawer } from '@/app/(vendor)/_layout';
+const { openDrawer } = useDrawer();
+```
+
+Every vendor screen has a hamburger button (`line.3.horizontal` icon) that calls `openDrawer()`.
+
+Drawer items: Incoming Orders → My Listings → Earnings → Settings | Sign Out (pinned to bottom).
+
+### Vendor approval
+
+Vendors start with `status = PENDING`. Listings can only be created once `status = APPROVED`. To approve manually during development:
+```bash
+# From gas-monitor-backend/
+npx prisma studio   # localhost:5555 → VendorProfile → set status = APPROVED
+```
+
+---
+
+## Auth & Storage layer
 
 **`lib/storage.ts`** — SecureStore helpers (uses `expo-secure-store`):
 - Keys: `4fg_access_token`, `4fg_refresh_token`, `4fg_user`
@@ -65,54 +147,80 @@ Stack animation config: `splash` = none, `onboarding` = fade (gestureEnabled: fa
 - `getAccessToken()` / `getRefreshToken()` / `getSavedUser<T>()` — typed reads
 - `clearSession()` — deletes all three keys (called on sign-out)
 
-**`lib/api.ts`** — Typed fetch wrapper + `authApi`:
+**`lib/api.ts`** — Typed fetch wrapper + API clients:
 ```
 API_BASE_URL:
-  dev + Android  → http://10.0.2.2:9000   (emulator routes localhost to itself)
+  dev + Android  → http://10.0.2.2:9000
   dev + iOS/web  → http://localhost:9000
   production     → https://your-production-api.com
 ```
 
-`authApi` methods (all save/clear session automatically):
+### `authApi` methods
+
 | Method | Endpoint | Notes |
 |---|---|---|
-| `register(name, email, password)` | POST `/api/auth/register` | Calls `saveSession` |
-| `login(email, password)` | POST `/api/auth/login` | Calls `saveSession` |
+| `register(name, email, password, role?)` | POST `/api/auth/register` | `role` defaults to `'CONSUMER'`; calls `saveSession` |
+| `login(email, password)` | POST `/api/auth/login` | Calls `saveSession`; response includes `role` + `vendorStatus` |
 | `refresh()` | POST `/api/auth/refresh` | Rotates token pair, returns null on failure |
 | `logout()` | POST `/api/auth/logout` | Revokes refresh token, always calls `clearSession` |
-| `me()` | GET `/api/auth/me` | Requires Bearer token (`auth: true`) |
+| `me()` | GET `/api/auth/me` | Returns full user including `role` + `vendorStatus` |
 
-### Auth screens (`app/sign-in.tsx`, `app/sign-up.tsx`)
+### `vendorApi` methods
 
-Both screens use `KeyboardAvoidingView` + `ScrollView` for keyboard handling. Shared `Field` component (local to each file) renders label + styled `TextInput` + optional password toggle + inline error. Validation runs on submit (not on keystroke).
+| Method | Endpoint | Notes |
+|---|---|---|
+| `createProfile(data)` | POST `/api/vendor/profile` | Upserts vendor profile |
+| `getProfile()` | GET `/api/vendor/me` | Returns profile + documents + listings |
+| `uploadDocuments(docs)` | POST `/api/vendor/documents` | Accepts `{ url, fileName }[]` |
+| `getListings()` | GET `/api/vendor/listings` | Returns vendor's own listings |
+| `createListing(data)` | POST `/api/vendor/listings` | Requires APPROVED status |
+| `updateListing(id, data)` | PATCH `/api/vendor/listings/:id` | Partial update |
+| `deleteListing(id)` | DELETE `/api/vendor/listings/:id` | — |
+| `getOrders()` | GET `/api/vendor/orders` | Includes consumer + listing data |
+| `updateOrderStatus(id, status)` | PATCH `/api/vendor/orders/:id` | `CONFIRMED \| DELIVERED \| CANCELLED` |
 
-- Button shows `ActivityIndicator` and is disabled during the API call
-- A red `apiErrBox` banner appears above the button for server-side errors
-- On success: `router.replace('/(tabs)')`
+### `ApiUser` type
 
-### Settings screen (`app/(tabs)/settings.tsx`)
+```ts
+interface ApiUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'CONSUMER' | 'VENDOR';
+  vendorStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+}
+```
 
-Sign Out button triggers `Alert.alert` with a destructive confirm action. On confirm:
-1. Sets `signingOut` state (shows `ActivityIndicator` on the button)
-2. Calls `authApi.logout()` (revokes refresh token on server + clears SecureStore)
-3. `router.replace('/sign-in')`
+---
 
-### Theming
+## Auth screens
 
-`constants/theme.ts` exports `Colors` (light/dark token map), `StatusColors`, `SensorStatus` type, and `Fonts` (platform-specific font families). Hooks:
+**`sign-in.tsx`** — After `authApi.login()`, reads saved user and routes:
+- `VENDOR + APPROVED` → `/(vendor)`
+- `VENDOR + other` → `/vendor-pending`
+- `CONSUMER` → `/(tabs)`
+
+**`sign-up.tsx`** — Consumer only. On success: `router.replace('/(tabs)')`.
+
+**`vendor-sign-up.tsx`** — Vendor only. On success: `router.replace('/vendor-pending')`.
+
+Both auth screens use `KeyboardAvoidingView` + `ScrollView`. Shared local `Field` component renders label + styled `TextInput` + optional password toggle + inline error. Validation runs on submit.
+
+---
+
+## Theming
+
+`constants/theme.ts` exports `Colors` (light/dark token map), `StatusColors`, `SensorStatus` type, and `Fonts`. Hooks:
 - `hooks/use-theme-color.ts` — resolves a token from `Colors` for the current scheme
-- `hooks/use-color-scheme.ts` — re-exports RN's `useColorScheme`; `.web.ts` variant defaults to `'light'` until hydration
+- `hooks/use-color-scheme.ts` — re-exports RN's `useColorScheme`; `.web.ts` variant defaults to `'light'`
 - `hooks/use-app-fonts.ts` — loads Fira Sans (400/500/700) and Fira Code (400/500/700) via `expo-font`
 
 The root `_layout.tsx` calls `SplashScreen.preventAutoHideAsync()` and gates rendering on `useAppFonts()`.
 
-`utils/sensor-status.ts` exports `getSensorStatus`, `getStatusColor`, `getStatusLabel` helpers.
+### App-wide color palette
 
-Themed primitives (`ThemedText`, `ThemedView`) accept optional `lightColor`/`darkColor` overrides.
-
-### App-wide color palette (light green theme)
-
-All tab screens share a consistent light green palette defined locally as `const C = { ... }` in each file:
+All screens share a consistent light green palette defined locally as `const C = { ... }`:
 
 | Token | Value | Usage |
 |---|---|---|
@@ -126,67 +234,58 @@ All tab screens share a consistent light green palette defined locally as `const
 | `accentLight` | `#E8F5E8` | Tinted backgrounds, active chips |
 | `red` | `#D32F2F` | Destructive actions, critical status |
 
-Tab bar: white bg (`#FFFFFF`), `#2D7450` active, `#9EBA9E` inactive.
+Tab bar (consumer): white bg, `#2D7450` active, `#9EBA9E` inactive.
 
-Onboarding/auth screens use a separate `C` palette with `greenBright: '#22C55E'` for CTAs on dark backgrounds and `greenDark: '#1A4730'` for the hero overlay.
+Onboarding/auth screens use a separate `C` palette with `greenBright: '#22C55E'` and `greenDark: '#1A4730'`.
 
-### Dashboard screen (`app/(tabs)/index.tsx`)
+---
 
-The main screen has two visual zones:
-1. **Top section** (`#EDF7ED` bg): app header, segmented arc gauge, status badge, action buttons
-2. **White content card** (`#FFFFFF`, `borderTopLeftRadius: 28`, `marginTop: -28`): stats row, AI insights, refill reminder, demo controls
+## Consumer dashboard (`app/(tabs)/index.tsx`)
 
-**Segmented Arc Gauge (`GaugeRing` component):**
-- 48 rectangular bars (7×18px, `borderRadius: 2`) arranged in a 300° arc (classic fuel gauge shape)
-- Arc starts at 210° (7 o'clock = empty) and ends at 150° (5 o'clock = full)
-- Bar color gradient via `getBarColor(t)` using iOS-style stops: `#FF3B30` → `#FF9500` → `#FFCC00` → `#4CD964` → `#34C759`
-- Active bars (up to current `gasLevel` percentage): full color; inactive bars: `#C2D9C2`
-- Inner white disk displays `%`, "Gas Level" label (colored by current level), and `kg` reading
-- `gasLevel` starts at `useState(100)` — replace with live sensor value when available
+Two visual zones:
+1. **Top** (`#EDF7ED`): app header, segmented arc gauge, status badge, action buttons
+2. **White card** (`borderTopLeftRadius: 28`, `marginTop: -28`): stats row, AI insights, refill reminder, demo controls
 
-**`getStatus(pct)`** returns a label and color:
-- ≤10%: `#FF3B30` "Critical — Refill Now"
-- ≤25%: `#FF9500` "Low — Order Soon"
-- ≤60%: `#CC9A00` "Moderate Level"
-- \>60%: `#34C759` "Good Level"
+**Segmented Arc Gauge (`GaugeRing`):** 48 bars in a 300° arc. `gasLevel` is `useState(100)` — replace with live sensor value when backend sensor data is wired up.
 
-**Simulate Drain (demo):**
-- `startDrain()` animates `gasLevel` 100→0 in 100 steps × 240ms (~24s)
-- Uses `setInterval` via `simRef` (ref, not state) to avoid stale closures
-- Button flips to "■ Stop" with red bg while simulating; ↺ resets to 100%
-- On press, `scrollRef.current?.scrollTo({ y: gaugeY.current })` auto-scrolls to the gauge
-- `gaugeY` is captured via `onLayout` on the gauge wrapper View
+**Refill Reminder:** time picker grid (4 options) → "Reminder Active" state with cancel link.
 
-**Refill Reminder:**
-- When `reminderSet === false`: shows a 4-option time picker grid + "Get Reminder" button
-- When `reminderSet === true`: shows "Reminder Active" state — checkmark circle, bold title, clock icon + "Notify me [selectedReminder] before empty", "Cancel reminder" underlined link
+**Simulate Drain:** animates `gasLevel` 100→0 over ~24s via `setInterval` ref. Auto-scrolls to gauge on start.
 
-### Onboarding screen (`app/onboarding.tsx`)
+---
 
-3-slide horizontal `ScrollView` with `pagingEnabled`. Slide index tracked via `onMomentumScrollEnd`.
+## Onboarding screen (`app/onboarding.tsx`)
 
-| Slide | Content | Background |
-|---|---|---|
-| 1 | `IllustrationMonitor` — 6 green icon circles around central 4FG device mockup | White |
-| 2 | `IllustrationAlerts` — styled alert card + green confirm circle | White |
-| 3 | Brand logo, title, body, CTA | `assets/images/onboarding-hero.jpg` (gas cylinder photo) with `rgba(0,10,5,0.62)` overlay |
+3-slide horizontal `ScrollView` with `pagingEnabled`.
 
-Dot indicator: inactive = `#D1E8D1` 8×8 circle; active = `#2D7450` 20×8 pill (or `#22C55E` on hero slide).
+| Slide | Content |
+|---|---|
+| 1 | `IllustrationMonitor` — 6 icon circles around central 4FG device mockup |
+| 2 | `IllustrationAlerts` — styled alert card + green confirm circle |
+| 3 | Hero photo bg + overlay; shows role picker cards (Consumer / Vendor) + "Log In" link |
 
-### Platform-specific files
+Slide 3 role picker: two frosted-glass cards with `house.fill` (Consumer → `/sign-up`) and `storefront.fill` (Vendor → `/vendor-sign-up`).
 
-- `components/ui/icon-symbol.ios.tsx` — SF Symbols via `expo-symbols` (accepts any valid SF Symbol name)
+---
+
+## Platform-specific files
+
+- `components/ui/icon-symbol.ios.tsx` — SF Symbols via `expo-symbols`
 - `components/ui/icon-symbol.tsx` — `@expo/vector-icons/MaterialIcons` fallback for Android/web
 
-**When adding a new icon:** add the SF Symbol name → MaterialIcons name mapping to `MAPPING` in `icon-symbol.tsx`. Currently mapped: `house.fill`, `bell.fill`, `clock.fill`, `clock`, `gearshape.fill`, `wifi`, `arrow.clockwise`, `arrow.right`, `arrow.left`, `chevron.right`, `chevron.left`, `checkmark.circle.fill`, `checkmark.circle`, `flame.fill`, `lightbulb.fill`, `chart.line.uptrend.xyaxis`, `chart.bar.fill`, `location.fill`, `xmark.circle.fill`, `plus`, `minus`, `thermometer.medium`, `shield.fill`, `person.fill`, `envelope.fill`, `lock.fill`, `eye.fill`, `eye.slash.fill`.
+**When adding a new icon:** add the SF Symbol name → MaterialIcons name mapping to `MAPPING` in `icon-symbol.tsx`.
 
-### Assets
+Currently mapped: `house.fill`, `bell.fill`, `clock.fill`, `clock`, `gearshape.fill`, `wifi`, `arrow.clockwise`, `arrow.right`, `arrow.left`, `chevron.right`, `chevron.left`, `checkmark.circle.fill`, `checkmark.circle`, `flame.fill`, `lightbulb.fill`, `chart.line.uptrend.xyaxis`, `chart.bar.fill`, `location.fill`, `xmark.circle.fill`, `plus`, `minus`, `thermometer.medium`, `shield.fill`, `person.fill`, `envelope.fill`, `lock.fill`, `eye.fill`, `eye.slash.fill`, `cart.fill`, `shippingbox.fill`, `mappin.fill`, `tag.fill`, `storefront.fill`, `line.3.horizontal`, `list.bullet`, `phone.fill`, `doc.fill`, `building.2.fill`, `hourglass`, `tray.fill`.
+
+---
+
+## Assets
 
 | Path | Usage |
 |---|---|
-| `assets/images/onboarding-hero.jpg` | Background of onboarding slide 3 (gas cylinder photo) |
+| `assets/images/onboarding-hero.jpg` | Background of onboarding slide 3 |
 
-### Path alias
+## Path alias
 
 `@/` resolves to the project root. Use it for all imports instead of relative paths.
 
@@ -194,7 +293,7 @@ Dot indicator: inactive = `#D1E8D1` 8×8 circle; active = `#2D7450` 20×8 pill (
 
 ## Backend (`gas-monitor-backend/`)
 
-Express + TypeScript server on **port 9000**. Lives in a sibling directory next to `gas-monitor/`.
+Express + TypeScript server on **port 9000**.
 
 ### Stack
 - **Express** — HTTP server
@@ -207,39 +306,65 @@ Express + TypeScript server on **port 9000**. Lives in a sibling directory next 
 ```
 gas-monitor-backend/
   prisma/
-    schema.prisma        # User + RefreshToken models
+    schema.prisma        # All models and enums
   src/
-    index.ts             # Express entry, port 9000
+    index.ts             # Express entry, mounts /api/auth and /api/vendor
     lib/
       jwt.ts             # signAccessToken, signRefreshToken, verify*, refreshTokenExpiresAt
-      prisma.ts          # Prisma client singleton (global cache for dev hot-reload)
+      prisma.ts          # Prisma client singleton
     middleware/
-      authenticate.ts    # Bearer token guard → attaches req.user (ApiUser)
+      authenticate.ts    # Bearer token guard → attaches req.user ({ sub, email })
     routes/
-      auth.ts            # All /api/auth/* endpoints
+      auth.ts            # /api/auth/* endpoints
+      vendor.ts          # /api/vendor/* endpoints (all require Bearer auth)
   .env                   # DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PORT
   .env.example           # Template (safe to commit)
 ```
 
-### Prisma models
-- **`User`** — id (uuid), email (unique), name, password (hashed), createdAt, updatedAt, refreshTokens
-- **`RefreshToken`** — id, token (unique), userId (FK → User, cascade delete), expiresAt, createdAt
+### Prisma models & enums
 
-### API endpoints (`/api/auth/`)
+**Enums:** `Role` (CONSUMER, VENDOR), `VendorStatus` (PENDING, APPROVED, REJECTED), `GasType` (COOKING, MEDICAL, INDUSTRIAL, BULK, OTHER), `OrderStatus` (PENDING, CONFIRMED, DELIVERED, CANCELLED)
 
-| Method | Path | Auth | Body | Notes |
-|---|---|---|---|---|
-| POST | `/register` | — | `{ name, email, password }` | Creates user, issues token pair |
-| POST | `/login` | — | `{ email, password }` | Verifies password, issues token pair |
-| POST | `/refresh` | — | `{ refreshToken }` | Rotates token pair (old deleted, new issued) |
-| POST | `/logout` | — | `{ refreshToken }` | Deletes refresh token from DB, always succeeds |
-| GET | `/me` | Bearer | — | Returns user object for current token |
+| Model | Key fields |
+|---|---|
+| `User` | id, email (unique), name, password, **role**, refreshTokens, vendorProfile?, orders |
+| `RefreshToken` | id, token (unique), userId (FK cascade), expiresAt |
+| `VendorProfile` | id, userId (unique FK), businessName, businessAddress, lat?, lng?, phone, **status** |
+| `VendorDocument` | id, vendorId (FK), url, fileName |
+| `GasListing` | id, vendorId (FK), gasType, customName?, pricePerKg, cylinderSizes[], otherSizes?, inStock |
+| `Order` | id, consumerId (FK), vendorId (FK), listingId (FK), cylinderSize, quantity, totalAmount, deliveryAddress, status, paystackRef? |
+
+### API endpoints
+
+**`/api/auth/`**
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/register` | — | Body: `{ name, email, password, role? }`. Role defaults to CONSUMER |
+| POST | `/login` | — | Returns user with `role` + `vendorStatus` |
+| POST | `/refresh` | — | Rotates token pair |
+| POST | `/logout` | — | Deletes refresh token |
+| GET | `/me` | Bearer | Returns user with `role` + `vendorStatus` |
+
+**`/api/vendor/`** — all require Bearer token
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/profile` | Create/update vendor profile (upsert) |
+| GET | `/me` | Get own profile + documents + listings |
+| POST | `/documents` | Body: `{ documents: [{ url, fileName }] }` |
+| GET | `/listings` | Own listings only |
+| POST | `/listings` | Requires APPROVED status |
+| PATCH | `/listings/:id` | Partial update, ownership checked |
+| DELETE | `/listings/:id` | Ownership checked |
+| GET | `/orders` | Incoming orders with consumer + listing data |
+| PATCH | `/orders/:id` | Body: `{ status: CONFIRMED \| DELIVERED \| CANCELLED }` |
 
 ### Token strategy
-- **Access token:** 15 minutes, signed with `JWT_ACCESS_SECRET`
-- **Refresh token:** 7 days, signed with `JWT_REFRESH_SECRET`, stored in `RefreshToken` table
-- On refresh: old token deleted, new pair issued (rotation — prevents reuse)
-- On logout: refresh token deleted from DB; `clearSession()` removes both tokens from SecureStore
+- **Access token:** 15 minutes, `JWT_ACCESS_SECRET`
+- **Refresh token:** 7 days, `JWT_REFRESH_SECRET`, stored in `RefreshToken` table
+- Rotation on refresh: old deleted, new pair issued
+- On logout: refresh token deleted from DB + `clearSession()` clears SecureStore
 
 ### Environment variables (`.env`)
 ```

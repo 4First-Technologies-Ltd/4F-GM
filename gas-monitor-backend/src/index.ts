@@ -2,6 +2,9 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import authRouter from './routes/auth.js';
+import vendorRouter from './routes/vendor.js';
+import cylindersRouter from './routes/cylinders.js';
+import ordersRouter from './routes/orders.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 9000;
@@ -9,7 +12,18 @@ const PORT = process.env.PORT ?? 9000;
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 app.use(cors());
-app.use(express.json());
+
+// Capture raw body for Paystack webhook signature verification
+app.use((req, _res, next) => {
+  if (req.path === '/api/orders/webhook') {
+    express.raw({ type: 'application/json' })(req, _res, (err) => {
+      if (!err) (req as any).rawBody = req.body;
+      next(err);
+    });
+  } else {
+    express.json()(req, _res, next);
+  }
+});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +32,9 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/vendor', vendorRouter);
+app.use('/api/cylinders', cylindersRouter);
+app.use('/api/orders', ordersRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 
