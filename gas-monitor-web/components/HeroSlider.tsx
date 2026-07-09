@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 type Slide = {
@@ -34,11 +35,14 @@ export default function HeroSlider() {
   return (
     <div className="hero-photo" aria-hidden={false}>
       {SLIDES.map((slide, index) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           key={slide.src}
           src={slide.src}
           alt={index === active ? slide.alt : ''}
+          fill
+          sizes="100vw"
+          priority={index === 0}
+          loading={index === 0 ? undefined : 'lazy'}
           className={`hero-photo-slide${index === active ? ' is-active' : ''}`}
         />
       ))}
