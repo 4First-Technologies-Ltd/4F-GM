@@ -45,13 +45,13 @@ router.post('/initialize', authenticate, async (req: AuthRequest, res: Response)
   const order = await prisma.order.create({
     data: {
       consumerId: req.user!.sub,
-      supplierName,          // added in migration: add_paystack_fields
+      supplierName,
       cylinderSize,
       quantity,
       totalAmount,
       deliveryAddress,
       status: 'PENDING',
-    } as any,
+    },
   });
 
   const reference = `4FG-${order.id}`;
@@ -119,8 +119,8 @@ router.post('/verify', authenticate, async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const order = await (prisma.order as any).update({
-      where: { paystackRef: reference },   // @unique after migration: add_paystack_fields
+    const order = await prisma.order.update({
+      where: { paystackRef: reference },
       data: { status: 'CONFIRMED', paystackStatus: ps.data.status },
     });
 
@@ -178,7 +178,7 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
   const event = req.body as { event: string; data: { reference: string; status: string } };
 
   if (event.event === 'charge.success') {
-    await (prisma.order as any).updateMany({
+    await prisma.order.updateMany({
       where: { paystackRef: event.data.reference, status: 'PENDING' },
       data: { status: 'CONFIRMED', paystackStatus: event.data.status },
     });

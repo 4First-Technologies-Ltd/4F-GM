@@ -49,7 +49,7 @@ export default function OrderLayout() {
         name="addresses"
         options={{
           title: 'My Addresses',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="mappin.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="mappin" color={color} />,
         }}
       />
     </Tabs>

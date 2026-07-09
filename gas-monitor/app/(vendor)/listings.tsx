@@ -117,7 +117,7 @@ function ListingCard({
 
 // ── Add / Edit form ───────────────────────────────────────────────────────────
 
-function ListingForm({
+function ListingFormView({
   initial,
   onSubmit,
   onCancel,
@@ -275,7 +275,6 @@ export default function ListingsScreen() {
   const [editTarget, setEditTarget] = useState<GasListing | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formApiErr, setFormApiErr] = useState('');
-  const [isApproved, setIsApproved] = useState(true);
 
   async function loadListings() {
     try {
@@ -391,7 +390,7 @@ export default function ListingsScreen() {
       </View>
 
       {view === 'form' ? (
-        <ListingForm
+        <ListingFormView
           key={editTarget?.id ?? 'new'}
           initial={initialForm}
           onSubmit={handleSubmit}
@@ -401,14 +400,6 @@ export default function ListingsScreen() {
         />
       ) : (
         <>
-          {!isApproved && (
-            <View style={s.approvalBanner}>
-              <IconSymbol name="hourglass" size={16} color="#B45309" />
-              <Text style={s.approvalBannerText}>
-                Your account is pending approval. Listings will go live once approved.
-              </Text>
-            </View>
-          )}
           <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
             {listings.length === 0 ? (
               <View style={s.emptyState}>
@@ -611,21 +602,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  approvalBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  approvalBannerText: { color: '#B45309', fontSize: 13, flex: 1, lineHeight: 18 },
 
   list: { paddingHorizontal: 20, gap: 12 },
   emptyState: {

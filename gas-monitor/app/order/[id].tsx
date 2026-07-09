@@ -282,10 +282,10 @@ export default function OrderDetailScreen() {
         </Section>
 
         {/* Delivery details */}
-        <Section title="Delivery Details" icon="mappin.fill">
+        <Section title="Delivery Details" icon="mappin">
           <View style={s.addressRow}>
             <View style={s.addressPin}>
-              <IconSymbol name="mappin.fill" size={14} color={C.accent} />
+              <IconSymbol name="mappin" size={14} color={C.accent} />
             </View>
             <Text style={s.addressText}>{order.deliveryAddress}</Text>
           </View>

@@ -92,7 +92,7 @@ export default function MyAddressesScreen() {
       {addresses.length === 0 ? (
         <View style={s.emptyState}>
           <View style={s.emptyIconCircle}>
-            <IconSymbol name="mappin.fill" size={32} color={C.dim} />
+            <IconSymbol name="mappin" size={32} color={C.dim} />
           </View>
           <Text style={s.emptyTitle}>No saved addresses</Text>
           <Text style={s.emptySubtitle}>Add a delivery address to speed up your orders</Text>
@@ -107,7 +107,7 @@ export default function MyAddressesScreen() {
             <View key={addr.id} style={[s.addressCard, cardShadow]}>
               <View style={s.cardLeft}>
                 <View style={[s.addrIconCircle, addr.isDefault && s.addrIconCircleDefault]}>
-                  <IconSymbol name="mappin.fill" size={18} color={addr.isDefault ? '#fff' : C.accent} />
+                  <IconSymbol name="mappin" size={18} color={addr.isDefault ? '#fff' : C.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={s.labelRow}>

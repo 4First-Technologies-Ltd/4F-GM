@@ -46,7 +46,7 @@ export default function VendorPendingScreen() {
           </View>
           <Text style={s.statusTitle}>Application Submitted!</Text>
           <Text style={s.statusBody}>
-            Your vendor account is under review by the 4FG team. We'll send you a notification once your account is approved — this usually takes within 24 hours.
+            Your vendor account is under review by the 4FG team. We&apos;ll send you a notification once your account is approved — this usually takes within 24 hours.
           </Text>
         </View>
 

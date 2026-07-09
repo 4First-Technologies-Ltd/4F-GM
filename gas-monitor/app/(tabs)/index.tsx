@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
+  type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -47,7 +48,7 @@ const C = {
 };
 
 // ── Cylinder image map ────────────────────────────────────────────────────────
-const CYLINDER_IMAGES: Record<string, ReturnType<typeof require>> = {
+const CYLINDER_IMAGES: Record<string, ImageSourcePropType> = {
   '6kg': require('@/assets/images/6kg.png'),
   '12.5kg': require('@/assets/images/12-5kg.png'),
   '50kg': require('@/assets/images/50kg.png'),

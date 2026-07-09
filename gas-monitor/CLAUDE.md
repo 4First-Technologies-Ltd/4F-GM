@@ -16,7 +16,7 @@ npm run reset-project  # Move app/ to app-example/ and create a blank app/ direc
 
 ### Backend (run from `gas-monitor-backend/`)
 ```bash
-npm run dev            # Start Express server with ts-node-dev (hot reload, port 9000)
+npm run dev            # Start Express server with tsx watch (hot reload, port 9000)
 npm run build          # tsc compile to dist/
 npm start              # Run compiled JS (production)
 npx prisma migrate dev # Apply schema changes + regenerate client
@@ -39,8 +39,8 @@ The app supports two distinct user roles set at registration:
 
 | Role | Value | Journey |
 |---|---|---|
-| Consumer | `CONSUMER` | Monitors gas level, browses vendors, places orders |
-| Vendor | `VENDOR` | Lists gas products, receives and manages orders, paid via Paystack |
+| Consumer | `CONSUMER` | Monitors gas level, browses suppliers, places orders via Paystack |
+| Vendor | `VENDOR` | Lists gas products, receives and manages orders |
 
 Role is stored on `User.role` in the database and in SecureStore as part of the saved user object. All role-based routing reads `getSavedUser<ApiUser>()` after login — never hardcode `/(tabs)` as the post-login destination.
 
@@ -88,10 +88,76 @@ Sign-in applies the same role check after `authApi.login()` resolves.
 | `app/(vendor)/listings.tsx` | `/(vendor)/listings` | Gas listing CRUD |
 | `app/(vendor)/earnings.tsx` | `/(vendor)/earnings` | Earnings placeholder |
 | `app/(vendor)/settings.tsx` | `/(vendor)/settings` | Vendor account settings + sign-out |
-| `app/order.tsx` | `/order` | Consumer order flow (presented from consumer dashboard) |
+| `app/order/_layout.tsx` | — | Stack navigator for the entire order section |
+| `app/order/(tabs)/_layout.tsx` | — | Bottom tab bar: Suppliers / Order History / My Addresses |
+| `app/order/(tabs)/index.tsx` | `/order` | Supplier list + order form (inline screen state) |
+| `app/order/(tabs)/history.tsx` | `/order/history` | Tappable order history cards |
+| `app/order/(tabs)/addresses.tsx` | `/order/addresses` | Saved delivery addresses (add / remove / set default) |
+| `app/order/[id].tsx` | `/order/:id` | Order detail — status banner, timeline, items, payment info |
+| `app/order/_shared.ts` | — | Shared `HistoryOrder` type, `MOCK_ORDERS`, `STATUS_META`, `fmtPrice` |
+| `app/order/payment.tsx` | `/order/payment` | Full-screen Paystack WebView; intercepts callback URL |
+| `app/order/payment-success.tsx` | `/order/payment-success` | Animated success screen shown after verified payment |
 | `app/modal.tsx` | `/modal` | Generic modal |
 
-Stack animation config: `splash` = none, `onboarding` = fade (gestureEnabled: false), `sign-in/sign-up/vendor-sign-up` = slide_from_right, `vendor-pending/(tabs)/(vendor)` = fade (gestureEnabled: false).
+Stack animation config:
+
+| Screen | Animation | Gesture |
+|---|---|---|
+| `splash` | none | — |
+| `onboarding` | fade | disabled |
+| `sign-in`, `sign-up`, `vendor-sign-up` | slide_from_right | enabled |
+| `vendor-pending`, `(tabs)`, `(vendor)` | fade | disabled |
+| `order` | slide_from_bottom | disabled |
+| `order/[id]` | slide_from_right | enabled |
+| `order/payment` | slide_from_bottom | disabled |
+| `order/payment-success` | fade | disabled |
+
+---
+
+## Consumer order flow (`app/order/`)
+
+The order section is a **nested Stack + Tabs** structure:
+
+```
+order/_layout.tsx          ← Stack (slide_from_bottom from /(tabs))
+  order/(tabs)/_layout.tsx ← Tabs (Suppliers | Order History | My Addresses)
+    order/(tabs)/index.tsx      Suppliers tab
+    order/(tabs)/history.tsx    History tab
+    order/(tabs)/addresses.tsx  Addresses tab
+  order/[id].tsx           ← Detail screen (pushed onto Stack)
+  order/payment.tsx        ← Paystack WebView (pushed onto Stack)
+  order/payment-success.tsx← Success confirmation (replaces payment)
+```
+
+### Suppliers tab (`order/(tabs)/index.tsx`)
+
+Two internal states controlled by `useState<'suppliers' | 'order'>`:
+
+- **`suppliers`** — lists `SUPPLIERS` mock data filtered by gas type, sorted by haversine distance. Tapping a card sets `selectedSupplier` and switches to `order`.
+- **`order`** — order form with cylinder size selector, quantity stepper, delivery address dropdown, and order summary. Tapping **Place Order** calls `ordersApi.initialize()` then navigates to `order/payment`.
+
+Delivery address is a dropdown (tappable selector → bottom sheet modal) populated from `savedAddresses` local state. The modal supports selecting a saved address or adding a new one inline.
+
+### Order detail (`order/[id].tsx`)
+
+Looks up order by `id` param in `MOCK_ORDERS` from `_shared.ts`. Sections:
+1. Status banner (color-coded: green = delivered, orange = processing, red = cancelled)
+2. Supplier card (avatar, name, address, gas type badge, rating)
+3. Order timeline (vertical stepper; hidden for cancelled)
+4. Order items (cylinder icon, size, qty, unit price, subtotal, total)
+5. Delivery details (address, date, time)
+6. Payment (method, amount)
+7. Action button: **Reorder** (delivered) / **Cancel Order** (processing) / **Place New Order** (cancelled)
+
+### Payment flow
+
+1. `ordersApi.initialize()` → `POST /api/orders/initialize` → returns `{ authorizationUrl, reference, orderId, amount }`
+2. App pushes `order/payment` with those params
+3. `payment.tsx` loads `authorizationUrl` in a `react-native-webview` `<WebView>`
+4. WebView intercepts navigation to `https://4fgmonitor.app.local/payment-callback` (set as `callback_url` in backend)
+5. On intercept → `ordersApi.verify(reference)` → `POST /api/orders/verify`
+6. On success → `router.replace('/order/payment-success')` with confirmation params
+7. Success screen shows animated checkmark, supplier, amount, reference; buttons: **View Order History** / **Back to Home**
 
 ---
 
@@ -179,6 +245,14 @@ API_BASE_URL:
 | `getOrders()` | GET `/api/vendor/orders` | Includes consumer + listing data |
 | `updateOrderStatus(id, status)` | PATCH `/api/vendor/orders/:id` | `CONFIRMED \| DELIVERED \| CANCELLED` |
 
+### `ordersApi` methods
+
+| Method | Endpoint | Notes |
+|---|---|---|
+| `initialize(payload)` | POST `/api/orders/initialize` | Creates DB order, calls Paystack, returns `authorizationUrl` + `reference` |
+| `verify(reference)` | POST `/api/orders/verify` | Verifies Paystack transaction; marks order `CONFIRMED` |
+| `list()` | GET `/api/orders` | Consumer's own orders |
+
 ### `ApiUser` type
 
 ```ts
@@ -234,7 +308,7 @@ All screens share a consistent light green palette defined locally as `const C =
 | `accentLight` | `#E8F5E8` | Tinted backgrounds, active chips |
 | `red` | `#D32F2F` | Destructive actions, critical status |
 
-Tab bar (consumer): white bg, `#2D7450` active, `#9EBA9E` inactive.
+Tab bar (consumer + order section): white bg, `#2D7450` active, `#9EBA9E` inactive.
 
 Onboarding/auth screens use a separate `C` palette with `greenBright: '#22C55E'` and `greenDark: '#1A4730'`.
 
@@ -251,6 +325,8 @@ Two visual zones:
 **Refill Reminder:** time picker grid (4 options) → "Reminder Active" state with cancel link.
 
 **Simulate Drain:** animates `gasLevel` 100→0 over ~24s via `setInterval` ref. Auto-scrolls to gauge on start.
+
+**Order Refill button** → `router.push('/order')` — navigates into the order section Stack.
 
 ---
 
@@ -275,7 +351,7 @@ Slide 3 role picker: two frosted-glass cards with `house.fill` (Consumer → `/s
 
 **When adding a new icon:** add the SF Symbol name → MaterialIcons name mapping to `MAPPING` in `icon-symbol.tsx`.
 
-Currently mapped: `house.fill`, `bell.fill`, `clock.fill`, `clock`, `gearshape.fill`, `wifi`, `arrow.clockwise`, `arrow.right`, `arrow.left`, `chevron.right`, `chevron.left`, `checkmark.circle.fill`, `checkmark.circle`, `flame.fill`, `lightbulb.fill`, `chart.line.uptrend.xyaxis`, `chart.bar.fill`, `location.fill`, `xmark.circle.fill`, `plus`, `minus`, `thermometer.medium`, `shield.fill`, `person.fill`, `envelope.fill`, `lock.fill`, `eye.fill`, `eye.slash.fill`, `cart.fill`, `shippingbox.fill`, `mappin.fill`, `tag.fill`, `storefront.fill`, `line.3.horizontal`, `list.bullet`, `phone.fill`, `doc.fill`, `building.2.fill`, `hourglass`, `tray.fill`.
+Currently mapped: `house.fill`, `bell.fill`, `clock.fill`, `clock`, `gearshape.fill`, `wifi`, `arrow.clockwise`, `arrow.right`, `arrow.left`, `chevron.right`, `chevron.left`, `checkmark.circle.fill`, `checkmark.circle`, `flame.fill`, `lightbulb.fill`, `chart.line.uptrend.xyaxis`, `chart.bar.fill`, `location.fill`, `xmark.circle.fill`, `plus`, `minus`, `thermometer.medium`, `shield.fill`, `person.fill`, `envelope.fill`, `lock.fill`, `eye.fill`, `eye.slash.fill`, `cart.fill`, `shippingbox.fill`, `mappin`, `tag.fill`, `storefront.fill`, `line.3.horizontal`, `list.bullet`, `phone.fill`, `doc.fill`, `building.2.fill`, `hourglass`, `tray.fill`.
 
 ---
 
@@ -284,6 +360,9 @@ Currently mapped: `house.fill`, `bell.fill`, `clock.fill`, `clock`, `gearshape.f
 | Path | Usage |
 |---|---|
 | `assets/images/onboarding-hero.jpg` | Background of onboarding slide 3 |
+| `assets/images/6kg.png` | 6 kg cylinder image |
+| `assets/images/12-5kg.png` | 12.5 kg cylinder image |
+| `assets/images/50kg.png` | 50 kg cylinder image |
 
 ## Path alias
 
@@ -301,6 +380,7 @@ Express + TypeScript server on **port 9000**.
 - **bcryptjs** — password hashing (10 salt rounds)
 - **jsonwebtoken** — JWT access + refresh tokens
 - **zod** — request body validation
+- **axios** — HTTP client for Paystack API calls
 
 ### File structure
 ```
@@ -308,7 +388,7 @@ gas-monitor-backend/
   prisma/
     schema.prisma        # All models and enums
   src/
-    index.ts             # Express entry, mounts /api/auth and /api/vendor
+    index.ts             # Express entry; mounts all routers; raw-body middleware for webhook
     lib/
       jwt.ts             # signAccessToken, signRefreshToken, verify*, refreshTokenExpiresAt
       prisma.ts          # Prisma client singleton
@@ -317,7 +397,9 @@ gas-monitor-backend/
     routes/
       auth.ts            # /api/auth/* endpoints
       vendor.ts          # /api/vendor/* endpoints (all require Bearer auth)
-  .env                   # DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PORT
+      cylinders.ts       # /api/cylinders/* endpoints
+      orders.ts          # /api/orders/* endpoints (consumer orders + Paystack integration)
+  .env                   # DATABASE_URL, JWT secrets, PAYSTACK_SECRET_KEY, PORT
   .env.example           # Template (safe to commit)
 ```
 
@@ -327,12 +409,15 @@ gas-monitor-backend/
 
 | Model | Key fields |
 |---|---|
-| `User` | id, email (unique), name, password, **role**, refreshTokens, vendorProfile?, orders |
+| `User` | id, email (unique), name, password, **role**, refreshTokens, vendorProfile?, orders, cylinderProfiles |
 | `RefreshToken` | id, token (unique), userId (FK cascade), expiresAt |
 | `VendorProfile` | id, userId (unique FK), businessName, businessAddress, lat?, lng?, phone, **status** |
 | `VendorDocument` | id, vendorId (FK), url, fileName |
 | `GasListing` | id, vendorId (FK), gasType, customName?, pricePerKg, cylinderSizes[], otherSizes?, inStock |
-| `Order` | id, consumerId (FK), vendorId (FK), listingId (FK), cylinderSize, quantity, totalAmount, deliveryAddress, status, paystackRef? |
+| `CylinderProfile` | id, userId (FK), name, sizeKg, customSizeLabel?, imageKey, isActive |
+| `Order` | id, consumerId (FK), vendorId? (FK), listingId? (FK), supplierName?, cylinderSize, quantity, totalAmount, deliveryAddress, status, paystackRef? (unique), paystackStatus? |
+
+`vendorId` and `listingId` are nullable on `Order` — orders created through the consumer app before vendor/listing DB integration is complete will have these as null and use `supplierName` instead.
 
 ### API endpoints
 
@@ -360,6 +445,24 @@ gas-monitor-backend/
 | GET | `/orders` | Incoming orders with consumer + listing data |
 | PATCH | `/orders/:id` | Body: `{ status: CONFIRMED \| DELIVERED \| CANCELLED }` |
 
+**`/api/orders/`** — all require Bearer token except webhook
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/initialize` | Body: `{ supplierName, cylinderSize, quantity, totalAmount, deliveryAddress }`. Creates `PENDING` order, calls Paystack initialize, returns `{ orderId, reference, authorizationUrl, amount, email }` |
+| POST | `/verify` | Body: `{ reference }`. Verifies with Paystack; sets order status to `CONFIRMED` |
+| GET | `/` | Consumer's own orders, newest first |
+| GET | `/:id` | Single order (ownership checked) |
+| POST | `/webhook` | Paystack webhook — HMAC-SHA512 signature verified; handles `charge.success` event |
+
+### Paystack integration
+
+- **Secret key** — `PAYSTACK_SECRET_KEY` in `.env` (use `sk_test_...` in dev, `sk_live_...` in prod)
+- **Callback URL** — `https://4fgmonitor.app.local/payment-callback` (intercepted by the WebView, never actually loaded)
+- **Reference format** — `4FG-{orderId}` (e.g. `4FG-uuid-here`)
+- **Amount** — sent to Paystack in **kobo** (naira × 100)
+- **Webhook** — mount order before `express.json()` middleware so raw body is available for HMAC verification; the `index.ts` conditionally applies `express.raw()` to `/api/orders/webhook`
+
 ### Token strategy
 - **Access token:** 15 minutes, `JWT_ACCESS_SECRET`
 - **Refresh token:** 7 days, `JWT_REFRESH_SECRET`, stored in `RefreshToken` table
@@ -374,4 +477,5 @@ JWT_REFRESH_SECRET=...
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 PORT=9000
+PAYSTACK_SECRET_KEY=sk_test_...
 ```

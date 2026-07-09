@@ -95,7 +95,7 @@ export default function VendorLayout() {
     closeDrawer();
     setActiveRoute(route);
     setTimeout(() => {
-      if (route === 'index') router.replace('/(vendor)/');
+      if (route === 'index') router.replace('/(vendor)');
       else router.push(`/(vendor)/${route}` as any);
     }, 240);
   }

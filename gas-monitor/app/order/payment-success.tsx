@@ -18,7 +18,7 @@ const C = {
 };
 
 export default function PaymentSuccessScreen() {
-  const { orderId, reference, amount, supplierName } = useLocalSearchParams<{
+  const { reference, amount, supplierName } = useLocalSearchParams<{
     orderId: string;
     reference: string;
     amount: string;

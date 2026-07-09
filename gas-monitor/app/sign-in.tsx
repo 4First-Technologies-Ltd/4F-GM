@@ -226,7 +226,7 @@ export default function SignInScreen() {
             style={s.switchLink}
           >
             <Text style={s.switchText}>
-              Don't have an account?{'  '}
+              Don&apos;t have an account?{'  '}
               <Text style={{ color: C.accent, fontWeight: '700' }}>Sign Up</Text>
             </Text>
           </TouchableOpacity>

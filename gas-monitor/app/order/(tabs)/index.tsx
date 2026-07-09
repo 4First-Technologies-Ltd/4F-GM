@@ -248,7 +248,7 @@ function SupplierCard({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SuppliersScreen() {
   const [screen, setScreen] = useState<'suppliers' | 'order'>('suppliers');
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<(Supplier & { distance: number | null }) | null>(null);
 
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState('Detecting your location...');
