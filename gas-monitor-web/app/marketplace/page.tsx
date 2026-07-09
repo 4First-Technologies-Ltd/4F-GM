@@ -1,4 +1,5 @@
 import NavAuthActions from '@/components/NavAuthActions';
+import Footer from '@/components/Footer';
 
 type GasType = 'cooking' | 'medical' | 'industrial' | 'bulk';
 
@@ -101,6 +102,7 @@ const VENDORS: Vendor[] = [
 
 export default function MarketplacePage() {
   return (
+    <>
     <main>
       <header className="site-header">
         <div className="container navbar-row">
@@ -111,6 +113,7 @@ export default function MarketplacePage() {
           <div className="nav-links">
             <a href="/#features">Features</a>
             <a href="/marketplace" className="active">Marketplace</a>
+            <a href="/downloads">Download</a>
             <a href="/#contact">Contact</a>
           </div>
           <NavAuthActions />
@@ -172,5 +175,7 @@ export default function MarketplacePage() {
         </div>
       </section>
     </main>
+    <Footer />
+    </>
   );
 }

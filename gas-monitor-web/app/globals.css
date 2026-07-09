@@ -8,6 +8,7 @@
   --muted: #6f6a60;
   --accent: #2d7450;
   --accent-soft: #245f43;
+  --accent-dark: #12271d;
   --on-accent: #ffffff;
   --border: #e2ded3;
   --clay: #a9714c;
@@ -415,6 +416,14 @@ main { min-height: 100vh; }
   font-family: var(--font-display), Arial, Helvetica, sans-serif;
   font-size: clamp(1.6rem, 3vw, 2.2rem);
 }
+.section-sub {
+  color: var(--muted);
+  max-width: 56ch;
+  margin: 0.5rem 0 0;
+}
+.section .grid-3 {
+  margin-top: 1.5rem;
+}
 .grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -554,6 +563,286 @@ main { min-height: 100vh; }
 
 @media (max-width: 480px) {
   .hero-checklist { grid-template-columns: 1fr; }
+}
+
+/* ---------- How it works ---------- */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.step-card {
+  text-align: center;
+}
+.step-number {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin: 0 auto 1rem;
+}
+.step-card h3 {
+  margin: 0 0 0.4rem;
+}
+.step-card p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* ---------- Comparison table ---------- */
+.compare-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-top: 1.5rem;
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+  background: var(--card);
+}
+.compare-table th,
+.compare-table td {
+  padding: 0.9rem 1.1rem;
+  text-align: left;
+  font-size: 0.92rem;
+  border-bottom: 1px solid var(--border);
+}
+.compare-table thead th {
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  background: #f8f6f1;
+}
+.compare-table thead th:first-child {
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  background: transparent;
+}
+.compare-table th:nth-child(3),
+.compare-table td:nth-child(3) {
+  background: #e9f6ec;
+}
+.compare-table td:first-child {
+  font-weight: 600;
+}
+.compare-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.compare-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.compare-cell.is-yes {
+  color: var(--accent);
+  font-weight: 700;
+}
+.compare-cell.is-no {
+  color: var(--muted);
+}
+.compare-cell svg {
+  flex-shrink: 0;
+}
+
+/* ---------- Reusable check list (app highlights, etc.) ---------- */
+.simple-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.simple-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+.simple-list svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--accent);
+}
+
+/* ---------- Testimonials ---------- */
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+.testimonial-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.testimonial-stars {
+  display: flex;
+  gap: 0.2rem;
+  color: var(--accent);
+}
+.testimonial-quote {
+  color: var(--text);
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.6;
+}
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: auto;
+}
+.testimonial-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: #e9f6ec;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.testimonial-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.testimonial-role {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* ---------- FAQ ---------- */
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  max-width: 48rem;
+}
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-weight: 700;
+  min-height: 44px;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+.faq-icon {
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+  color: var(--muted);
+}
+.faq-item[open] .faq-icon {
+  transform: rotate(180deg);
+}
+.faq-answer {
+  margin: 0;
+  padding: 0 1.25rem 1.1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .steps-grid { grid-template-columns: 1fr; }
+  .testimonials-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Footer ---------- */
+.site-footer {
+  background: var(--accent-dark);
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2rem;
+  padding-top: 3rem;
+  border-radius: 2.5rem 2.5rem 0 0;
+}
+.footer-inner {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 2rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.footer-brand-col .brand {
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+}
+.footer-brand-col .brand-mark {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.footer-tagline {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.9rem;
+  max-width: 32ch;
+  margin: 0;
+}
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.footer-col h4 {
+  color: #ffffff;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.3rem;
+}
+.footer-col a {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.92rem;
+  min-height: 24px;
+}
+.footer-col a:hover {
+  color: #ffffff;
+}
+.footer-bottom {
+  padding: 1.5rem 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+.footer-bottom p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .footer-inner { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .footer-inner { grid-template-columns: 1fr; }
+  .site-footer { border-radius: 1.5rem 1.5rem 0 0; }
 }
 
 /* ---------- Nav auth actions ---------- */

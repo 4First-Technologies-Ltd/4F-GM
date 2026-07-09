@@ -105,3 +105,20 @@ export function IconCheck({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconMinusCircle({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12h8" />
+    </svg>
+  );
+}
+
+export function IconStar({ className }: IconProps) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2.5l2.9 6.5 7.1.6-5.4 4.7 1.7 7-6.3-4-6.3 4 1.7-7L2 9.6l7.1-.6L12 2.5Z" />
+    </svg>
+  );
+}
