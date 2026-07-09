@@ -1,4 +1,4 @@
-import NavAuthActions from '@/components/NavAuthActions';
+import SiteNav from '@/components/SiteNav';
 import Footer from '@/components/Footer';
 import { IconCheck } from '@/components/icons';
 
@@ -14,21 +14,17 @@ export default function DownloadsPage() {
   return (
     <>
       <main>
-        <header className="site-header">
-          <div className="container navbar-row">
-            <a className="brand" href="/">
-              <span className="brand-mark">4F</span>
-              <span>4FG Smart Gas Monitor</span>
-            </a>
-            <div className="nav-links">
-              <a href="/#features">Features</a>
-              <a href="/marketplace">Marketplace</a>
-              <a href="/downloads" className="active">Download</a>
-              <a href="/#contact">Contact</a>
-            </div>
-            <NavAuthActions />
-          </div>
-        </header>
+        <SiteNav
+          variant="solid"
+          brandHref="/"
+          links={[
+            { href: '/#features', label: 'Features' },
+            { href: '/marketplace', label: 'Marketplace' },
+            { href: '/downloads', label: 'Download', active: true },
+            { href: '/#contact', label: 'Contact' },
+            { href: '/partner', label: 'Partner with us' }
+          ]}
+        />
 
         <section className="section marketplace-intro">
           <div className="container">

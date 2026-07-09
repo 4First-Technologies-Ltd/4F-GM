@@ -1,5 +1,5 @@
 import HeroSlider from '@/components/HeroSlider';
-import NavAuthActions from '@/components/NavAuthActions';
+import SiteNav from '@/components/SiteNav';
 import Footer from '@/components/Footer';
 import { IconCheck, IconMinusCircle, IconStar, IconChevronDown } from '@/components/icons';
 
@@ -18,19 +18,28 @@ const activity = [
 const heroChecklist = [
   'Real-Time Gas Level Monitoring',
   'Low Gas Notifications',
+  'Live Percentage and KG Update Notification',
   'Usage Analytics & Refill Predictions',
   'Mobile App Access Anywhere',
   'Accurate Weight-Based Measurement'
 ];
 
 const goals = [
-  { title: 'Nationwide coverage', text: 'Bringing real-time gas monitoring to homes and businesses across Nigeria, then expanding across West Africa.' },
-  { title: 'A trusted vendor network', text: 'Onboarding certified gas suppliers city by city, so every order ships from someone we vouch for.' },
-  { title: 'Smarter every day', text: 'Our AI refill predictions improve with every household that joins — the goal is a model that just knows.' }
+  {
+    title: 'Nationwide coverage',
+    text: 'Bringing real-time gas monitoring to homes and businesses across Nigeria, then expanding across West Africa.',
+    cta: { label: 'Partner with us', href: '/partner#distributor' }
+  },
+  {
+    title: 'A trusted vendor network',
+    text: 'Onboarding certified gas suppliers city by city, so every order ships from someone we vouch for.',
+    cta: { label: 'Partner with us', href: '/partner#gas-station' }
+  },
+  { title: 'Smarter every day', text: 'Our AI refill predictions improve with every household that joins. The goal is a model that just knows.' }
 ];
 
 const steps = [
-  { title: 'Place your cylinder on the sensor', text: 'No clipping, no Bluetooth pairing — just set the cylinder on the base plate.' },
+  { title: 'Place your cylinder on the sensor', text: 'No clipping, no Bluetooth pairing, just set the cylinder on the base plate.' },
   { title: 'Connect your account', text: 'Sign in on the app or here on the web portal and the sensor syncs automatically.' },
   { title: 'Get alerts & order refills', text: 'See live levels, get AI refill predictions, and order from a verified vendor in one tap.' }
 ];
@@ -38,6 +47,7 @@ const steps = [
 const compareRows = [
   { feature: 'Real-time level tracking', traditional: false, fourFg: 'Live percentage, updated continuously' },
   { feature: 'Predicts your refill date', traditional: false, fourFg: 'AI-powered, based on your usage' },
+  { feature: 'Usage Analytics and Prediction', traditional: false, fourFg: 'Consumption trends and refill forecasts' },
   { feature: 'Alerts before you run out', traditional: false, fourFg: 'Push & email notifications' },
   { feature: 'Order refills without leaving the app', traditional: false, fourFg: 'Verified vendor marketplace' },
   { feature: 'Setup time', traditional: 'N/A', fourFg: 'Under 3 minutes' }
@@ -62,22 +72,18 @@ export default function HomePage() {
   return (
     <>
     <main>
-      <nav className="navbar">
-        <div className="container navbar-row">
-          <a className="brand" href="#">
-            <span className="brand-mark">4F</span>
-            <span>4FG Smart Gas Monitor</span>
-          </a>
-          <div className="nav-links">
-            <a href="#features" className="active">Features</a>
-            <a href="#faq">FAQ</a>
-            <a href="/marketplace">Marketplace</a>
-            <a href="/downloads">Download</a>
-            <a href="#contact">Contact</a>
-          </div>
-          <NavAuthActions />
-        </div>
-      </nav>
+      <SiteNav
+        variant="transparent"
+        brandHref="#"
+        links={[
+          { href: '#features', label: 'Features', active: true },
+          { href: '#faq', label: 'FAQ' },
+          { href: '/marketplace', label: 'Marketplace' },
+          { href: '/downloads', label: 'Download' },
+          { href: '#contact', label: 'Contact' },
+          { href: '/partner', label: 'Partner with us' }
+        ]}
+      />
 
       <section className="hero">
         <HeroSlider />
@@ -169,9 +175,14 @@ export default function HomePage() {
           <p className="section-sub">We&apos;re an early-stage startup — here&apos;s what we&apos;re building toward.</p>
           <div className="grid-3">
             {goals.map((goal) => (
-              <div key={goal.title} className="card">
+              <div key={goal.title} className="card goal-card">
                 <h3>{goal.title}</h3>
                 <p>{goal.text}</p>
+                {goal.cta && (
+                  <a href={goal.cta.href} className="btn btn-primary goal-card-cta">
+                    {goal.cta.label}
+                  </a>
+                )}
               </div>
             ))}
           </div>

@@ -44,6 +44,12 @@ main { min-height: 100vh; }
   width: min(1680px, calc(100% - 6rem));
   margin: 0 auto;
 }
+@media (max-width: 640px) {
+  .container { width: calc(100% - 2.5rem); }
+}
+@media (max-width: 420px) {
+  .container { width: calc(100% - 2rem); }
+}
 
 /* ---------- Navbar ---------- */
 .navbar {
@@ -107,14 +113,96 @@ main { min-height: 100vh; }
   min-height: 44px;
   display: none;
   align-items: center;
+  transition: background-color 150ms ease;
+}
+.nav-cta:hover {
+  background-color: rgba(45, 116, 80, 0.1);
 }
 @media (min-width: 720px) {
   .nav-cta { display: inline-flex; }
 }
 
+/* ---------- Mobile nav toggle ---------- */
+.nav-toggle {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  flex-shrink: 0;
+}
+.nav-auth-desktop {
+  display: none;
+}
+.nav-links-mobile-auth {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .nav-auth-desktop {
+    display: flex;
+  }
+}
+
+@media (max-width: 900px) {
+  .navbar-row {
+    flex-wrap: wrap;
+  }
+  .nav-toggle {
+    display: inline-flex;
+    order: 2;
+  }
+  .brand {
+    order: 1;
+  }
+  .nav-auth-desktop {
+    display: none;
+  }
+  .nav-links {
+    order: 3;
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 220ms ease, opacity 200ms ease;
+  }
+  .nav-links.is-open {
+    max-height: 32rem;
+    opacity: 1;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .nav-links a {
+    min-height: 48px;
+    width: 100%;
+  }
+  .nav-cta {
+    display: inline-flex;
+    width: 100%;
+  }
+  .nav-links-mobile-auth {
+    display: block;
+    margin-top: 0.5rem;
+  }
+  .nav-links-mobile-auth .nav-auth-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+}
+
 /* Transparent header sits over the hero photo — needs light text for contrast */
 .navbar .brand,
-.navbar .nav-links a {
+.navbar .nav-links a,
+.navbar .nav-toggle {
   color: #ffffff;
 }
 .navbar .brand-mark {
@@ -129,6 +217,21 @@ main { min-height: 100vh; }
 .navbar .nav-cta-outline {
   border-color: rgba(255, 255, 255, 0.55);
   color: #ffffff;
+}
+.navbar .nav-cta:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+@media (max-width: 900px) {
+  .navbar .nav-links.is-open {
+    background: rgba(9, 32, 23, 0.92);
+    backdrop-filter: blur(14px);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    border-top: none;
+  }
+  .navbar .nav-links a {
+    padding: 0 0.25rem;
+  }
 }
 
 /* Opaque header for interior pages without a hero photo behind them */
@@ -434,6 +537,19 @@ main { min-height: 100vh; }
   gap: 1rem;
 }
 
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.goal-card p {
+  flex: 1;
+}
+.goal-card-cta {
+  margin-top: 1rem;
+  align-self: flex-start;
+}
+
 /* ---------- Marketplace ---------- */
 .marketplace-intro {
   padding-bottom: 1rem;
@@ -658,6 +774,34 @@ main { min-height: 100vh; }
 }
 .compare-cell svg {
   flex-shrink: 0;
+}
+
+/* ---------- Partner page ---------- */
+.partner-card {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+.partner-card-icon {
+  flex-shrink: 0;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: var(--radius);
+  background: #e9f6ec;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.partner-card-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.partner-card .btn {
+  margin-top: 1.25rem;
+}
+@media (max-width: 720px) {
+  .partner-card { flex-direction: column; }
 }
 
 /* ---------- Reusable check list (app highlights, etc.) ---------- */
