@@ -14,10 +14,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/sign-in');
+      return;
+    }
+    if (user?.role === 'VENDOR' && user.vendorStatus !== 'APPROVED') {
+      router.replace('/vendor-pending');
     }
   }, [loading, user, router]);
 
-  if (loading || !user) {
+  if (loading || !user || (user.role === 'VENDOR' && user.vendorStatus !== 'APPROVED')) {
     return (
       <main className="dashboard-loading">
         <p>Loading your dashboard…</p>

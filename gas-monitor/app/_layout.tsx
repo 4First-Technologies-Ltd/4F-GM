@@ -34,6 +34,8 @@ export default function RootLayout() {
         <Stack.Screen name="sign-in" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="vendor-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="verify-email" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="vendor-pending" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(vendor)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />

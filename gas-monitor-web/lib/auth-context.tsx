@@ -1,14 +1,16 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { authApi, ApiUser, UserRole } from './api';
+import { authApi, ApiUser, UserRole, RegisterResult, OtpSentResult } from './api';
 import { getAccessToken, getSavedUser, clearSession } from './storage';
 
 interface AuthContextValue {
   user: ApiUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, role?: UserRole) => Promise<void>;
+  login: (email: string, password: string) => Promise<ApiUser>;
+  register: (name: string, email: string, password: string, role?: UserRole) => Promise<RegisterResult>;
+  verifyOtp: (email: string, otp: string) => Promise<ApiUser>;
+  resendOtp: (email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET') => Promise<OtpSentResult>;
   logout: () => Promise<void>;
 }
 
@@ -39,11 +41,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const data = await authApi.login(email, password);
     setUser(data.user);
+    return data.user;
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string, role: UserRole = 'CONSUMER') => {
-    const data = await authApi.register(name, email, password, role);
+    return authApi.register(name, email, password, role);
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, otp: string) => {
+    const data = await authApi.verifyOtp(email, otp);
     setUser(data.user);
+    return data.user;
+  }, []);
+
+  const resendOtp = useCallback(async (email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET') => {
+    return authApi.resendOtp(email, purpose);
   }, []);
 
   const logout = useCallback(async () => {
@@ -51,7 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

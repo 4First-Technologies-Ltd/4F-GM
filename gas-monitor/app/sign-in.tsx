@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi, ApiUser } from '@/lib/api';
+import { authApi, ApiUser, ApiRequestError } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
 
 const C = {
@@ -122,6 +122,10 @@ export default function SignInScreen() {
         router.replace('/(tabs)');
       }
     } catch (err) {
+      if (err instanceof ApiRequestError && err.code === 'EMAIL_NOT_VERIFIED') {
+        router.replace({ pathname: '/verify-email', params: { email: email.trim() } });
+        return;
+      }
       setApiErr(err instanceof Error ? err.message : 'Sign in failed. Try again.');
     } finally {
       setLoading(false);
@@ -184,7 +188,7 @@ export default function SignInScreen() {
                 textContentType="password"
               />
               <TouchableOpacity
-                onPress={() => {}}
+                onPress={() => router.push('/forgot-password')}
                 activeOpacity={0.7}
                 style={{ alignSelf: 'flex-end', marginTop: -6 }}
               >

@@ -5,9 +5,16 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { IconGrid, IconPackage, IconSettings, IconStore, IconSignOut, IconClose } from '@/components/icons';
 
-const NAV_ITEMS = [
+const CONSUMER_NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: IconGrid, exact: true },
   { href: '/dashboard/orders', label: 'Orders', icon: IconPackage, exact: false },
+  { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, exact: false }
+];
+
+const VENDOR_NAV_ITEMS = [
+  { href: '/dashboard', label: 'Overview', icon: IconGrid, exact: true },
+  { href: '/dashboard/orders', label: 'Incoming orders', icon: IconPackage, exact: false },
+  { href: '/dashboard/listings', label: 'Listings', icon: IconStore, exact: false },
   { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, exact: false }
 ];
 
@@ -24,6 +31,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const NAV_ITEMS = user?.role === 'VENDOR' ? VENDOR_NAV_ITEMS : CONSUMER_NAV_ITEMS;
 
   return (
     <>

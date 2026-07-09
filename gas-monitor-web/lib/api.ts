@@ -7,6 +7,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://loca
 export type UserRole = 'CONSUMER' | 'VENDOR';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
+export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 
 export interface ApiUser {
   id: string;
@@ -36,8 +37,29 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+export interface RegisterResult {
+  message: string;
+  email: string;
+  otp?: string;
+}
+
+export interface OtpSentResult {
+  message: string;
+  otp?: string;
+}
+
 interface ApiError {
   error: string;
+  code?: string;
+}
+
+export class ApiRequestError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.code = code;
+  }
 }
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
@@ -83,7 +105,7 @@ async function request<T>(
         }
       }
     }
-    throw new Error((data as ApiError).error ?? `HTTP ${res.status}`);
+    throw new ApiRequestError((data as ApiError).error ?? `HTTP ${res.status}`, (data as ApiError).code);
   }
 
   return data as T;
@@ -103,13 +125,27 @@ function getSavedUserSafe(): ApiUser | null {
 // ── Auth API ──────────────────────────────────────────────────────────────────
 
 export const authApi = {
-  async register(name: string, email: string, password: string, role: UserRole = 'CONSUMER'): Promise<AuthResponse> {
-    const data = await request<AuthResponse>('/api/auth/register', {
+  async register(name: string, email: string, password: string, role: UserRole = 'CONSUMER'): Promise<RegisterResult> {
+    return request<RegisterResult>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password, role })
     });
+  },
+
+  async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
+    const data = await request<AuthResponse>('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp })
+    });
     saveSession(data.accessToken, data.refreshToken, data.user);
     return data;
+  },
+
+  async resendOtp(email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET'): Promise<OtpSentResult> {
+    return request('/api/auth/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose })
+    });
   },
 
   async login(email: string, password: string): Promise<AuthResponse> {
@@ -136,6 +172,20 @@ export const authApi = {
   async me(): Promise<ApiUser> {
     const data = await request<{ user: ApiUser }>('/api/auth/me', { auth: true });
     return data.user;
+  },
+
+  async forgotPassword(email: string): Promise<OtpSentResult> {
+    return request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  async resetPassword(email: string, otp: string, password: string): Promise<{ message: string }> {
+    return request('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, password })
+    });
   }
 };
 
@@ -177,5 +227,124 @@ export const ordersApi = {
   async list(): Promise<Order[]> {
     const data = await request<{ orders: Order[] }>('/api/orders', { auth: true });
     return data.orders;
+  }
+};
+
+// ── Vendor API ────────────────────────────────────────────────────────────────
+
+export interface VendorDocument {
+  id: string;
+  url: string;
+  fileName: string;
+}
+
+export interface GasListing {
+  id: string;
+  gasType: GasType;
+  customName?: string;
+  pricePerKg: number;
+  cylinderSizes: string[];
+  otherSizes?: string;
+  inStock: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VendorProfile {
+  id: string;
+  businessName: string;
+  businessAddress: string;
+  lat?: number;
+  lng?: number;
+  phone: string;
+  status: VendorStatus;
+  documents?: VendorDocument[];
+  listings?: GasListing[];
+}
+
+export interface VendorOrder extends Order {
+  consumer: { id: string; name: string; email: string };
+  listing?: GasListing;
+}
+
+export interface CreateVendorProfilePayload {
+  businessName: string;
+  businessAddress: string;
+  phone: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface ListingPayload {
+  gasType: GasType;
+  customName?: string;
+  pricePerKg: number;
+  cylinderSizes: string[];
+  otherSizes?: string;
+  inStock?: boolean;
+}
+
+export const vendorApi = {
+  async createProfile(payload: CreateVendorProfilePayload): Promise<VendorProfile> {
+    const data = await request<{ profile: VendorProfile }>('/api/vendor/profile', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.profile;
+  },
+
+  async getProfile(): Promise<VendorProfile> {
+    const data = await request<{ profile: VendorProfile }>('/api/vendor/me', { auth: true });
+    return data.profile;
+  },
+
+  async uploadDocuments(documents: { url: string; fileName: string }[]): Promise<{ count: number }> {
+    return request('/api/vendor/documents', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ documents })
+    });
+  },
+
+  async getListings(): Promise<GasListing[]> {
+    const data = await request<{ listings: GasListing[] }>('/api/vendor/listings', { auth: true });
+    return data.listings;
+  },
+
+  async createListing(payload: ListingPayload): Promise<GasListing> {
+    const data = await request<{ listing: GasListing }>('/api/vendor/listings', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.listing;
+  },
+
+  async updateListing(id: string, payload: Partial<ListingPayload>): Promise<GasListing> {
+    const data = await request<{ listing: GasListing }>(`/api/vendor/listings/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.listing;
+  },
+
+  async deleteListing(id: string): Promise<void> {
+    await request(`/api/vendor/listings/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  async getOrders(): Promise<VendorOrder[]> {
+    const data = await request<{ orders: VendorOrder[] }>('/api/vendor/orders', { auth: true });
+    return data.orders;
+  },
+
+  async updateOrderStatus(id: string, status: 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'): Promise<VendorOrder> {
+    const data = await request<{ order: VendorOrder }>(`/api/vendor/orders/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ status })
+    });
+    return data.order;
   }
 };

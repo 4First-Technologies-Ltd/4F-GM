@@ -120,8 +120,8 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      await authApi.register(name.trim(), email.trim(), password);
-      router.replace('/(tabs)');
+      const result = await authApi.register(name.trim(), email.trim(), password);
+      router.replace({ pathname: '/verify-email', params: { email: result.email } });
     } catch (err) {
       setApiErr(err instanceof Error ? err.message : 'Registration failed. Try again.');
     } finally {

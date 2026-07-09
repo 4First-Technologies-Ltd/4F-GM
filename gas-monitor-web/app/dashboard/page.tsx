@@ -5,10 +5,19 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order } from '@/lib/api';
 import { formatNaira, STATUS_LABEL } from '@/lib/format';
+import VendorOverview from '@/components/dashboard/VendorOverview';
 
 const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
 
 export default function DashboardOverviewPage() {
+  const { user } = useAuth();
+  if (user?.role === 'VENDOR') {
+    return <VendorOverview />;
+  }
+  return <ConsumerOverview />;
+}
+
+function ConsumerOverview() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);

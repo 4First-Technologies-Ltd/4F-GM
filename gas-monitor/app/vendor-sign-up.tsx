@@ -9,7 +9,8 @@ import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi, vendorApi } from '@/lib/api';
+import { authApi } from '@/lib/api';
+import { setPendingVendorProfile } from '@/lib/pendingVendorProfile';
 
 const C = {
   bg: '#FFFFFF',
@@ -215,23 +216,17 @@ export default function VendorSignUpScreen() {
     setLoading(true);
     setApiErr('');
     try {
-      await authApi.register(name.trim(), email.trim(), password, 'VENDOR');
-
-      await vendorApi.createProfile({
+      setPendingVendorProfile({
         businessName: businessName.trim(),
         businessAddress: businessAddress.trim(),
         phone: phone.trim(),
         lat: coords?.lat,
         lng: coords?.lng,
+        documents: selectedDocs.map((d) => ({ uri: d.uri, fileName: d.fileName })),
       });
 
-      if (selectedDocs.length > 0) {
-        await vendorApi.uploadDocuments(
-          selectedDocs.map((d) => ({ url: d.uri, fileName: d.fileName })),
-        );
-      }
-
-      router.replace('/vendor-pending');
+      const result = await authApi.register(name.trim(), email.trim(), password, 'VENDOR');
+      router.replace({ pathname: '/verify-email', params: { email: result.email, role: 'VENDOR' } });
     } catch (err) {
       setApiErr(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {

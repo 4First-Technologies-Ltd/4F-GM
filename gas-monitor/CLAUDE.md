@@ -56,6 +56,9 @@ Role is stored on `User.role` in the database and in SecureStore as part of the 
 splash.tsx
   ├── no token → /onboarding
   │     └── role picker (slide 3) → /sign-up (consumer) | /vendor-sign-up (vendor)
+  │           └── register() → /verify-email → verifyOtp() issues session
+  │                 ├── CONSUMER → /(tabs)
+  │                 └── VENDOR → creates vendor profile → /vendor-pending
   └── token exists → check role
         ├── CONSUMER → /(tabs)
         └── VENDOR
@@ -63,7 +66,9 @@ splash.tsx
               └── PENDING/REJECTED → /vendor-pending
 ```
 
-Sign-in applies the same role check after `authApi.login()` resolves.
+`authApi.register()` no longer returns a session — email verification is mandatory. It creates an unverified account, emails a 6-digit OTP via Resend, and returns `{ message, email }`. The client must call `authApi.verifyOtp(email, otp)` to get tokens. `sign-in.tsx` applies the same role check as above after `authApi.login()` resolves; if the account isn't verified yet, login fails with `code: 'EMAIL_NOT_VERIFIED'` and the screen redirects to `/verify-email` instead of showing a generic error.
+
+`/forgot-password` (new) is a self-contained 3-step screen (email → OTP + new password → done) that doesn't touch the auth session — it calls `authApi.forgotPassword()`/`resetPassword()` directly.
 
 ### Route table
 
@@ -71,9 +76,11 @@ Sign-in applies the same role check after `authApi.login()` resolves.
 |---|---|---|
 | `app/splash.tsx` | `/splash` | Animated logo, token + role check, auto-navigates after 2.2s |
 | `app/onboarding.tsx` | `/onboarding` | 3-slide carousel; slide 3 shows role picker cards |
-| `app/sign-in.tsx` | `/sign-in` | Email + password; routes to `/(tabs)` or `/(vendor)` based on role |
-| `app/sign-up.tsx` | `/sign-up` | Consumer registration → `/(tabs)` |
-| `app/vendor-sign-up.tsx` | `/vendor-sign-up` | 3-step vendor registration → `/vendor-pending` |
+| `app/sign-in.tsx` | `/sign-in` | Email + password; routes to `/(tabs)` or `/(vendor)` based on role, or `/verify-email` if unverified |
+| `app/sign-up.tsx` | `/sign-up` | Consumer registration → `/verify-email` |
+| `app/vendor-sign-up.tsx` | `/vendor-sign-up` | 3-step vendor registration → `/verify-email` (business info held in `lib/pendingVendorProfile.ts` until OTP verified) |
+| `app/verify-email.tsx` | `/verify-email` | 6-digit OTP entry; on success issues session, creates pending vendor profile if `role=VENDOR` param present, then routes to `/(tabs)` or `/vendor-pending` |
+| `app/forgot-password.tsx` | `/forgot-password` | Email → OTP + new password → done (inline steps, no session involved) |
 | `app/vendor-pending.tsx` | `/vendor-pending` | Holding screen shown until admin approves vendor |
 | `app/(tabs)/` | `/(tabs)` | Consumer tab group |
 | `app/(tabs)/_layout.tsx` | — | `<Tabs>` navigator |
@@ -105,7 +112,7 @@ Stack animation config:
 |---|---|---|
 | `splash` | none | — |
 | `onboarding` | fade | disabled |
-| `sign-in`, `sign-up`, `vendor-sign-up` | slide_from_right | enabled |
+| `sign-in`, `sign-up`, `vendor-sign-up`, `verify-email`, `forgot-password` | slide_from_right | enabled |
 | `vendor-pending`, `(tabs)`, `(vendor)` | fade | disabled |
 | `order` | slide_from_bottom | disabled |
 | `order/[id]` | slide_from_right | enabled |
@@ -171,12 +178,12 @@ Looks up order by `id` param in `MOCK_ORDERS` from `_shared.ts`. Sections:
 | 2 — Business | Phone number, business address (multiline), GPS location (optional) |
 | 3 — Verify | Identity document upload via `expo-image-picker` (skip allowed) |
 
-On submit (step 3), three sequential API calls are made:
-1. `authApi.register(name, email, password, 'VENDOR')` — creates user + saves session
-2. `vendorApi.createProfile(...)` — creates `VendorProfile` (status = PENDING)
-3. `vendorApi.uploadDocuments(...)` — only if files were selected
+On submit (step 3):
+1. Business info + documents are stashed in-memory via `setPendingVendorProfile()` (`lib/pendingVendorProfile.ts`) — a module-level variable, not persisted storage, since it only needs to survive the navigation to `/verify-email`.
+2. `authApi.register(name, email, password, 'VENDOR')` — creates an unverified user, emails an OTP. No session yet.
+3. `router.replace('/verify-email?email=...&role=VENDOR')`.
 
-After submit → `router.replace('/vendor-pending')`.
+`/verify-email` then calls `authApi.verifyOtp()` (issuing the session), reads back the pending profile via `takePendingVendorProfile()`, calls `vendorApi.createProfile(...)` and `vendorApi.uploadDocuments(...)` (if docs were selected), and finally routes to `/vendor-pending`.
 
 ---
 
@@ -225,11 +232,15 @@ API_BASE_URL:
 
 | Method | Endpoint | Notes |
 |---|---|---|
-| `register(name, email, password, role?)` | POST `/api/auth/register` | `role` defaults to `'CONSUMER'`; calls `saveSession` |
-| `login(email, password)` | POST `/api/auth/login` | Calls `saveSession`; response includes `role` + `vendorStatus` |
+| `register(name, email, password, role?)` | POST `/api/auth/register` | `role` defaults to `'CONSUMER'`. Creates an **unverified** account, emails a 6-digit OTP via Resend. Returns `{ message, email }` — no session, no `saveSession` call |
+| `verifyOtp(email, otp)` | POST `/api/auth/verify-otp` | Verifies a signup OTP, marks `emailVerified`, calls `saveSession` |
+| `resendOtp(email, purpose)` | POST `/api/auth/resend-otp` | `purpose` is `'SIGNUP_VERIFICATION'` or `'PASSWORD_RESET'` |
+| `login(email, password)` | POST `/api/auth/login` | Calls `saveSession`; response includes `role` + `vendorStatus`. Throws `ApiRequestError` with `code: 'EMAIL_NOT_VERIFIED'` if the account hasn't verified its email yet |
 | `refresh()` | POST `/api/auth/refresh` | Rotates token pair, returns null on failure |
 | `logout()` | POST `/api/auth/logout` | Revokes refresh token, always calls `clearSession` |
 | `me()` | GET `/api/auth/me` | Returns full user including `role` + `vendorStatus` |
+| `forgotPassword(email)` | POST `/api/auth/forgot-password` | Always responds the same way regardless of whether the account exists (no enumeration). Emails an OTP if it does |
+| `resetPassword(email, otp, password)` | POST `/api/auth/reset-password` | Verifies the OTP and updates the password; revokes all refresh tokens |
 
 ### `vendorApi` methods
 
@@ -274,12 +285,17 @@ interface ApiUser {
 - `VENDOR + APPROVED` → `/(vendor)`
 - `VENDOR + other` → `/vendor-pending`
 - `CONSUMER` → `/(tabs)`
+- Login throwing `code: 'EMAIL_NOT_VERIFIED'` → `/verify-email?email=...` instead of showing an error
 
-**`sign-up.tsx`** — Consumer only. On success: `router.replace('/(tabs)')`.
+**`sign-up.tsx`** — Consumer only. On success: `router.replace('/verify-email?email=...')`.
 
-**`vendor-sign-up.tsx`** — Vendor only. On success: `router.replace('/vendor-pending')`.
+**`vendor-sign-up.tsx`** — Vendor only. On success: `router.replace('/verify-email?email=...&role=VENDOR')`.
 
-Both auth screens use `KeyboardAvoidingView` + `ScrollView`. Shared local `Field` component renders label + styled `TextInput` + optional password toggle + inline error. Validation runs on submit.
+**`verify-email.tsx`** — Single OTP field (6-digit, numeric) + resend link. On `authApi.verifyOtp()` success: creates the pending vendor profile if `role=VENDOR` was passed, then routes to `/(tabs)` or `/vendor-pending`.
+
+**`forgot-password.tsx`** — 3 inline steps (`useState<'email' | 'reset' | 'done'>`): email → OTP + new password + confirm → done. Doesn't touch the auth session; ends with a link back to `/sign-in`.
+
+All auth screens use `KeyboardAvoidingView` + `ScrollView`. Shared local `Field` component renders label + styled `TextInput` + optional password toggle + inline error. Validation runs on submit.
 
 ---
 
@@ -392,6 +408,8 @@ gas-monitor-backend/
     lib/
       jwt.ts             # signAccessToken, signRefreshToken, verify*, refreshTokenExpiresAt
       prisma.ts          # Prisma client singleton
+      otp.ts             # generateOtp, hashOtp, otpExpiresAt (10 min TTL), OTP_MAX_ATTEMPTS (5)
+      email.ts           # sendOtpEmail via Resend; logs to console instead if RESEND_API_KEY is unset
     middleware/
       authenticate.ts    # Bearer token guard → attaches req.user ({ sub, email })
     routes/
@@ -399,17 +417,17 @@ gas-monitor-backend/
       vendor.ts          # /api/vendor/* endpoints (all require Bearer auth)
       cylinders.ts       # /api/cylinders/* endpoints
       orders.ts          # /api/orders/* endpoints (consumer orders + Paystack integration)
-  .env                   # DATABASE_URL, JWT secrets, PAYSTACK_SECRET_KEY, PORT
+  .env                   # DATABASE_URL, JWT secrets, PAYSTACK_SECRET_KEY, RESEND_API_KEY, EMAIL_FROM, PORT
   .env.example           # Template (safe to commit)
 ```
 
 ### Prisma models & enums
 
-**Enums:** `Role` (CONSUMER, VENDOR), `VendorStatus` (PENDING, APPROVED, REJECTED), `GasType` (COOKING, MEDICAL, INDUSTRIAL, BULK, OTHER), `OrderStatus` (PENDING, CONFIRMED, DELIVERED, CANCELLED)
+**Enums:** `Role` (CONSUMER, VENDOR), `VendorStatus` (PENDING, APPROVED, REJECTED), `GasType` (COOKING, MEDICAL, INDUSTRIAL, BULK, OTHER), `OrderStatus` (PENDING, CONFIRMED, DELIVERED, CANCELLED), `OtpPurpose` (SIGNUP_VERIFICATION, PASSWORD_RESET)
 
 | Model | Key fields |
 |---|---|
-| `User` | id, email (unique), name, password, **role**, refreshTokens, vendorProfile?, orders, cylinderProfiles |
+| `User` | id, email (unique), name, password, **role**, **emailVerified**, otpCodeHash?, otpPurpose?, otpExpiresAt?, otpAttempts, refreshTokens, vendorProfile?, orders, cylinderProfiles |
 | `RefreshToken` | id, token (unique), userId (FK cascade), expiresAt |
 | `VendorProfile` | id, userId (unique FK), businessName, businessAddress, lat?, lng?, phone, **status** |
 | `VendorDocument` | id, vendorId (FK), url, fileName |
@@ -425,11 +443,17 @@ gas-monitor-backend/
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/register` | — | Body: `{ name, email, password, role? }`. Role defaults to CONSUMER |
-| POST | `/login` | — | Returns user with `role` + `vendorStatus` |
+| POST | `/register` | — | Body: `{ name, email, password, role? }`. Role defaults to CONSUMER. Creates an **unverified** user, emails a 6-digit OTP (10 min TTL), returns `{ message, email }` — no tokens |
+| POST | `/verify-otp` | — | Body: `{ email, otp }`. Marks `emailVerified`, returns `{ user, accessToken, refreshToken }` like `/register` used to |
+| POST | `/resend-otp` | — | Body: `{ email, purpose: 'SIGNUP_VERIFICATION' \| 'PASSWORD_RESET' }`. Always responds generically |
+| POST | `/login` | — | Returns user with `role` + `vendorStatus`. `403 { code: 'EMAIL_NOT_VERIFIED' }` if not yet verified |
 | POST | `/refresh` | — | Rotates token pair |
 | POST | `/logout` | — | Deletes refresh token |
 | GET | `/me` | Bearer | Returns user with `role` + `vendorStatus` |
+| POST | `/forgot-password` | — | Body: `{ email }`. Always responds the same message regardless of whether the account exists (no enumeration); emails an OTP if it does |
+| POST | `/reset-password` | — | Body: `{ email, otp, password }`. Verifies the OTP, updates the password, revokes all refresh tokens |
+
+OTP codes are 6-digit, sha256-hashed at rest (`otpCodeHash`), expire after 10 minutes, and lock out after 5 wrong attempts (`otpAttempts`) — the caller must request a new one via `/resend-otp`. Outside `NODE_ENV=production`, OTP-issuing endpoints also return the raw `otp` in the response body so the flow is testable without a working Resend key.
 
 **`/api/vendor/`** — all require Bearer token
 
@@ -478,4 +502,6 @@ JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 PORT=9000
 PAYSTACK_SECRET_KEY=sk_test_...
+RESEND_API_KEY=re_...          # optional in dev — OTPs log to console if unset
+EMAIL_FROM="4FG Smart Gas Monitor <onboarding@resend.dev>"
 ```

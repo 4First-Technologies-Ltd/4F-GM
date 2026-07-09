@@ -33,12 +33,22 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum OtpPurpose {
+  SIGNUP_VERIFICATION
+  PASSWORD_RESET
+}
+
 model User {
   id               String            @id @default(uuid())
   email            String            @unique
   name             String
   password         String
   role             Role              @default(CONSUMER)
+  emailVerified    Boolean           @default(false)
+  otpCodeHash      String?
+  otpPurpose       OtpPurpose?
+  otpExpiresAt     DateTime?
+  otpAttempts      Int               @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   refreshTokens    RefreshToken[]

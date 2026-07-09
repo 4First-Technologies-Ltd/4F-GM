@@ -84,8 +84,29 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+export interface RegisterResult {
+  message: string;
+  email: string;
+  otp?: string;
+}
+
+export interface OtpSentResult {
+  message: string;
+  otp?: string;
+}
+
 export interface ApiError {
   error: string;
+  code?: string;
+}
+
+export class ApiRequestError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.code = code;
+  }
 }
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
@@ -133,7 +154,7 @@ async function request<T>(
         }
       }
     }
-    throw new Error((data as ApiError).error ?? `HTTP ${res.status}`);
+    throw new ApiRequestError((data as ApiError).error ?? `HTTP ${res.status}`, (data as ApiError).code);
   }
 
   return data as T;
@@ -142,13 +163,41 @@ async function request<T>(
 // ── Auth API ──────────────────────────────────────────────────────────────────
 
 export const authApi = {
-  async register(name: string, email: string, password: string, role: UserRole = 'CONSUMER'): Promise<AuthResponse> {
-    const data = await request<AuthResponse>('/api/auth/register', {
+  async register(name: string, email: string, password: string, role: UserRole = 'CONSUMER'): Promise<RegisterResult> {
+    return request<RegisterResult>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password, role }),
     });
+  },
+
+  async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
+    const data = await request<AuthResponse>('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
     await saveSession(data.accessToken, data.refreshToken, data.user);
     return data;
+  },
+
+  async resendOtp(email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET'): Promise<OtpSentResult> {
+    return request('/api/auth/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose }),
+    });
+  },
+
+  async forgotPassword(email: string): Promise<OtpSentResult> {
+    return request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  async resetPassword(email: string, otp: string, password: string): Promise<{ message: string }> {
+    return request('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, password }),
+    });
   },
 
   async login(email: string, password: string): Promise<AuthResponse> {

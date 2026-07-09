@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { ApiRequestError } from '@/lib/api';
 
 export default function SignInPage() {
   const { login } = useAuth();
@@ -18,9 +19,17 @@ export default function SignInPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
-      router.push('/dashboard');
+      const user = await login(email, password);
+      if (user.role === 'VENDOR' && user.vendorStatus !== 'APPROVED') {
+        router.push('/vendor-pending');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err) {
+      if (err instanceof ApiRequestError && err.code === 'EMAIL_NOT_VERIFIED') {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
@@ -51,7 +60,12 @@ export default function SignInPage() {
               />
             </div>
             <div className="field">
-              <label htmlFor="password">Password</label>
+              <div className="field-label-row">
+                <label htmlFor="password">Password</label>
+                <Link href="/forgot-password" className="field-label-action">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"

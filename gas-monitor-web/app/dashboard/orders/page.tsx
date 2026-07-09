@@ -2,14 +2,20 @@
 
 import { Suspense, useEffect, useMemo, useState, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order, InitializeOrderResult } from '@/lib/api';
 import { CYLINDER_SIZES, STATUS_LABEL, formatNaira } from '@/lib/format';
+import VendorOrders from '@/components/dashboard/VendorOrders';
 
 type StatusFilter = 'ALL' | Order['status'];
 
 const FILTERS: StatusFilter[] = ['ALL', 'PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
 
 export default function OrdersPage() {
+  const { user } = useAuth();
+  if (user?.role === 'VENDOR') {
+    return <VendorOrders />;
+  }
   return (
     <Suspense fallback={null}>
       <OrdersPageContent />
