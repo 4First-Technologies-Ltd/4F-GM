@@ -2,14 +2,17 @@ import { Platform } from 'react-native';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
-// Android emulator routes "localhost" to the emulator itself — use 10.0.2.2 to
-// reach the host machine. Change to your production URL before deploying.
+// The API now lives in gas-monitor-web's Next.js app (app/api/**), run via
+// `npm run dev` there (default port 3000 — update this if yours picks a
+// different port, e.g. because 3000 was already in use). Android emulator
+// routes "localhost" to the emulator itself — use 10.0.2.2 to reach the host
+// machine.
 
 export const API_BASE_URL = __DEV__
   ? Platform.OS === 'android'
-    ? 'http://10.0.2.2:9000'
-    : 'http://localhost:9000'
-  : 'https://your-production-api.com';
+    ? 'http://10.0.2.2:3000'
+    : 'http://localhost:3000'
+  : 'https://4fgmonitor.com';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
