@@ -31,6 +31,7 @@ export default function Footer() {
 
         <div className="footer-col">
           <h4>Contact</h4>
+          <a href="/contact">Contact us</a>
           <a href="mailto:4firsttechnologieslimited@gmail.com">4firsttechnologieslimited@gmail.com</a>
           <a href="#">Privacy Policy</a>
           <a href="#">Terms of Service</a>

@@ -10,13 +10,31 @@ export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 
+export type UnitPreference = 'KG' | 'LBS';
+
 export interface ApiUser {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
   role: UserRole;
   vendorStatus?: VendorStatus;
+  pushEnabled: boolean;
+  emailNotifEnabled: boolean;
+  smsAlertsEnabled: boolean;
+  unitPreference: UnitPreference;
   createdAt: string;
+}
+
+export interface UpdateProfilePayload {
+  name?: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  pushEnabled?: boolean;
+  emailNotifEnabled?: boolean;
+  smsAlertsEnabled?: boolean;
+  unitPreference?: UnitPreference;
 }
 
 export interface Order {
@@ -175,6 +193,15 @@ export const authApi = {
     return data.user;
   },
 
+  async updateProfile(payload: UpdateProfilePayload): Promise<ApiUser> {
+    const data = await request<{ user: ApiUser }>('/api/auth/me', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.user;
+  },
+
   async forgotPassword(email: string): Promise<OtpSentResult> {
     return request('/api/auth/forgot-password', {
       method: 'POST',
@@ -228,6 +255,20 @@ export const ordersApi = {
   async list(): Promise<Order[]> {
     const data = await request<{ orders: Order[] }>('/api/orders', { auth: true });
     return data.orders;
+  },
+
+  async guestInitialize(payload: InitializeOrderPayload & { email: string; name?: string }): Promise<InitializeOrderResult> {
+    return request<InitializeOrderResult>('/api/orders/guest/initialize', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async guestVerify(reference: string): Promise<{ success: boolean; orderId: string; status: string }> {
+    return request('/api/orders/guest/verify', {
+      method: 'POST',
+      body: JSON.stringify({ reference })
+    });
   }
 };
 
@@ -255,12 +296,24 @@ export interface VendorProfile {
   id: string;
   businessName: string;
   businessAddress: string;
+  bio?: string | null;
+  logoUrl?: string | null;
   lat?: number;
   lng?: number;
   phone: string;
   status: VendorStatus;
   documents?: VendorDocument[];
   listings?: GasListing[];
+}
+
+export interface UpdateVendorProfilePayload {
+  businessName?: string;
+  businessAddress?: string;
+  phone?: string;
+  bio?: string | null;
+  logoUrl?: string | null;
+  lat?: number;
+  lng?: number;
 }
 
 export interface VendorOrder extends Order {
@@ -297,6 +350,15 @@ export const vendorApi = {
 
   async getProfile(): Promise<VendorProfile> {
     const data = await request<{ profile: VendorProfile }>('/api/vendor/me', { auth: true });
+    return data.profile;
+  },
+
+  async updateProfile(payload: UpdateVendorProfilePayload): Promise<VendorProfile> {
+    const data = await request<{ profile: VendorProfile }>('/api/vendor/profile', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
     return data.profile;
   },
 
@@ -347,5 +409,85 @@ export const vendorApi = {
       body: JSON.stringify({ status })
     });
     return data.order;
+  }
+};
+
+// ── Addresses API ─────────────────────────────────────────────────────────────
+
+export interface Address {
+  id: string;
+  label: string;
+  fullAddress: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AddressPayload {
+  label: string;
+  fullAddress: string;
+  isDefault?: boolean;
+}
+
+export const addressApi = {
+  async list(): Promise<Address[]> {
+    const data = await request<{ addresses: Address[] }>('/api/addresses', { auth: true });
+    return data.addresses;
+  },
+
+  async create(payload: AddressPayload): Promise<Address> {
+    const data = await request<{ address: Address }>('/api/addresses', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.address;
+  },
+
+  async update(id: string, payload: Partial<AddressPayload>): Promise<Address> {
+    const data = await request<{ address: Address }>(`/api/addresses/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.address;
+  },
+
+  async remove(id: string): Promise<void> {
+    await request(`/api/addresses/${id}`, { method: 'DELETE', auth: true });
+  }
+};
+
+// ── Analytics API ─────────────────────────────────────────────────────────────
+
+export interface StatusBreakdownEntry {
+  status: OrderStatus;
+  count: number;
+}
+
+export interface ConsumerAnalytics {
+  role: 'CONSUMER';
+  totalSpend: number;
+  totalOrders: number;
+  avgOrderValue: number;
+  statusBreakdown: StatusBreakdownEntry[];
+  monthly: { month: string; spend: number; orders: number }[];
+}
+
+export interface VendorAnalytics {
+  role: 'VENDOR';
+  totalRevenue: number;
+  totalOrders: number;
+  avgOrderValue: number;
+  statusBreakdown: StatusBreakdownEntry[];
+  monthly: { month: string; revenue: number; orders: number }[];
+  topListings: { id: string; name: string; orders: number; revenue: number }[];
+}
+
+export type Analytics = ConsumerAnalytics | VendorAnalytics;
+
+export const analyticsApi = {
+  async get(): Promise<Analytics> {
+    return request<Analytics>('/api/analytics', { auth: true });
   }
 };

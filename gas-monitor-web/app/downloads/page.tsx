@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import SiteNav from '@/components/SiteNav';
 import Footer from '@/components/Footer';
 import { IconCheck } from '@/components/icons';
@@ -18,10 +19,10 @@ export default function DownloadsPage() {
           variant="solid"
           brandHref="/"
           links={[
-            { href: '/#features', label: 'Features' },
+            { href: '/', label: 'Home' },
             { href: '/marketplace', label: 'Marketplace' },
             { href: '/downloads', label: 'Download', active: true },
-            { href: '/#contact', label: 'Contact' },
+            { href: '/contact', label: 'Contact' },
             { href: '/partner', label: 'Partner with us' }
           ]}
         />
@@ -40,6 +41,16 @@ export default function DownloadsPage() {
 
         <section className="section">
           <div className="container">
+            <div className="device-banner" aria-label="The 4FG Monitor device">
+              <Image
+                src="/products/4fg-monitor-front.jpeg"
+                alt="Front view of the 4FG Monitor IoT device showing a live gas level of 12.5 kg, connection status, and indicator lights"
+                width={1280}
+                height={700}
+                sizes="(max-width: 900px) 100vw, 1100px"
+                priority
+              />
+            </div>
             <div className="card get-app-card">
               <div>
                 <h2>Get notified at launch</h2>

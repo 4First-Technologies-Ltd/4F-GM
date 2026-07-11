@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order } from '@/lib/api';
 import { formatNaira, STATUS_LABEL } from '@/lib/format';
 import VendorOverview from '@/components/dashboard/VendorOverview';
+import { IconPackage, IconBell, IconWallet } from '@/components/icons';
 
 const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
 
@@ -68,20 +69,29 @@ function ConsumerOverview() {
 
       <section className="kpi-grid">
         <div className="card kpi-card">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconPackage />
+          </span>
           <span className="kpi-label">Total orders</span>
           <strong className="kpi-value">{loading ? '—' : stats.total}</strong>
         </div>
         <div className="card kpi-card">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconBell />
+          </span>
           <span className="kpi-label">Pending</span>
           <strong className="kpi-value">{loading ? '—' : stats.pending}</strong>
         </div>
         <div className="card kpi-card">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconWallet />
+          </span>
           <span className="kpi-label">Total spend</span>
           <strong className="kpi-value">{loading ? '—' : formatNaira(stats.totalSpend)}</strong>
         </div>
         <div className="card kpi-card kpi-card-accent">
           <span className="kpi-label">Need a refill?</span>
-          <Link href="/dashboard/orders" className="btn btn-primary btn-sm">
+          <Link href="/marketplace" className="btn btn-primary btn-sm">
             Place an order
           </Link>
         </div>
@@ -93,20 +103,29 @@ function ConsumerOverview() {
           {orders.length === 0 && !loading ? (
             <p className="hero-card-sub">No orders yet — your breakdown will appear here.</p>
           ) : (
-            <ul className="status-breakdown" aria-label="Orders by status">
-              {stats.byStatus.map((s) => (
-                <li key={s.status} className="status-breakdown-row">
-                  <span className={`status-pill status-${s.status.toLowerCase()}`}>{STATUS_LABEL[s.status]}</span>
-                  <span className="status-breakdown-bar-track">
-                    <span
-                      className={`status-breakdown-bar status-breakdown-bar-${s.status.toLowerCase()}`}
-                      style={{ width: `${(s.count / stats.max) * 100}%` }}
+            <>
+              <div className="segment-row" aria-label="Orders by status">
+                {stats.byStatus.map((s) => (
+                  <div className="segment" key={s.status}>
+                    <div className="segment-value">{s.count}</div>
+                    <div className="segment-label">{STATUS_LABEL[s.status]}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="segment-bar-track">
+                {stats.total === 0 ? (
+                  <div className="segment-bar-fill" style={{ width: '100%', background: '#f0f1eb' }} />
+                ) : (
+                  stats.byStatus.map((s) => (
+                    <div
+                      key={s.status}
+                      className={`segment-bar-fill status-breakdown-bar-${s.status.toLowerCase()}`}
+                      style={{ width: `${(s.count / stats.total) * 100}%` }}
                     />
-                  </span>
-                  <span className="status-breakdown-count">{s.count}</span>
-                </li>
-              ))}
-            </ul>
+                  ))
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -121,7 +140,7 @@ function ConsumerOverview() {
           {!loading && recentOrders.length === 0 && (
             <p className="hero-card-sub">
               No orders yet.{' '}
-              <Link href="/dashboard/orders" className="link-underline">
+              <Link href="/marketplace" className="link-underline">
                 Place your first refill order
               </Link>
               .

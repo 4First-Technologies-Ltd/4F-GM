@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { vendorApi, VendorProfile, VendorOrder } from '@/lib/api';
 import { formatNaira, STATUS_LABEL } from '@/lib/format';
+import { IconPackage, IconBell, IconWallet, IconStore } from '@/components/icons';
+
+const STATUS_ORDER: VendorOrder['status'][] = ['PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
 
 export default function VendorOverview() {
   const { user } = useAuth();
@@ -37,7 +40,11 @@ export default function VendorOverview() {
     const totalRevenue = orders
       .filter((o) => o.status === 'CONFIRMED' || o.status === 'DELIVERED')
       .reduce((sum, o) => sum + o.totalAmount, 0);
-    return { pending, totalRevenue, total: orders.length, listings: profile?.listings?.length ?? 0 };
+    const byStatus = STATUS_ORDER.map((status) => ({
+      status,
+      count: orders.filter((o) => o.status === status).length
+    }));
+    return { pending, totalRevenue, total: orders.length, listings: profile?.listings?.length ?? 0, byStatus };
   }, [orders, profile]);
 
   const recentOrders = orders.slice(0, 5);
@@ -54,24 +61,59 @@ export default function VendorOverview() {
 
       <section className="kpi-grid">
         <div className="card kpi-card">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconPackage />
+          </span>
           <span className="kpi-label">Total orders</span>
           <strong className="kpi-value">{loading ? '—' : stats.total}</strong>
         </div>
         <div className="card kpi-card">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconBell />
+          </span>
           <span className="kpi-label">Needs action</span>
           <strong className="kpi-value">{loading ? '—' : stats.pending}</strong>
         </div>
         <div className="card kpi-card">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconWallet />
+          </span>
           <span className="kpi-label">Revenue</span>
           <strong className="kpi-value">{loading ? '—' : formatNaira(stats.totalRevenue)}</strong>
         </div>
         <div className="card kpi-card kpi-card-accent">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconStore />
+          </span>
           <span className="kpi-label">Listings</span>
           <Link href="/dashboard/listings" className="btn btn-primary btn-sm">
             {loading ? 'Manage' : `${stats.listings} live`}
           </Link>
         </div>
       </section>
+
+      {stats.total > 0 && (
+        <section className="card">
+          <h2>Orders by status</h2>
+          <div className="segment-row" aria-label="Orders by status">
+            {stats.byStatus.map((s) => (
+              <div className="segment" key={s.status}>
+                <div className="segment-value">{s.count}</div>
+                <div className="segment-label">{STATUS_LABEL[s.status]}</div>
+              </div>
+            ))}
+          </div>
+          <div className="segment-bar-track">
+            {stats.byStatus.map((s) => (
+              <div
+                key={s.status}
+                className={`segment-bar-fill status-breakdown-bar-${s.status.toLowerCase()}`}
+                style={{ width: `${(s.count / stats.total) * 100}%` }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="dashboard-grid">
         <div className="card">

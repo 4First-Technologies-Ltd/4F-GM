@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { authApi, ApiUser, UserRole, RegisterResult, OtpSentResult } from './api';
-import { getAccessToken, getSavedUser, clearSession } from './storage';
+import { authApi, ApiUser, UserRole, RegisterResult, OtpSentResult, UpdateProfilePayload } from './api';
+import { getAccessToken, getSavedUser, clearSession, saveSession, getRefreshToken } from './storage';
 
 interface AuthContextValue {
   user: ApiUser | null;
@@ -12,6 +12,7 @@ interface AuthContextValue {
   verifyOtp: (email: string, otp: string) => Promise<ApiUser>;
   resendOtp: (email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET') => Promise<OtpSentResult>;
   logout: () => Promise<void>;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<ApiUser>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -63,8 +64,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(async (payload: UpdateProfilePayload) => {
+    const updated = await authApi.updateProfile(payload);
+    setUser(updated);
+    const refreshToken = getRefreshToken();
+    const accessToken = getAccessToken();
+    if (refreshToken && accessToken) saveSession(accessToken, refreshToken, updated);
+    return updated;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

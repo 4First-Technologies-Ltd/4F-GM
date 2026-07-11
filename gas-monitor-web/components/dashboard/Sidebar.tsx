@@ -3,11 +3,22 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { IconGrid, IconPackage, IconSettings, IconStore, IconSignOut, IconClose } from '@/components/icons';
+import {
+  IconGrid,
+  IconPackage,
+  IconSettings,
+  IconStore,
+  IconSignOut,
+  IconClose,
+  IconChartBar,
+  IconMapPin
+} from '@/components/icons';
 
 const CONSUMER_NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: IconGrid, exact: true },
   { href: '/dashboard/orders', label: 'Orders', icon: IconPackage, exact: false },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: IconChartBar, exact: false },
+  { href: '/dashboard/addresses', label: 'Addresses', icon: IconMapPin, exact: false },
   { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, exact: false }
 ];
 
@@ -15,6 +26,7 @@ const VENDOR_NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: IconGrid, exact: true },
   { href: '/dashboard/orders', label: 'Incoming orders', icon: IconPackage, exact: false },
   { href: '/dashboard/listings', label: 'Listings', icon: IconStore, exact: false },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: IconChartBar, exact: false },
   { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, exact: false }
 ];
 

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import HeroSlider from '@/components/HeroSlider';
 import SiteNav from '@/components/SiteNav';
 import Footer from '@/components/Footer';
@@ -76,11 +77,11 @@ export default function HomePage() {
         variant="transparent"
         brandHref="#"
         links={[
-          { href: '#features', label: 'Features', active: true },
+          { href: '/', label: 'Home', active: true },
           { href: '#faq', label: 'FAQ' },
           { href: '/marketplace', label: 'Marketplace' },
           { href: '/downloads', label: 'Download' },
-          { href: '#contact', label: 'Contact' },
+          { href: '/contact', label: 'Contact' },
           { href: '/partner', label: 'Partner with us' }
         ]}
       />
@@ -115,10 +116,15 @@ export default function HomePage() {
             <h3>Real-time cylinder insight</h3>
             <p className="hero-card-sub">From sensor to dashboard, instantly.</p>
 
-            <div className="hero-card-visual">
-              <div className="cylinder-dot" style={{ top: '18%', left: '38%' }} />
-              <div className="cylinder-dot" style={{ top: '52%', left: '58%' }} />
-              <div className="cylinder-dot" style={{ top: '74%', left: '30%' }} />
+            <div className="hero-card-visual hero-card-visual-photo">
+              <Image
+                src="/products/4fg-monitor-cylinder.jpeg"
+                alt="4FG Monitor sensor base with a 12.5 kg cylinder on top, showing a live gas level of 12.5 kg"
+                fill
+                sizes="(max-width: 900px) 100vw, 480px"
+                style={{ objectFit: 'contain' }}
+                priority
+              />
               <div className="hero-card-flyout">
                 <span className="flyout-label">LIVE READING</span>
                 <div className="flyout-body">

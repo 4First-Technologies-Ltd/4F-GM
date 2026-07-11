@@ -24,10 +24,10 @@ export default function PartnerPage() {
           variant="solid"
           brandHref="/"
           links={[
-            { href: '/#features', label: 'Features' },
+            { href: '/', label: 'Home' },
             { href: '/marketplace', label: 'Marketplace' },
             { href: '/downloads', label: 'Download' },
-            { href: '/#contact', label: 'Contact' },
+            { href: '/contact', label: 'Contact' },
             { href: '/partner', label: 'Partner with us', active: true }
           ]}
         />
