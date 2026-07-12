@@ -20,6 +20,7 @@ export default function DownloadsPage() {
           brandHref="/"
           links={[
             { href: '/', label: 'Home' },
+            { href: '/about', label: 'About' },
             { href: '/marketplace', label: 'Marketplace' },
             { href: '/downloads', label: 'Download', active: true },
             { href: '/contact', label: 'Contact' },

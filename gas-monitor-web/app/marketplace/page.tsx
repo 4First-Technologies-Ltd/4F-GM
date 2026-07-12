@@ -121,6 +121,7 @@ export default function MarketplacePage() {
           brandHref="/"
           links={[
             { href: '/', label: 'Home' },
+            { href: '/about', label: 'About' },
             { href: '/marketplace', label: 'Marketplace', active: true },
             { href: '/downloads', label: 'Download' },
             { href: '/contact', label: 'Contact' },

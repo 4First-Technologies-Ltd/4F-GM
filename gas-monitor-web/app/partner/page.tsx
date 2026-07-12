@@ -25,6 +25,7 @@ export default function PartnerPage() {
           brandHref="/"
           links={[
             { href: '/', label: 'Home' },
+            { href: '/about', label: 'About' },
             { href: '/marketplace', label: 'Marketplace' },
             { href: '/downloads', label: 'Download' },
             { href: '/contact', label: 'Contact' },

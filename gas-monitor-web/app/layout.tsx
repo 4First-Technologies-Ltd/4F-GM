@@ -10,8 +10,14 @@ const ubuntu = Ubuntu({
 });
 
 export const metadata: Metadata = {
-  title: '4FG Smart Gas Monitor',
-  description: 'A web portal for monitoring gas usage, managing refill alerts, and connecting with nearby vendors.'
+  title: '4First Technologies - Smarter Tech, Safer World.',
+  description: 'Smarter Tech, Safer World. Real-time gas monitoring, AI-powered refill predictions, and a trusted vendor marketplace.',
+  openGraph: {
+    title: '4First Technologies - Smarter Tech, Safer World.',
+    description: 'Smarter Tech, Safer World. Real-time gas monitoring, AI-powered refill predictions, and a trusted vendor marketplace.',
+    siteName: '4First Technologies',
+    type: 'website'
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
