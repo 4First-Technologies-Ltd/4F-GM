@@ -13,7 +13,6 @@ import { IconCheck, IconStar } from '@/components/icons';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
-  { href: '/about', label: 'About' },
   { href: '/marketplace', label: 'Marketplace', active: true },
   { href: '/downloads', label: 'Download' },
   { href: '/contact', label: 'Contact' },

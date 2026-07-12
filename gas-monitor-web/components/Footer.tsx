@@ -7,12 +7,14 @@ export default function Footer() {
             <span className="brand-mark">4F</span>
             <span>4FG Smart Gas Monitor</span>
           </a>
-          <p className="footer-tagline">Smarter Tech, Safer World. — Built with intent.</p>
+          <p className="footer-tagline">
+            Real-time gas monitoring, AI-powered refill predictions, and a trusted vendor marketplace — all in one
+            place.
+          </p>
         </div>
 
         <div className="footer-col">
           <h4>Product</h4>
-          <a href="/about">About us</a>
           <a href="/#features">Features</a>
           <a href="/#faq">FAQ</a>
           <a href="/marketplace">Marketplace</a>

@@ -78,7 +78,6 @@ export default function HomePage() {
         brandHref="#"
         links={[
           { href: '/', label: 'Home', active: true },
-          { href: '/about', label: 'About' },
           { href: '#faq', label: 'FAQ' },
           { href: '/marketplace', label: 'Marketplace' },
           { href: '/downloads', label: 'Download' },
