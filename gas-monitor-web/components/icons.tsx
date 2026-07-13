@@ -197,6 +197,17 @@ export function IconPhone({ className }: IconProps) {
   );
 }
 
+export function IconDevice({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <rect x="6.5" y="7" width="11" height="13.5" rx="2" />
+      <path d="M9.5 7V5.5A1.5 1.5 0 0 1 11 4h2a1.5 1.5 0 0 1 1.5 1.5V7" />
+      <circle cx="12" cy="13" r="2.5" />
+      <path d="M9.5 17.5h5" />
+    </svg>
+  );
+}
+
 export function IconClock({ className }: IconProps) {
   return (
     <svg {...base} className={className} aria-hidden="true">

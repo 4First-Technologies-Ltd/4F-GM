@@ -11,11 +11,13 @@ import {
   IconSignOut,
   IconClose,
   IconChartBar,
-  IconMapPin
+  IconMapPin,
+  IconDevice
 } from '@/components/icons';
 
 const CONSUMER_NAV_ITEMS = [
-  { href: '/dashboard', label: 'Overview', icon: IconGrid, exact: true },
+  { href: '/dashboard/device', label: 'Device', icon: IconDevice, exact: false },
+  { href: '/dashboard/overview', label: 'Overview', icon: IconGrid, exact: false },
   { href: '/dashboard/orders', label: 'Orders', icon: IconPackage, exact: false },
   { href: '/dashboard/analytics', label: 'Analytics', icon: IconChartBar, exact: false },
   { href: '/dashboard/addresses', label: 'Addresses', icon: IconMapPin, exact: false },

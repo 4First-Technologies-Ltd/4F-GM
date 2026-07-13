@@ -6,6 +6,8 @@ import { IconMenu, IconBell } from '@/components/icons';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Overview',
+  '/dashboard/overview': 'Overview',
+  '/dashboard/device': 'Device',
   '/dashboard/orders': 'Orders',
   '/dashboard/listings': 'Listings',
   '/dashboard/analytics': 'Analytics',

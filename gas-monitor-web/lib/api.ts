@@ -412,6 +412,65 @@ export const vendorApi = {
   }
 };
 
+// ── Cylinders API ─────────────────────────────────────────────────────────────
+
+export type CylinderImageKey = '6kg' | '12.5kg' | '50kg';
+
+export interface CylinderProfile {
+  id: string;
+  name: string;
+  sizeKg: number;
+  customSizeLabel?: string | null;
+  imageKey: CylinderImageKey;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CylinderPayload {
+  name: string;
+  sizeKg: number;
+  customSizeLabel?: string;
+  imageKey: CylinderImageKey;
+}
+
+export const cylinderApi = {
+  async list(): Promise<CylinderProfile[]> {
+    const data = await request<{ profiles: CylinderProfile[] }>('/api/cylinders', { auth: true });
+    return data.profiles;
+  },
+
+  async create(payload: CylinderPayload): Promise<CylinderProfile> {
+    const data = await request<{ profile: CylinderProfile }>('/api/cylinders', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.profile;
+  },
+
+  async update(id: string, payload: Partial<CylinderPayload>): Promise<CylinderProfile> {
+    const data = await request<{ profile: CylinderProfile }>(`/api/cylinders/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.profile;
+  },
+
+  async activate(id: string): Promise<CylinderProfile> {
+    const data = await request<{ profile: CylinderProfile }>(`/api/cylinders/${id}/activate`, {
+      method: 'PATCH',
+      auth: true
+    });
+    return data.profile;
+  },
+
+  async remove(id: string): Promise<void> {
+    await request(`/api/cylinders/${id}`, { method: 'DELETE', auth: true });
+  }
+};
+
 // ── Addresses API ─────────────────────────────────────────────────────────────
 
 export interface Address {
