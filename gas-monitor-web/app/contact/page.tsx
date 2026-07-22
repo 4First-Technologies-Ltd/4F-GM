@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import SiteNav from '@/components/SiteNav';
 import Footer from '@/components/Footer';
 import { IconMail, IconPhone, IconMapPin, IconClock } from '@/components/icons';
+import { API_BASE_URL } from '@/lib/api';
 
 const CHANNELS = [
   {
@@ -50,7 +51,7 @@ export default function ContactPage() {
     setError(null);
     setSending(true);
     try {
-      const res = await fetch('/api/contact', {
+      const res = await fetch(`${API_BASE_URL}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, topic, message })

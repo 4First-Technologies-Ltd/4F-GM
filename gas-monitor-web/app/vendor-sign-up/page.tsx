@@ -4,6 +4,8 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import PasswordInput from '@/components/PasswordInput';
+import NetworkStatusDot from '@/components/NetworkStatusDot';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 
@@ -44,6 +46,7 @@ export default function VendorSignUpPage() {
 
   return (
     <main className="auth-page">
+      <NetworkStatusDot />
       <div className="container auth-container">
         <div className="card auth-card">
           <a className="brand" href="/">
@@ -52,6 +55,15 @@ export default function VendorSignUpPage() {
           </a>
           <h1 className="auth-title">Become a vendor</h1>
           <p className="auth-sub">List gas products and manage incoming orders. Your account is reviewed before it goes live.</p>
+
+          <div className="role-tabs" role="group" aria-label="Choose account type">
+            <button type="button" className="role-tab" onClick={() => router.push('/sign-up')}>
+              Consumer
+            </button>
+            <button type="button" className="role-tab is-active">
+              Vendor
+            </button>
+          </div>
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="field">
@@ -81,9 +93,8 @@ export default function VendorSignUpPage() {
             </div>
             <div className="field">
               <label htmlFor="password">Password</label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={6}
@@ -126,9 +137,6 @@ export default function VendorSignUpPage() {
             </button>
           </form>
 
-          <p className="auth-switch">
-            Not a vendor? <Link href="/sign-up">Sign up as a customer</Link>
-          </p>
           <p className="auth-switch">
             Already have an account? <Link href="/sign-in">Sign in</Link>
           </p>

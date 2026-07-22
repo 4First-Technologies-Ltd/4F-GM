@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
+import { adminFetch } from '@/lib/api';
 
 interface VendorProfileDetail {
   id: string;
@@ -76,7 +77,7 @@ export default function UserModal({
   useEffect(() => {
     if (isCreate) return;
     setLoading(true);
-    fetch(`/api/users/${userId}`)
+    adminFetch(`/users/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         const u: UserDetail = data.user;
@@ -94,7 +95,7 @@ export default function UserModal({
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch('/api/users', {
+      const res = await adminFetch('/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,7 +123,7 @@ export default function UserModal({
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/users/${userId}`, {
+      const res = await adminFetch(`/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, phone: phone || null, emailVerified, isSuspended })
@@ -145,7 +146,7 @@ export default function UserModal({
     setError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      const res = await adminFetch(`/users/${userId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Could not delete user.');

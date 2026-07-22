@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from 'react';
 import { useAdminSession } from '@/lib/admin-session-context';
+import { adminFetch } from '@/lib/api';
 
 interface PlatformSettings {
   maintenanceMode: boolean;
@@ -41,7 +42,7 @@ function PlatformSettingsCard({ canEdit }: { canEdit: boolean }) {
   const [saved, setSaved] = useState(false);
 
   function load() {
-    fetch('/api/settings')
+    adminFetch('/settings')
       .then((res) => res.json())
       .then((data) => {
         setSettings(data.settings);
@@ -54,7 +55,7 @@ function PlatformSettingsCard({ canEdit }: { canEdit: boolean }) {
 
   async function patch(payload: Partial<PlatformSettings>) {
     setSaved(false);
-    const res = await fetch('/api/settings', {
+    const res = await adminFetch('/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -160,7 +161,7 @@ function SubAdminsCard() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   function load() {
-    fetch('/api/admin-users')
+    adminFetch('/admin-users')
       .then((res) => res.json())
       .then((data) => setAdmins(data.adminUsers));
   }
@@ -172,7 +173,7 @@ function SubAdminsCard() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch('/api/admin-users', {
+      const res = await adminFetch('/admin-users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, role })
@@ -194,7 +195,7 @@ function SubAdminsCard() {
   async function toggleActive(id: string, isActive: boolean) {
     setBusyId(id);
     try {
-      await fetch(`/api/admin-users/${id}`, {
+      await adminFetch(`/admin-users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !isActive })
@@ -208,7 +209,7 @@ function SubAdminsCard() {
   async function handleDelete(id: string) {
     setBusyId(id);
     try {
-      await fetch(`/api/admin-users/${id}`, { method: 'DELETE' });
+      await adminFetch(`/admin-users/${id}`, { method: 'DELETE' });
       load();
     } finally {
       setBusyId(null);

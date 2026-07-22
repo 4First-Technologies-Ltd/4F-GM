@@ -187,6 +187,18 @@ export default function VendorLayout() {
 
             <View style={d.navSection}>
               <NavItem
+                icon="building.2.fill"
+                label="Business Profile"
+                active={activeRoute === 'profile'}
+                onPress={() => navigate('profile')}
+              />
+              <NavItem
+                icon="doc.fill"
+                label="Documents"
+                active={activeRoute === 'documents'}
+                onPress={() => navigate('documents')}
+              />
+              <NavItem
                 icon="gearshape.fill"
                 label="Settings"
                 active={activeRoute === 'settings'}

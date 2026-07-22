@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { formatNaira } from '@/lib/format';
 import { IconUsers, IconStore, IconPackage } from '@/components/icons';
+import { adminFetch } from '@/lib/api';
 
 interface Stats {
   userCount: number;
@@ -31,10 +32,10 @@ export default function OverviewPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
 
   useEffect(() => {
-    fetch('/api/stats')
+    adminFetch('/stats')
       .then((res) => res.json())
       .then(setStats);
-    fetch('/api/analytics')
+    adminFetch('/analytics')
       .then((res) => res.json())
       .then(setAnalytics);
   }, []);

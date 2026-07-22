@@ -400,7 +400,7 @@ export default function SuppliersScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.filterRow}
-          style={{ flexShrink: 0 }}
+          style={s.filterScroll}
         >
           {FILTERS.map((f) => (
             <TouchableOpacity
@@ -726,11 +726,17 @@ const s = StyleSheet.create({
   },
   locationText: { color: C.text, fontSize: 13, fontWeight: '500', flex: 1 },
 
+  filterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 44,
+    marginBottom: 14,
+  },
   filterRow: {
     paddingHorizontal: 20,
-    paddingBottom: 14,
     gap: 8,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   filterPill: {
     paddingHorizontal: 16,

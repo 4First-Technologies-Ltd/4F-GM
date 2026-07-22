@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { IconTag, IconCheck, IconMinusCircle, IconPackage } from '@/components/icons';
+import { adminFetch } from '@/lib/api';
 
 interface Listing {
   id: string;
@@ -27,7 +28,7 @@ export default function ListingsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    fetch('/api/listings')
+    adminFetch('/listings')
       .then((res) => res.json())
       .then((data) => setListings(data.listings));
   }, []);
@@ -56,7 +57,7 @@ export default function ListingsPage() {
   async function toggleStock(id: string, current: boolean) {
     setBusyId(id);
     try {
-      await fetch(`/api/listings/${id}`, {
+      await adminFetch(`/listings/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inStock: !current })

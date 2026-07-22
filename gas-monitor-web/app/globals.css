@@ -507,21 +507,52 @@ main { min-height: 100vh; }
   gap: 0.4rem;
 }
 .flyout-body strong { font-size: 1.15rem; }
-.flyout-body span { color: var(--muted); font-size: 0.85rem; }
 
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+.hero-gauge-mirror {
+  display: flex;
+  align-items: stretch;
+  gap: 1.5rem;
+  padding: 1.25rem 1.25rem 1rem;
+  border-radius: 1rem;
+  background: #ffffff;
+  border: 1px solid var(--border-soft);
+  margin-bottom: 1.25rem;
 }
-.metric {
-  padding: 0.85rem;
-  border-radius: var(--radius);
-  background: #f8f6f1;
-  border: 1px solid var(--border);
+.hero-gauge-col {
+  flex: 1.1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
 }
-.metric span { font-size: 0.78rem; color: var(--muted); }
-.metric strong { display: block; font-size: 1.15rem; margin-top: 0.3rem; }
+.hero-readings-col {
+  flex: 0.9 1 0;
+  min-width: 0;
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--border-soft);
+}
+.hero-gauge-mirror .dashboard-card-head { width: 100%; }
+.hero-gauge-mirror .dashboard-card-head h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.hero-gauge-wrap { padding: 0.25rem 0 0.35rem; }
+.hero-reading-list { width: 100%; }
+.hero-reading-list li { font-size: 0.85rem; }
+
+@media (max-width: 560px) {
+  .hero-gauge-mirror { flex-direction: column; }
+  .hero-readings-col {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid var(--border-soft);
+    padding-top: 0.75rem;
+  }
+}
+.flyout-body span { color: var(--muted); font-size: 0.85rem; }
 
 .link-underline {
   color: var(--accent);
@@ -1497,7 +1528,6 @@ main { min-height: 100vh; }
 @media (max-width: 900px) {
   .hero-content { grid-template-columns: 1fr; }
   .grid-3 { grid-template-columns: 1fr; }
-  .metrics { grid-template-columns: 1fr; }
   .hero { border-radius: 0 0 1.5rem 1.5rem; }
 }
 
@@ -2658,34 +2688,30 @@ button.nav-cta {
   font: inherit;
 }
 
-.role-picker {
-  display: grid;
-  gap: 0.85rem;
-}
-.role-card {
+.role-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  text-align: left;
-  padding: 1.1rem 1.25rem;
+  gap: 0.25rem;
+  padding: 0.25rem;
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  background: var(--card);
-  cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease;
+  background: var(--surface, #f8fcf8);
+  margin-bottom: 1.5rem;
 }
-.role-card:hover,
-.role-card:focus-visible {
-  border-color: var(--accent);
-  background: #f3f8f4;
-}
-.role-card-title {
-  font-weight: 700;
-  font-size: 1.02rem;
-}
-.role-card-sub {
+.role-tab {
+  flex: 1;
+  padding: 0.6rem;
+  border: none;
+  border-radius: calc(var(--radius) - 4px);
+  background: transparent;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.role-tab.is-active {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* ---------- Dashboard shell ---------- */
@@ -3304,6 +3330,102 @@ button.nav-cta {
 .status-confirmed { background: #e9f6ec; color: var(--accent); }
 .status-delivered { background: #e6f3ea; color: #1f6b45; }
 .status-cancelled { background: #fdecea; color: #b3261e; }
+
+/* ---------- Network status dot ---------- */
+.network-status-dot {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--muted);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6);
+  z-index: 50;
+  transition: background 200ms ease;
+}
+.network-status-online { background: var(--accent); }
+.network-status-offline { background: #d32f2f; }
+
+/* ---------- Profile logo ---------- */
+.profile-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.profile-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.profile-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- Documents ---------- */
+.document-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.document-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  background: #fbfaf7;
+  border: 1px solid var(--border-soft);
+}
+.document-row-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.document-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+.document-row-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--muted);
+}
+.document-empty-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
 
 @media (max-width: 900px) {
   .dashboard-grid { grid-template-columns: 1fr; }
@@ -3980,4 +4102,37 @@ button.nav-cta {
 @media (max-width: 900px) {
   .device-hero-actions { align-items: flex-start; }
   .device-size-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- Password show/hide toggle ---------- */
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 3.1rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.25rem;
+  transform: translateY(-50%);
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  color: var(--accent);
 }

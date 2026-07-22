@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
+import { NetworkStatusDot } from '@/components/network-status-dot';
 
 const C = {
   bg: '#FFFFFF',
@@ -90,6 +91,33 @@ function Field({
   );
 }
 
+function RoleTabs({
+  role,
+  onChange,
+}: {
+  role: 'CONSUMER' | 'VENDOR';
+  onChange: (r: 'CONSUMER' | 'VENDOR') => void;
+}) {
+  return (
+    <View style={rt.wrap}>
+      <TouchableOpacity
+        style={[rt.tab, role === 'CONSUMER' && rt.tabActive]}
+        onPress={() => onChange('CONSUMER')}
+        activeOpacity={0.8}
+      >
+        <Text style={[rt.tabText, role === 'CONSUMER' && rt.tabTextActive]}>Consumer</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[rt.tab, role === 'VENDOR' && rt.tabActive]}
+        onPress={() => onChange('VENDOR')}
+        activeOpacity={0.8}
+      >
+        <Text style={[rt.tabText, role === 'VENDOR' && rt.tabTextActive]}>Vendor</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function SignUpScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -132,6 +160,7 @@ export default function SignUpScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="dark" />
+      <NetworkStatusDot />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -141,16 +170,6 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Back */}
-          <TouchableOpacity
-            style={s.back}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <IconSymbol name="chevron.left" size={22} color={C.accent} />
-          </TouchableOpacity>
-
           {/* Header */}
           <View style={s.header}>
             <View style={s.badge}>
@@ -159,6 +178,11 @@ export default function SignUpScreen() {
             <Text style={s.title}>Create Account</Text>
             <Text style={s.subtitle}>Start monitoring your gas today</Text>
           </View>
+
+          <RoleTabs
+            role="CONSUMER"
+            onChange={(r) => { if (r === 'VENDOR') router.replace('/vendor-sign-up'); }}
+          />
 
           {/* Form */}
           <View style={s.form}>
@@ -280,23 +304,34 @@ const sf = StyleSheet.create({
   },
 });
 
+// ── Role tabs styles ──────────────────────────────────────────────────────────
+const rt = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    marginBottom: 22,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  tabActive: { backgroundColor: C.accent },
+  tabText: { color: C.muted, fontSize: 14, fontWeight: '700' },
+  tabTextActive: { color: '#FFFFFF' },
+});
+
 // ── Screen styles ─────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 28,
     paddingBottom: 32,
-  },
-
-  back: {
-    marginTop: 8,
-    marginBottom: 8,
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: C.accentLight,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   header: {

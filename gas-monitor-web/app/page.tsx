@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import HeroSlider from '@/components/HeroSlider';
+import HeroLiveGauge from '@/components/HeroLiveGauge';
 import SiteNav from '@/components/SiteNav';
 import Footer from '@/components/Footer';
 import { IconCheck, IconMinusCircle, IconStar, IconChevronDown } from '@/components/icons';
@@ -8,12 +8,6 @@ const features = [
   { title: 'Live cylinder insights', text: 'Track gas levels, refill forecasts, and reminder thresholds in one clean dashboard.' },
   { title: 'Vendor marketplace', text: 'Find nearby suppliers, compare prices, and place orders with confidence.' },
   { title: 'Secure account flow', text: 'Support for consumer and vendor roles with a modern authentication experience.' }
-];
-
-const activity = [
-  { label: 'Refill readiness', value: '82%' },
-  { label: 'Next refill ETA', value: '3 days' },
-  { label: 'Nearby vendors', value: '14' }
 ];
 
 const heroChecklist = [
@@ -116,32 +110,7 @@ export default function HomePage() {
             <h3>Real-time cylinder insight</h3>
             <p className="hero-card-sub">From sensor to dashboard, instantly.</p>
 
-            <div className="hero-card-visual hero-card-visual-photo">
-              <Image
-                src="/products/4fg-monitor-cylinder.jpeg"
-                alt="4FG Monitor sensor base with a 12.5 kg cylinder on top, showing a live gas level of 12.5 kg"
-                fill
-                sizes="(max-width: 900px) 100vw, 480px"
-                style={{ objectFit: 'contain' }}
-                priority
-              />
-              <div className="hero-card-flyout">
-                <span className="flyout-label">LIVE READING</span>
-                <div className="flyout-body">
-                  <strong>82%</strong>
-                  <span>Cylinder A2</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="metrics">
-              {activity.map((item) => (
-                <div key={item.label} className="metric">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
+            <HeroLiveGauge />
           </div>
         </div>
       </section>

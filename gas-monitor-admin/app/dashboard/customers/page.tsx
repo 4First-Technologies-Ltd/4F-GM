@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { IconUserCircle, IconCheck, IconWallet, IconPackage } from '@/components/icons';
 import { formatNaira } from '@/lib/format';
 import UserModal from '@/components/UserModal';
+import { adminFetch } from '@/lib/api';
 
 interface Customer {
   id: string;
@@ -26,7 +27,7 @@ export default function CustomersPage() {
   const [openUserId, setOpenUserId] = useState<string | null | undefined>(undefined);
 
   const load = useCallback(() => {
-    fetch('/api/customers')
+    adminFetch('/customers')
       .then((res) => res.json())
       .then((data) => setCustomers(data.customers));
   }, []);

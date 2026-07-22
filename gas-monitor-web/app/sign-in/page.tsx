@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { ApiRequestError } from '@/lib/api';
+import PasswordInput from '@/components/PasswordInput';
+import NetworkStatusDot from '@/components/NetworkStatusDot';
 
 export default function SignInPage() {
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const router = useRouter();
+  const [role, setRole] = useState<'CONSUMER' | 'VENDOR'>('CONSUMER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +23,15 @@ export default function SignInPage() {
     setSubmitting(true);
     try {
       const user = await login(email, password);
+      if (user.role !== role) {
+        await logout();
+        setError(
+          user.role === 'VENDOR'
+            ? 'This account is registered as a Vendor. Switch to the Vendor tab to sign in.'
+            : 'This account is registered as a Consumer. Switch to the Consumer tab to sign in.'
+        );
+        return;
+      }
       if (user.role === 'VENDOR' && user.vendorStatus !== 'APPROVED') {
         router.push('/vendor-pending');
       } else {
@@ -38,6 +50,7 @@ export default function SignInPage() {
 
   return (
     <main className="auth-page">
+      <NetworkStatusDot />
       <div className="container auth-container">
         <div className="card auth-card">
           <a className="brand" href="/">
@@ -46,6 +59,23 @@ export default function SignInPage() {
           </a>
           <h1 className="auth-title">Welcome back</h1>
           <p className="auth-sub">Sign in to track cylinders, reminders, and orders.</p>
+
+          <div className="role-tabs" role="group" aria-label="Sign in as">
+            <button
+              type="button"
+              className={`role-tab${role === 'CONSUMER' ? ' is-active' : ''}`}
+              onClick={() => setRole('CONSUMER')}
+            >
+              Consumer
+            </button>
+            <button
+              type="button"
+              className={`role-tab${role === 'VENDOR' ? ' is-active' : ''}`}
+              onClick={() => setRole('VENDOR')}
+            >
+              Vendor
+            </button>
+          </div>
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="field">
@@ -66,9 +96,8 @@ export default function SignInPage() {
                   Forgot password?
                 </Link>
               </div>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 minLength={6}

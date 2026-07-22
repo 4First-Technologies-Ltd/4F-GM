@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { IconPackage, IconBell, IconCheck, IconWallet } from '@/components/icons';
 import { formatNaira } from '@/lib/format';
+import { adminFetch } from '@/lib/api';
 
 interface OrderRow {
   id: string;
@@ -24,7 +25,7 @@ export default function OrdersPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('ALL');
 
   const load = useCallback(() => {
-    fetch('/api/orders')
+    adminFetch('/orders')
       .then((res) => res.json())
       .then((data) => setOrders(data.orders));
   }, []);

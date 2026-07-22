@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import { AdminSessionProvider, AdminSession } from '@/lib/admin-session-context';
+import { adminFetch } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/auth/me')
+    adminFetch('/auth/me')
       .then(async (res) => {
         if (cancelled) return;
         if (res.ok) {

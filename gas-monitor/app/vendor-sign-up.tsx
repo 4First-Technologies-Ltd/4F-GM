@@ -11,6 +11,7 @@ import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
 import { setPendingVendorProfile } from '@/lib/pendingVendorProfile';
+import { NetworkStatusDot } from '@/components/network-status-dot';
 
 const C = {
   bg: '#FFFFFF',
@@ -78,6 +79,35 @@ function Field({
         )}
       </View>
       {!!error && <Text style={sf.error}>{error}</Text>}
+    </View>
+  );
+}
+
+// ── Role tabs ─────────────────────────────────────────────────────────────────
+
+function RoleTabs({
+  role,
+  onChange,
+}: {
+  role: 'CONSUMER' | 'VENDOR';
+  onChange: (r: 'CONSUMER' | 'VENDOR') => void;
+}) {
+  return (
+    <View style={rt.wrap}>
+      <TouchableOpacity
+        style={[rt.tab, role === 'CONSUMER' && rt.tabActive]}
+        onPress={() => onChange('CONSUMER')}
+        activeOpacity={0.8}
+      >
+        <Text style={[rt.tabText, role === 'CONSUMER' && rt.tabTextActive]}>Consumer</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[rt.tab, role === 'VENDOR' && rt.tabActive]}
+        onPress={() => onChange('VENDOR')}
+        activeOpacity={0.8}
+      >
+        <Text style={[rt.tabText, role === 'VENDOR' && rt.tabTextActive]}>Vendor</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -161,8 +191,7 @@ export default function VendorSignUpScreen() {
   }
 
   function goBack() {
-    if (step === 1) router.back();
-    else setStep((s) => (s - 1) as Step);
+    setStep((s) => (s - 1) as Step);
   }
 
   function goNext() {
@@ -237,14 +266,17 @@ export default function VendorSignUpScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="dark" />
+      <NetworkStatusDot />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
 
         {/* Header */}
         <View style={s.header}>
-          <TouchableOpacity style={s.backBtn} onPress={goBack} activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <IconSymbol name="chevron.left" size={22} color={C.accent} />
-          </TouchableOpacity>
+          {step > 1 && (
+            <TouchableOpacity style={s.backBtn} onPress={goBack} activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <IconSymbol name="chevron.left" size={22} color={C.accent} />
+            </TouchableOpacity>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Vendor Sign Up</Text>
             <Text style={s.headerSub}>Step {step} of 3</Text>
@@ -268,6 +300,11 @@ export default function VendorSignUpScreen() {
                 <Text style={s.formTitle}>Account Details</Text>
                 <Text style={s.formSub}>Set up your login and business identity</Text>
               </View>
+
+              <RoleTabs
+                role="VENDOR"
+                onChange={(r) => { if (r === 'CONSUMER') router.replace('/sign-up'); }}
+              />
 
               <Field label="Your full name" value={name}
                 onChangeText={(t) => { setName(t); clearErr('name'); }}
@@ -471,6 +508,27 @@ const si = StyleSheet.create({
     marginHorizontal: 6,
   },
   lineDone: { backgroundColor: C.accent },
+});
+
+// ── Role tabs styles ──────────────────────────────────────────────────────────
+const rt = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1.5,
+    borderColor: C.border,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  tabActive: { backgroundColor: C.accent },
+  tabText: { color: C.muted, fontSize: 14, fontWeight: '700' },
+  tabTextActive: { color: '#FFFFFF' },
 });
 
 // ── Field styles ──────────────────────────────────────────────────────────────

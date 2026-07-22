@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { IconUsers, IconUserCircle, IconStore, IconCheck } from '@/components/icons';
 import UserModal from '@/components/UserModal';
+import { adminFetch } from '@/lib/api';
 
 interface UserRow {
   id: string;
@@ -26,7 +27,7 @@ export default function UsersPage() {
   const [openUserId, setOpenUserId] = useState<string | null | undefined>(undefined);
 
   const load = useCallback(() => {
-    fetch('/api/users')
+    adminFetch('/users')
       .then((res) => res.json())
       .then((data) => setUsers(data.users));
   }, []);

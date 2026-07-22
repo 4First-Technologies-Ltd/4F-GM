@@ -10,6 +10,7 @@ import { ordersApi, InitializeOrderResult } from '@/lib/api';
 import { formatNaira } from '@/lib/format';
 import { getListing, AREAS, DELIVERY_FEE, MAX_QUANTITY, CATEGORY_LABEL } from '@/lib/catalog';
 import { IconCheck, IconStar } from '@/components/icons';
+import PasswordInput from '@/components/PasswordInput';
 
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
@@ -365,9 +366,8 @@ function CheckoutContent() {
                       Forgot password?
                     </a>
                   </div>
-                  <input
+                  <PasswordInput
                     id="ci-password"
-                    type="password"
                     required
                     autoComplete="current-password"
                     value={signinPassword}
@@ -411,9 +411,8 @@ function CheckoutContent() {
                 </div>
                 <div className="field">
                   <label htmlFor="cs-password">Password</label>
-                  <input
+                  <PasswordInput
                     id="cs-password"
-                    type="password"
                     required
                     minLength={8}
                     autoComplete="new-password"

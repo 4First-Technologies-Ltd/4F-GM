@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CONSUMER
+  VENDOR
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GasType {
+  COOKING
+  MEDICAL
+  INDUSTRIAL
+  BULK
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  DELIVERED
+  CANCELLED
+}
+
+enum OtpPurpose {
+  SIGNUP_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum UnitPreference {
+  KG
+  LBS
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  OPERATIONS
+  SUPPORT
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  name             String
+  phone            String?
+  avatarUrl        String?
+  password         String
+  role             Role              @default(CONSUMER)
+  emailVerified    Boolean           @default(false)
+  isSuspended      Boolean           @default(false)
+  otpCodeHash      String?
+  otpPurpose       OtpPurpose?
+  otpExpiresAt     DateTime?
+  otpAttempts      Int               @default(0)
+  pushEnabled      Boolean           @default(true)
+  emailNotifEnabled Boolean          @default(true)
+  smsAlertsEnabled  Boolean          @default(false)
+  unitPreference   UnitPreference    @default(KG)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  refreshTokens    RefreshToken[]
+  vendorProfile    VendorProfile?
+  orders           Order[]           @relation("ConsumerOrders")
+  cylinderProfiles CylinderProfile[]
+  addresses        Address[]
+
+  @@map("users")
+}
+
+model Address {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String
+  fullAddress String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("addresses")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model VendorProfile {
+  id              String           @id @default(uuid())
+  userId          String           @unique
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName    String
+  businessAddress String
+  bio             String?
+  logoUrl         String?
+  lat             Float?
+  lng             Float?
+  phone           String
+  status          VendorStatus     @default(PENDING)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  documents       VendorDocument[]
+  listings        GasListing[]
+  orders          Order[]          @relation("VendorOrders")
+
+  @@map("vendor_profiles")
+}
+
+model VendorDocument {
+  id        String        @id @default(uuid())
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  url       String
+  fileName  String
+  createdAt DateTime      @default(now())
+
+  @@map("vendor_documents")
+}
+
+model GasListing {
+  id            String        @id @default(uuid())
+  vendorId      String
+  vendor        VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  gasType       GasType
+  customName    String?
+  pricePerKg    Float
+  cylinderSizes String[]
+  otherSizes    String?
+  inStock       Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  orders        Order[]
+
+  @@map("gas_listings")
+}
+
+model CylinderProfile {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  sizeKg          Float
+  customSizeLabel String?
+  imageKey        String   @default("12.5kg")
+  isActive        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("cylinder_profiles")
+}
+
+model Order {
+  id              String         @id @default(uuid())
+  consumerId      String
+  consumer        User           @relation("ConsumerOrders", fields: [consumerId], references: [id])
+  vendorId        String?
+  vendor          VendorProfile? @relation("VendorOrders", fields: [vendorId], references: [id])
+  listingId       String?
+  listing         GasListing?    @relation(fields: [listingId], references: [id])
+  supplierName    String?
+  cylinderSize    String
+  quantity        Int
+  totalAmount     Float
+  deliveryAddress String
+  status          OrderStatus    @default(PENDING)
+  paystackRef     String?        @unique
+  paystackStatus  String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("orders")
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(SUPPORT)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("admin_users")
+}
+
+model PlatformSettings {
+  id                 String   @id @default("singleton")
+  maintenanceMode    Boolean  @default(false)
+  allowVendorSignups Boolean  @default(true)
+  supportEmail       String?
+  platformFeePercent Float    @default(0)
+  updatedAt          DateTime @updatedAt
+
+  @@map("platform_settings")
+}

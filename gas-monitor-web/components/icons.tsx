@@ -208,6 +208,46 @@ export function IconDevice({ className }: IconProps) {
   );
 }
 
+export function IconEye({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function IconEyeOff({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M4 4l16 16" />
+      <path d="M10.6 6c.46-.08.93-.13 1.4-.13 6 0 9.5 6.13 9.5 6.13a17.6 17.6 0 0 1-2.5 3.2" />
+      <path d="M6.6 6.9C4 8.7 2.5 12 2.5 12S6 18.13 12 18.13c1.2 0 2.3-.24 3.3-.63" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
+export function IconUser({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.5 20.5c0-4.1 3.4-7 7.5-7s7.5 2.9 7.5 7" />
+    </svg>
+  );
+}
+
+export function IconFileText({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M7 3.5h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
+      <path d="M14 3.5v4h4" />
+      <path d="M9 13h6" />
+      <path d="M9 16.5h6" />
+    </svg>
+  );
+}
+
 export function IconClock({ className }: IconProps) {
   return (
     <svg {...base} className={className} aria-hidden="true">

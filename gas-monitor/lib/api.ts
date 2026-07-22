@@ -2,17 +2,15 @@ import { Platform } from 'react-native';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
-// The API now lives in gas-monitor-web's Next.js app (app/api/**), run via
-// `npm run dev` there (default port 3000 — update this if yours picks a
-// different port, e.g. because 3000 was already in use). Android emulator
-// routes "localhost" to the emulator itself — use 10.0.2.2 to reach the host
-// machine.
+// The API lives in the standalone gas-monitor-backend service (Express + Prisma),
+// run via `npm run dev` there (port 9000). Android emulator routes "localhost" to
+// the emulator itself — use 10.0.2.2 to reach the host machine.
 
 export const API_BASE_URL = __DEV__
   ? Platform.OS === 'android'
-    ? 'http://10.0.2.2:3000'
-    : 'http://localhost:3000'
-  : 'https://4fgmonitor.com';
+    ? 'http://10.0.2.2:9000'
+    : 'http://localhost:9000'
+  : 'https://gas-monitor-backend-production.up.railway.app';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,12 +19,27 @@ export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
 
+export type UnitPreference = 'KG' | 'LBS';
+
 export interface ApiUser {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
   role: UserRole;
   vendorStatus?: VendorStatus;
+  pushEnabled: boolean;
+  emailNotifEnabled: boolean;
+  smsAlertsEnabled: boolean;
+  unitPreference: UnitPreference;
+  createdAt: string;
+}
+
+export interface VendorDocument {
+  id: string;
+  url: string;
+  fileName: string;
   createdAt: string;
 }
 
@@ -34,10 +47,13 @@ export interface VendorProfile {
   id: string;
   businessName: string;
   businessAddress: string;
+  bio?: string | null;
+  logoUrl?: string | null;
   lat?: number;
   lng?: number;
   phone: string;
   status: VendorStatus;
+  documents?: VendorDocument[];
   createdAt: string;
   updatedAt: string;
 }
@@ -244,6 +260,25 @@ export const authApi = {
     const data = await request<{ user: ApiUser }>('/api/auth/me', { auth: true });
     return data.user;
   },
+
+  async updateProfile(patch: Partial<{
+    name: string;
+    phone: string | null;
+    avatarUrl: string | null;
+    pushEnabled: boolean;
+    emailNotifEnabled: boolean;
+    smsAlertsEnabled: boolean;
+    unitPreference: UnitPreference;
+  }>): Promise<ApiUser> {
+    const data = await request<{ user: ApiUser }>('/api/auth/me', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(patch),
+    });
+    const [accessToken, refreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
+    if (accessToken && refreshToken) await saveSession(accessToken, refreshToken, data.user);
+    return data.user;
+  },
 };
 
 // ── Vendor API ────────────────────────────────────────────────────────────────
@@ -266,6 +301,23 @@ export const vendorApi = {
 
   async getProfile(): Promise<VendorProfile> {
     const res = await request<{ profile: VendorProfile }>('/api/vendor/me', { auth: true });
+    return res.profile;
+  },
+
+  async updateProfile(data: Partial<{
+    businessName: string;
+    businessAddress: string;
+    phone: string;
+    bio: string | null;
+    logoUrl: string | null;
+    lat: number;
+    lng: number;
+  }>): Promise<VendorProfile> {
+    const res = await request<{ profile: VendorProfile }>('/api/vendor/profile', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(data),
+    });
     return res.profile;
   },
 

@@ -1,7 +1,8 @@
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
 
-// The API now lives in this same Next.js app (app/api/**), so all calls are same-origin.
-export const API_BASE_URL = '';
+// The API lives in the standalone gas-monitor-backend service (Express + Prisma).
+// Set NEXT_PUBLIC_API_URL to its origin; defaults to the local dev backend (port 9000).
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:9000';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -278,6 +279,7 @@ export interface VendorDocument {
   id: string;
   url: string;
   fileName: string;
+  createdAt: string;
 }
 
 export interface GasListing {

@@ -10,8 +10,15 @@ const ubuntu = Ubuntu({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://4fgmonitor.com'),
   title: '4FG Smart Gas Monitor',
-  description: 'A web portal for monitoring gas usage, managing refill alerts, and connecting with nearby vendors.'
+  description: 'A web portal for monitoring gas usage, managing refill alerts, and connecting with nearby vendors.',
+  openGraph: {
+    title: '4FG Smart Gas Monitor',
+    description: 'A web portal for monitoring gas usage, managing refill alerts, and connecting with nearby vendors.',
+    url: 'https://4fgmonitor.com',
+    siteName: '4FG Smart Gas Monitor'
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -14,6 +14,7 @@ import {
   IconLogout
 } from '@/components/icons';
 import { useAdminSession } from '@/lib/admin-session-context';
+import { adminFetch } from '@/lib/api';
 
 const SECTIONS = [
   {
@@ -52,7 +53,7 @@ export default function Sidebar() {
   const { name, role } = useAdminSession();
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await adminFetch('/auth/logout', { method: 'POST' });
     router.replace('/login');
   }
 

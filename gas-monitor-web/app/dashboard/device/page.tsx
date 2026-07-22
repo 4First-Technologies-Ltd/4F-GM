@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import Image from 'next/image';
 import { cylinderApi, CylinderProfile, CylinderImageKey, ApiRequestError } from '@/lib/api';
 import { IconCheck, IconClose, IconBell } from '@/components/icons';
+import { getBarColor, getStatus } from '@/lib/gauge';
+import GaugeRing from '@/components/GaugeRing';
 
 // ── Linked-device persistence ─────────────────────────────────────────────────
 
@@ -42,96 +44,6 @@ function loadSettings(): DeviceSettings {
   } catch {
     return DEFAULT_SETTINGS;
   }
-}
-
-// ── Gauge color helpers (same math as the mobile app) ─────────────────────────
-
-function hexToRgb(hex: string): [number, number, number] {
-  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
-}
-
-function lerpHex(c1: string, c2: string, t: number): string {
-  const [r1, g1, b1] = hexToRgb(c1);
-  const [r2, g2, b2] = hexToRgb(c2);
-  const v = (a: number, b: number) =>
-    Math.round(a + (b - a) * t)
-      .toString(16)
-      .padStart(2, '0');
-  return `#${v(r1, r2)}${v(g1, g2)}${v(b1, b2)}`;
-}
-
-const BAR_STOPS: [number, string][] = [
-  [0, '#FF3B30'],
-  [0.25, '#FF9500'],
-  [0.5, '#FFCC00'],
-  [0.75, '#4CD964'],
-  [1, '#34C759']
-];
-
-function getBarColor(t: number): string {
-  for (let i = 0; i < BAR_STOPS.length - 1; i++) {
-    const [t1, c1] = BAR_STOPS[i];
-    const [t2, c2] = BAR_STOPS[i + 1];
-    if (t <= t2) return lerpHex(c1, c2, Math.max(0, Math.min(1, (t - t1) / (t2 - t1))));
-  }
-  return BAR_STOPS[BAR_STOPS.length - 1][1];
-}
-
-function getStatus(pct: number) {
-  if (pct <= 10) return { label: 'Critical — Refill Now', color: '#FF3B30' };
-  if (pct <= 25) return { label: 'Low — Order Soon', color: '#FF9500' };
-  if (pct <= 60) return { label: 'Moderate Level', color: '#CC9A00' };
-  return { label: 'Good Level', color: '#34C759' };
-}
-
-// ── Segmented arc gauge (48 bars over a 300° arc) ─────────────────────────────
-
-const GAUGE_TOTAL = 48;
-const GAUGE_ARC = 300;
-const GAUGE_START = 210;
-const GAUGE_BAR_H = 18;
-const GAUGE_BAR_W = 7;
-
-function GaugeRing({ percentage, maxKg, size = 230 }: { percentage: number; maxKg: number; size?: number }) {
-  const p = Math.max(0, Math.min(100, Math.round(percentage)));
-  const midR = size / 2 - GAUGE_BAR_H / 2;
-  const innerD = 2 * (midR - GAUGE_BAR_H / 2 - 6);
-  const activeCount = Math.round((p / 100) * GAUGE_TOTAL);
-  const currentColor = getBarColor(p / 100);
-
-  return (
-    <div className="device-gauge" style={{ width: size, height: size }} role="img" aria-label={`Gas level ${p} percent`}>
-      {Array.from({ length: GAUGE_TOTAL }, (_, i) => {
-        const t = i / (GAUGE_TOTAL - 1);
-        const angleDeg = GAUGE_START + (i / GAUGE_TOTAL) * GAUGE_ARC;
-        const isActive = i < activeCount;
-        return (
-          <span
-            key={i}
-            className="device-gauge-bar"
-            style={{
-              width: GAUGE_BAR_W,
-              height: GAUGE_BAR_H,
-              background: isActive ? getBarColor(t) : '#C2D9C2',
-              top: (size - GAUGE_BAR_H) / 2,
-              left: (size - GAUGE_BAR_W) / 2,
-              transform: `rotate(${angleDeg}deg) translateY(${-midR}px)`
-            }}
-          />
-        );
-      })}
-      <div
-        className="device-gauge-disk"
-        style={{ width: innerD, height: innerD, top: (size - innerD) / 2, left: (size - innerD) / 2 }}
-      >
-        <strong className="device-gauge-percent">{p}%</strong>
-        <span className="device-gauge-label" style={{ color: currentColor }}>
-          Gas Level
-        </span>
-        <span className="device-gauge-kg">{((p / 100) * maxKg).toFixed(1)} kg</span>
-      </div>
-    </div>
-  );
 }
 
 // ── Cylinder images / size options ────────────────────────────────────────────

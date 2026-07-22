@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Ubuntu } from 'next/font/google';
 import './globals.css';
 
@@ -7,9 +8,11 @@ const ubuntu = Ubuntu({
   variable: '--font-body'
 });
 
-export const metadata = {
+export const metadata: Metadata = {
+  metadataBase: new URL('https://4fgmpanel.4fgmonitor.com'),
   title: '4FG Admin',
-  description: 'Admin panel for the 4FG Gas Monitor platform'
+  description: 'Admin panel for the 4FG Gas Monitor platform',
+  robots: { index: false, follow: false }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

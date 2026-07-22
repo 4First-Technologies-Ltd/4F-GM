@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { IconStore, IconBell, IconCheck, IconMinusCircle } from '@/components/icons';
 import UserModal from '@/components/UserModal';
+import { adminFetch } from '@/lib/api';
 
 interface Vendor {
   id: string;
@@ -25,7 +26,7 @@ export default function VendorsPage() {
   const [openUserId, setOpenUserId] = useState<string | null | undefined>(undefined);
 
   const load = useCallback(() => {
-    fetch('/api/vendors')
+    adminFetch('/vendors')
       .then((res) => res.json())
       .then((data) => setVendors(data.vendors));
   }, []);
@@ -52,7 +53,7 @@ export default function VendorsPage() {
   async function updateStatus(id: string, status: 'APPROVED' | 'REJECTED') {
     setBusyId(id);
     try {
-      await fetch(`/api/vendors/${id}`, {
+      await adminFetch(`/vendors/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })

@@ -12,7 +12,9 @@ import {
   IconClose,
   IconChartBar,
   IconMapPin,
-  IconDevice
+  IconDevice,
+  IconUser,
+  IconFileText
 } from '@/components/icons';
 
 const CONSUMER_NAV_ITEMS = [
@@ -21,6 +23,7 @@ const CONSUMER_NAV_ITEMS = [
   { href: '/dashboard/orders', label: 'Orders', icon: IconPackage, exact: false },
   { href: '/dashboard/analytics', label: 'Analytics', icon: IconChartBar, exact: false },
   { href: '/dashboard/addresses', label: 'Addresses', icon: IconMapPin, exact: false },
+  { href: '/dashboard/profile', label: 'Profile', icon: IconUser, exact: false },
   { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, exact: false }
 ];
 
@@ -29,6 +32,8 @@ const VENDOR_NAV_ITEMS = [
   { href: '/dashboard/orders', label: 'Incoming orders', icon: IconPackage, exact: false },
   { href: '/dashboard/listings', label: 'Listings', icon: IconStore, exact: false },
   { href: '/dashboard/analytics', label: 'Analytics', icon: IconChartBar, exact: false },
+  { href: '/dashboard/profile', label: 'Profile', icon: IconUser, exact: false },
+  { href: '/dashboard/documents', label: 'Documents', icon: IconFileText, exact: false },
   { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, exact: false }
 ];
 

@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { useAppFonts } from '@/hooks/use-app-fonts';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Sentry } from '@/lib/sentry';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -14,7 +15,7 @@ export const unstable_settings = {
   anchor: 'splash',
 };
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded] = useAppFonts();
 
@@ -46,3 +47,5 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
