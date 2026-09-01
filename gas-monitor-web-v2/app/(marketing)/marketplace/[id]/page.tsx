@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Star } from "lucide-react";
+import { Star, MapPin, Check } from "lucide-react";
 import { ButtonLink } from "@/components/motion/button/base";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
-import { LISTINGS, getListing, NGN } from "@/lib/catalog";
+import { LISTINGS, getListing, CATEGORY_LABEL } from "@/lib/catalog";
+import { formatNaira } from "@/lib/format";
 
 export function generateStaticParams() {
   return LISTINGS.map((l) => ({ id: l.id }));
@@ -19,15 +20,9 @@ export async function generateMetadata({
   const listing = getListing(id);
   return {
     title: listing ? `${listing.title} — ${listing.vendor}` : "Listing",
-    description: listing?.blurb,
+    description: listing?.description,
   };
 }
-
-const AVAILABILITY = {
-  "in-stock": { label: "In stock", status: "success" as const },
-  "low-stock": { label: "Low stock", status: "warning" as const },
-  preorder: { label: "Pre-order", status: "info" as const },
-};
 
 export default async function ListingPage({
   params,
@@ -37,8 +32,6 @@ export default async function ListingPage({
   const { id } = await params;
   const listing = getListing(id);
   if (!listing) notFound();
-
-  const a = AVAILABILITY[listing.availability];
 
   return (
     <main className="mx-auto max-w-5xl px-6 pb-24 pt-32">
@@ -51,31 +44,52 @@ export default async function ListingPage({
 
       <div className="mt-8 grid gap-10 md:grid-cols-[1.4fr_1fr]">
         <div>
-          <div className="flex items-center gap-3">
-            <AnimatedBadge status={a.status} size="sm">
-              {a.label}
+          <div className="flex items-start gap-3">
+            <AnimatedBadge status={listing.isOpen ? "success" : "info"} size="sm">
+              {listing.isOpen ? "Open now" : listing.hours}
             </AnimatedBadge>
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <Star size={12} className="fill-current" />
-              {listing.rating.toFixed(1)} rating
+              {listing.rating.toFixed(1)} · {listing.reviews} reviews
             </span>
           </div>
+
           <h1 className="mt-4 text-4xl font-semibold">{listing.title}</h1>
-          <p className="mt-2 text-muted-foreground">
-            Sold by {listing.vendor} · {listing.region}
-          </p>
+
+          <div className="mt-4 flex items-center gap-2">
+            <div
+              className="grid h-10 w-10 place-items-center rounded-lg text-xs font-semibold text-white"
+              style={{ backgroundColor: listing.color }}
+            >
+              {listing.initials}
+            </div>
+            <div>
+              <p className="font-medium">
+                {listing.vendor}
+                {listing.verified && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600">
+                    <Check size={12} /> Verified
+                  </span>
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <MapPin size={14} /> {listing.location}
+              </p>
+            </div>
+          </div>
+
           <p className="mt-6 max-w-prose text-muted-foreground">
-            {listing.blurb}
+            {listing.description}
           </p>
 
           <dl className="mt-8 grid grid-cols-2 gap-4 text-sm">
             <div className="rounded-xl border border-border/70 bg-card/60 p-4">
-              <dt className="text-muted-foreground">Cylinder size</dt>
-              <dd className="mt-1 font-mono text-lg">{listing.sizeKg} kg</dd>
+              <dt className="text-muted-foreground">Category</dt>
+              <dd className="mt-1 text-lg font-medium">{CATEGORY_LABEL[listing.category]}</dd>
             </div>
             <div className="rounded-xl border border-border/70 bg-card/60 p-4">
-              <dt className="text-muted-foreground">Region</dt>
-              <dd className="mt-1 text-lg">{listing.region}</dd>
+              <dt className="text-muted-foreground">Available sizes</dt>
+              <dd className="mt-1 text-lg font-medium">{listing.sizes.join(", ")}</dd>
             </div>
           </dl>
         </div>
@@ -83,10 +97,15 @@ export default async function ListingPage({
         <aside className="h-fit rounded-2xl border border-border/70 bg-card/80 p-6 backdrop-blur">
           <p className="text-sm text-muted-foreground">Price</p>
           <p className="mt-1 font-mono text-3xl font-semibold">
-            {NGN.format(listing.priceNgn)}
+            {formatNaira(listing.price)}
           </p>
+          {listing.deliveryToday && (
+            <p className="mt-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary w-fit">
+              Same-day delivery available
+            </p>
+          )}
           <div className="mt-6 flex flex-col gap-3">
-            <ButtonLink href={`/checkout?listing=${listing.id}`} size="lg">
+            <ButtonLink href={`/marketplace/${listing.id}`} size="lg">
               Order now
             </ButtonLink>
             <ButtonLink href="/sign-in" variant="outline" size="lg">

@@ -1,0 +1,53 @@
+services:
+  backend:
+    build:
+      context: ./gas-monitor-backend
+    env_file:
+      - ./gas-monitor-backend/.env
+    environment:
+      PORT: 9000
+      CORS_ORIGINS: http://localhost:3100,http://localhost:3110,http://localhost:3140
+    ports:
+      - "9000:9000"
+
+  web:
+    build:
+      context: ./gas-monitor-web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:9000
+    env_file:
+      - ./gas-monitor-web/.env.local
+    ports:
+      - "3100:3000"
+    depends_on:
+      - backend
+
+  admin:
+    build:
+      context: ./gas-monitor-admin
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:9000
+    env_file:
+      - ./gas-monitor-admin/.env.local
+    ports:
+      - "3110:3010"
+    depends_on:
+      - backend
+
+  web-v2:
+    build:
+      context: ./gas-monitor-web-v2
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:9000
+    env_file:
+      - ./gas-monitor-web-v2/.env.local
+    ports:
+      - "3140:3000"
+    depends_on:
+      - backend
+
+  landing:
+    build:
+      context: ./landing
+    ports:
+      - "3130:80"

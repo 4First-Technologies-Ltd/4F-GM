@@ -55,6 +55,7 @@ model User {
   email            String            @unique
   name             String
   phone            String?
+  devicePhone      String?
   avatarUrl        String?
   password         String
   role             Role              @default(CONSUMER)

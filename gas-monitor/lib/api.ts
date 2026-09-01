@@ -473,3 +473,162 @@ export const cylinderApi = {
     return res.profile;
   },
 };
+
+
+// ── Sensor API ────────────────────────────────────────────────────────────────
+
+export interface SensorReading {
+  weight: number;
+  temperature?: number;
+  pressure?: number;
+  timestamp: string;
+  status: 'success' | 'timeout' | 'error';
+  rawResponse?: string;
+}
+
+export interface DeviceCommandResult {
+  success: boolean;
+  message: string;
+  rawResponse?: string;
+  data?: Record<string, any>;
+}
+
+export interface DeviceConfig {
+  phoneNumber?: string;
+  location?: string;
+  minimumLevel?: number;
+  currentPassword?: string;
+}
+
+export const sensorApi = {
+  /**
+   * Get current weight sensor reading from device
+   * Sends USSD: *1234*INFO#
+   * Returns weight in kg, temperature, pressure, etc.
+   */
+  async getReading(): Promise<SensorReading> {
+    return request<SensorReading>('/api/device/sensor/reading', {
+      auth: true,
+    });
+  },
+
+  /**
+   * Calibrate (tare) the weight scale to zero
+   * Sends USSD: *1234*TARE#
+   */
+  async tare(): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/sensor/tare', {
+      method: 'POST',
+      auth: true,
+    });
+  },
+
+  /**
+   * Set critical low-level threshold for alerts
+   * Sends USSD: *1234*MINIMUM*{level}#
+   * @param level Critical level in kg (1-9, integers only, no decimals)
+   */
+  async setMinimumLevel(level: number): Promise<DeviceCommandResult> {
+    if (!Number.isInteger(level) || level < 1 || level > 9) {
+      throw new ApiRequestError(
+        'Minimum level must be an integer between 1 and 9 kg',
+        'INVALID_MINIMUM_LEVEL'
+      );
+    }
+
+    return request<DeviceCommandResult>('/api/device/sensor/minimum-level', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ level }),
+    });
+  },
+
+  /**
+   * Query device configuration and status
+   * Sends USSD: *1234*INFO#
+   */
+  async queryDeviceInfo(): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/info', {
+      auth: true,
+    });
+  },
+};
+
+// ── Device Configuration API ──────────────────────────────────────────────────
+
+export const deviceApi = {
+  /**
+   * Set device's phone number for notifications
+   * Sends USSD: *1234*USER*number*number#
+   */
+  async setPhoneNumber(phoneNumber: string): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/config/phone', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ phoneNumber }),
+    });
+  },
+
+  /**
+   * Set device's physical location
+   * Sends USSD: *1234*ADDRESS*location#
+   */
+  async setLocation(locationName: string): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/config/location', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ locationName }),
+    });
+  },
+
+  /**
+   * Change device password
+   * Sends USSD: *old_password*PASSWORD*new_password#
+   * Password must be 1-4 alphanumeric characters
+   */
+  async changePassword(oldPassword: string, newPassword: string): Promise<DeviceCommandResult> {
+    if (newPassword.length > 4 || !/^[a-zA-Z0-9]{1,4}$/.test(newPassword)) {
+      throw new ApiRequestError(
+        'Password must be 1-4 alphanumeric characters',
+        'INVALID_PASSWORD'
+      );
+    }
+
+    return request<DeviceCommandResult>('/api/device/config/password', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
+  },
+
+  /**
+   * Factory reset device (manufacturer only)
+   * WARNING: Clears all logs and resets to default password
+   */
+  async factoryReset(): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/factory-reset', {
+      method: 'POST',
+      auth: true,
+    });
+  },
+
+  /**
+   * Get device configuration (saved settings)
+   */
+  async getConfig(): Promise<DeviceConfig> {
+    return request<DeviceConfig>('/api/device/config', {
+      auth: true,
+    });
+  },
+
+  /**
+   * Save device configuration locally
+   */
+  async saveConfig(config: DeviceConfig): Promise<DeviceConfig> {
+    return request<DeviceConfig>('/api/device/config', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(config),
+    });
+  },
+};
