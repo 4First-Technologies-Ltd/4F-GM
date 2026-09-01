@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_VERSION = "10"
+
+# Next.js will handle routing with `output: standalone`
+# Netlify automatically detects Next.js and deploys the standalone build
