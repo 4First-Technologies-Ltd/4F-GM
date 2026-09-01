@@ -2,16 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Send } from "lucide-react";
-import { ButtonLink } from "@/components/motion/button/base";
 import { PhoneMockup } from "@/components/mobile/phone-mockup";
 import { TiltCard } from "@/components/motion/tilt-card";
-
-const steps = [
-  "Download and install the app on your Android phone.",
-  "Create an account or sign in.",
-  "Scan the QR code on your 4FG monitor to pair it.",
-  "Set your reorder threshold and you're done.",
-];
 
 interface Countdown {
   days: number;
