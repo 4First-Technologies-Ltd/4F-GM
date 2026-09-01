@@ -1,6 +1,7 @@
 [build]
-  command = "cd gas-monitor-web-v2 && npm run build"
-  publish = "gas-monitor-web-v2"
+  base = "gas-monitor-web-v2"
+  command = "npm run build"
+  publish = "./.next"
 
 [build.environment]
   NODE_VERSION = "20"
