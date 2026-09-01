@@ -21,7 +21,7 @@ function CountdownTimer() {
   });
 
   useEffect(() => {
-    const launchDate = new Date(Date.now() + 27 * 24 * 60 * 60 * 1000).getTime();
+    const launchDate = new Date("2025-09-22T00:00:00Z").getTime();
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
@@ -68,13 +68,37 @@ function CountdownTimer() {
 export default function DownloadsPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) {
+    if (!email) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Failed to subscribe");
+        return;
+      }
+
       setSubmitted(true);
       setEmail("");
       setTimeout(() => setSubmitted(false), 3000);
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,10 +127,12 @@ export default function DownloadsPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="flex-1 rounded-lg border border-border/70 bg-card/50 px-4 py-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:bg-card focus:outline-none"
                   required
+                  disabled={loading}
                 />
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground hover:bg-primary/90 transition-colors"
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Subscribe"
                 >
                   <Send size={18} />
@@ -115,6 +141,9 @@ export default function DownloadsPage() {
 
               {submitted && (
                 <p className="mt-3 text-sm text-primary">✓ Thanks for subscribing!</p>
+              )}
+              {error && (
+                <p className="mt-3 text-sm text-destructive">{error}</p>
               )}
             </div>
 

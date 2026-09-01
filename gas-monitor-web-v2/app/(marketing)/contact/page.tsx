@@ -11,8 +11,6 @@ import {
 } from "@/components/motion/select";
 import { Checkbox } from "@/components/motion/checkbox";
 import { Button } from "@/components/motion/button/base";
-import { apiUrl } from "@/lib/api";
-
 type Status = "idle" | "sending" | "sent" | "error";
 
 const TOPICS = [
@@ -41,7 +39,7 @@ export default function ContactPage() {
     setStatus("sending");
     setError(null);
     try {
-      const res = await fetch(apiUrl("/contact"), {
+      const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, topic, message }),
@@ -123,23 +121,24 @@ export default function ContactPage() {
           />
         </div>
 
-        <Checkbox
-          checked={consent}
-          onCheckedChange={setConsent}
-          label="I agree to be contacted about this enquiry."
-        />
+        <div className="flex items-center justify-between gap-4">
+          <Checkbox
+            checked={consent}
+            onCheckedChange={setConsent}
+            label="I agree to be contacted about this enquiry."
+          />
+          <Button
+            type="submit"
+            size="lg"
+            disabled={!canSubmit || status === "sending"}
+          >
+            {status === "sending" ? "Sending…" : "Send message"}
+          </Button>
+        </div>
 
         {error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : null}
-
-        <Button
-          type="submit"
-          size="lg"
-          disabled={!canSubmit || status === "sending"}
-        >
-          {status === "sending" ? "Sending…" : "Send message"}
-        </Button>
       </form>
     </main>
   );
