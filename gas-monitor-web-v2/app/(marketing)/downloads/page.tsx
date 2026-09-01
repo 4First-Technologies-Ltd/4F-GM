@@ -95,7 +95,7 @@ export default function DownloadsPage() {
       setSubmitted(true);
       setEmail("");
       setTimeout(() => setSubmitted(false), 3000);
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);
