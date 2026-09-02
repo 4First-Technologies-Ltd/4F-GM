@@ -25,6 +25,7 @@ const CONTACT_INFO = {
   phone: "+234 906 476 8335",
   email: "4fg@4firsttechnologies.com",
   supportEmail: "4fg-support@4firsttechnologies.com",
+  hours: "Monday – Friday: 8:00am – 6:00pm\nSaturday: 9:00am – 3:00pm\nSunday: Closed",
 };
 
 export default function ContactPage() {
@@ -87,7 +88,7 @@ export default function ContactPage() {
             <h3 className="text-sm font-semibold uppercase tracking-widest">
               Address
             </h3>
-            <p className="mt-3 text-sm text-muted-foreground">
+            <p className="mt-3 text-base text-muted-foreground">
               {CONTACT_INFO.address}
             </p>
           </div>
@@ -98,7 +99,7 @@ export default function ContactPage() {
             </h3>
             <a
               href={`tel:${CONTACT_INFO.phone}`}
-              className="mt-3 block text-sm text-primary transition-colors hover:text-primary/80"
+              className="mt-3 block text-base text-primary transition-colors hover:text-primary/80"
             >
               {CONTACT_INFO.phone}
             </a>
@@ -111,17 +112,26 @@ export default function ContactPage() {
             <div className="mt-3 space-y-2">
               <a
                 href={`mailto:${CONTACT_INFO.email}`}
-                className="block text-sm text-primary transition-colors hover:text-primary/80"
+                className="block text-base text-primary transition-colors hover:text-primary/80"
               >
                 {CONTACT_INFO.email}
               </a>
               <a
                 href={`mailto:${CONTACT_INFO.supportEmail}`}
-                className="block text-sm text-primary transition-colors hover:text-primary/80"
+                className="block text-base text-primary transition-colors hover:text-primary/80"
               >
                 {CONTACT_INFO.supportEmail}
               </a>
             </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-widest">
+              Operating Hours
+            </h3>
+            <p className="mt-3 whitespace-pre-line text-base text-muted-foreground">
+              {CONTACT_INFO.hours}
+            </p>
           </div>
         </div>
 
