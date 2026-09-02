@@ -20,6 +20,13 @@ const TOPICS = [
   { value: "press", label: "Press" },
 ];
 
+const CONTACT_INFO = {
+  address: "Head Office: Imo Digital City Limited, 23 Egbu Road, Owerri, Imo State, Nigeria.",
+  phone: "+234 906 476 8335",
+  email: "4fg@4firsttechnologies.com",
+  supportEmail: "4fg-support@4firsttechnologies.com",
+};
+
 export default function ContactPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -64,7 +71,7 @@ export default function ContactPage() {
   }
 
   return (
-    <main className="mx-auto max-w-xl px-6 pb-24 pt-32">
+    <main className="mx-auto max-w-7xl px-4 pb-16 pt-36 sm:px-6">
       <p className="font-mono text-xs uppercase tracking-[0.28em] text-primary">
         Contact
       </p>
@@ -74,7 +81,51 @@ export default function ContactPage() {
         them here.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-10 space-y-5">
+      <div className="mt-4 grid gap-16 lg:grid-cols-2 lg:items-start">
+        <div className="space-y-8 lg:order-1">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-widest">
+              Address
+            </h3>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {CONTACT_INFO.address}
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-widest">
+              Phone
+            </h3>
+            <a
+              href={`tel:${CONTACT_INFO.phone}`}
+              className="mt-3 block text-sm text-primary transition-colors hover:text-primary/80"
+            >
+              {CONTACT_INFO.phone}
+            </a>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-widest">
+              Email
+            </h3>
+            <div className="mt-3 space-y-2">
+              <a
+                href={`mailto:${CONTACT_INFO.email}`}
+                className="block text-sm text-primary transition-colors hover:text-primary/80"
+              >
+                {CONTACT_INFO.email}
+              </a>
+              <a
+                href={`mailto:${CONTACT_INFO.supportEmail}`}
+                className="block text-sm text-primary transition-colors hover:text-primary/80"
+              >
+                {CONTACT_INFO.supportEmail}
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-5 lg:order-2 lg:-mt-24">
         <Input
           label="Your name"
           value={name}
@@ -139,7 +190,8 @@ export default function ContactPage() {
         {error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : null}
-      </form>
+        </form>
+      </div>
     </main>
   );
 }
