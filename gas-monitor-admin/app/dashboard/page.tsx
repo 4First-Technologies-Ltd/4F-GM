@@ -1,213 +1,279 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { formatNaira } from '@/lib/format';
-import { IconUsers, IconStore, IconPackage } from '@/components/icons';
-import { adminFetch } from '@/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { getJson } from '@/admin/data/source';
+import { formatNaira, formatNairaCompact, formatNumber, formatRelative, shortId } from '@/admin/primitives/format';
+import { StatCard, StatGrid } from '@/admin/primitives/stat-card';
+import { StatusBadge } from '@/admin/primitives/status-badge';
+import { ErrorState, InlineError, LoadingBlock } from '@/admin/primitives/states';
+import { usePermission } from '@/admin/permissions/use-permission';
+import type { OrderRow, StatsResponse, VendorRow } from '@/admin/modules/types';
+import { IconPackage, IconStore, IconUsers, IconWallet } from '@/components/icons';
 
-interface Stats {
-  userCount: number;
-  vendorPending: number;
-  vendorApproved: number;
-  vendorRejected: number;
-  orderCount: number;
-  listingCount: number;
-  revenue: number;
-  pendingValue: number;
-  avgOrderValue: number;
+/**
+ * Overview — a TRIAGE screen, not a trophy case.
+ *
+ * Leads with what needs action (pending vendor approvals), then the metrics,
+ * then the queues. The alert band renders only when something is actually
+ * pending; an alert that shows when nothing is wrong stops being read.
+ *
+ * Every figure comes from the server's /stats endpoint, which aggregates over
+ * the whole table. The previous implementation summed a capped 200-row page in
+ * the browser and labelled the result "total revenue".
+ */
+
+interface Paginated<T> {
+  data: T[];
+  pagination: { total: number };
 }
-
-interface Analytics {
-  monthly: { month: string; revenue: number; orders: number }[];
-  statusBreakdown: { status: string; count: number }[];
-  topVendors: { id: string; businessName: string; orders: number; revenue: number }[];
-}
-
-const ACCENT = '#12271D';
-const ACCENT_SOFT = '#A9714C';
 
 export default function OverviewPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const canSeeVendors = usePermission('vendors.read');
+  const canSeeOrders = usePermission('orders.read');
+  const canApprove = usePermission('vendors.approve');
 
-  useEffect(() => {
-    adminFetch('/stats')
-      .then((res) => res.json())
-      .then(setStats);
-    adminFetch('/analytics')
-      .then((res) => res.json())
-      .then(setAnalytics);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [statsError, setStatsError] = useState<Error | null>(null);
+
+  const [pendingVendors, setPendingVendors] = useState<VendorRow[] | null>(null);
+  const [vendorsError, setVendorsError] = useState<string | null>(null);
+
+  const [recentOrders, setRecentOrders] = useState<OrderRow[] | null>(null);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadStats = useCallback(() => {
+    setStatsError(null);
+    getJson<StatsResponse>('/stats')
+      .then(setStats)
+      .catch((e) => setStatsError(e instanceof Error ? e : new Error(String(e))));
   }, []);
 
-  const vendorTotal = stats ? stats.vendorPending + stats.vendorApproved + stats.vendorRejected : 0;
-  const realizedTotal = stats ? stats.revenue + stats.pendingValue : 0;
-  const realizedPct = realizedTotal > 0 ? ((stats?.revenue ?? 0) / realizedTotal) * 100 : 0;
-  const pendingPct = 100 - realizedPct;
+  const loadQueues = useCallback(() => {
+    if (canSeeVendors) {
+      setVendorsError(null);
+      getJson<Paginated<VendorRow>>('/vendors?status=PENDING&limit=6')
+        .then((r) => setPendingVendors(r.data))
+        .catch((e) => setVendorsError(e instanceof Error ? e.message : String(e)));
+    } else {
+      setPendingVendors([]);
+    }
+
+    if (canSeeOrders) {
+      setOrdersError(null);
+      getJson<Paginated<OrderRow>>('/orders?limit=8')
+        .then((r) => setRecentOrders(r.data))
+        .catch((e) => setOrdersError(e instanceof Error ? e.message : String(e)));
+    } else {
+      setRecentOrders([]);
+    }
+  }, [canSeeVendors, canSeeOrders]);
+
+  useEffect(() => {
+    loadStats();
+    loadQueues();
+  }, [loadStats, loadQueues]);
+
+  async function decide(vendor: VendorRow, status: 'APPROVED' | 'REJECTED') {
+    setBusyId(vendor.id);
+    try {
+      const { patchJson } = await import('@/admin/data/source');
+      await patchJson(`/vendors/${vendor.id}`, { status });
+      loadStats();
+      loadQueues();
+    } catch (e) {
+      setVendorsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const pendingCount = stats?.vendorPending ?? 0;
 
   return (
-    <>
-      <h1>Dashboard</h1>
+    <div className="adm-page">
+      <header className="adm-page-header">
+        <div>
+          <h1 className="adm-page-title">Overview</h1>
+          <p className="adm-page-meta">Platform health and anything waiting on you.</p>
+        </div>
+      </header>
 
-      {!stats ? (
-        <p className="loading-state">Loading…</p>
-      ) : (
-        <>
-          <div className="top-stat-row">
-            <div className="card stat-card-sm">
-              <span className="stat-icon" aria-hidden="true">
-                <IconUsers />
-              </span>
-              <div className="label">Total users</div>
-              <div className="value">{stats.userCount}</div>
-            </div>
-            <div className="card stat-card-sm">
-              <span className="stat-icon" aria-hidden="true">
-                <IconStore />
-              </span>
-              <div className="label">Total vendors</div>
-              <div className="value">{vendorTotal}</div>
-            </div>
-            <div className="card stat-card-sm">
-              <span className="stat-icon" aria-hidden="true">
-                <IconPackage />
-              </span>
-              <div className="label">Total orders</div>
-              <div className="value">{stats.orderCount}</div>
-            </div>
-
-            <div className="card wide-stat-card">
-              <div className="wide-stat-row">
-                <span className="label">Total revenue</span>
-                <strong className="value">{formatNaira(stats.revenue)}</strong>
-              </div>
-              <div className="wide-stat-row">
-                <span className="label">Pending value</span>
-                <strong className="value">{formatNaira(stats.pendingValue)}</strong>
-              </div>
-              <div className="wide-stat-row wide-stat-row-last">
-                <span className="label">Avg order value</span>
-                <strong className="value">{formatNaira(stats.avgOrderValue)}</strong>
-              </div>
-
-              <div className="wide-legend">
-                <span>
-                  <i className="legend-dot legend-dot-ink" /> Realized
-                </span>
-                <span>
-                  <i className="legend-dot legend-dot-accent" /> Pending
-                </span>
-              </div>
-              <div className="wide-bar-track">
-                <div className="wide-bar wide-bar-ink" style={{ width: `${realizedPct}%` }} />
-              </div>
-              <div className="wide-bar-track">
-                <div className="wide-bar wide-bar-accent" style={{ width: `${pendingPct}%` }} />
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Vendor status</h2>
-            <div className="segment-row">
-              <div className="segment">
-                <div className="segment-value">{stats.vendorPending}</div>
-                <div className="segment-label">Pending</div>
-              </div>
-              <div className="segment">
-                <div className="segment-value">{stats.vendorApproved}</div>
-                <div className="segment-label">Approved</div>
-              </div>
-              <div className="segment">
-                <div className="segment-value">{stats.vendorRejected}</div>
-                <div className="segment-label">Rejected</div>
-              </div>
-            </div>
-            <div className="segment-bar-track">
-              {vendorTotal === 0 ? (
-                <div className="segment-bar-fill" style={{ width: '100%', background: '#e2ded3' }} />
-              ) : (
-                <>
-                  <div
-                    className="segment-bar-fill"
-                    style={{ width: `${(stats.vendorPending / vendorTotal) * 100}%`, background: 'var(--accent)' }}
-                  />
-                  <div
-                    className="segment-bar-fill"
-                    style={{ width: `${(stats.vendorApproved / vendorTotal) * 100}%`, background: 'var(--accent-dark)' }}
-                  />
-                  <div
-                    className="segment-bar-fill"
-                    style={{ width: `${(stats.vendorRejected / vendorTotal) * 100}%`, background: 'var(--danger)' }}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
-          {!analytics ? (
-            <p className="loading-state">Loading analytics…</p>
-          ) : (
-            <>
-              <div className="card">
-                <h2 style={{ marginTop: 0 }}>Revenue trend (last 6 months)</h2>
-                <div style={{ width: '100%', height: 260 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={analytics.monthly}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2ded3" />
-                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} width={56} />
-                      <Tooltip formatter={(value) => formatNaira(Number(value))} />
-                      <Line type="monotone" dataKey="revenue" stroke={ACCENT} strokeWidth={2.5} dot={{ r: 3 }} name="Revenue" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="card">
-                <h2 style={{ marginTop: 0 }}>Orders by status</h2>
-                <div style={{ width: '100%', height: 240 }}>
-                  <ResponsiveContainer>
-                    <BarChart data={analytics.statusBreakdown}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2ded3" />
-                      <XAxis dataKey="status" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} allowDecimals={false} width={32} />
-                      <Tooltip />
-                      <Bar dataKey="count" fill={ACCENT_SOFT} radius={[4, 4, 0, 0]} name="Orders" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="card">
-                <h2 style={{ marginTop: 0 }}>Top vendors by revenue</h2>
-                {analytics.topVendors.length === 0 ? (
-                  <p className="empty-state">No vendor orders yet.</p>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Vendor</th>
-                        <th>Orders</th>
-                        <th>Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analytics.topVendors.map((v) => (
-                        <tr key={v.id}>
-                          <td>{v.businessName}</td>
-                          <td>{v.orders}</td>
-                          <td>{formatNaira(v.revenue)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </>
-          )}
-        </>
+      {/* Rendered only when there is genuinely something to act on. */}
+      {pendingCount > 0 && canSeeVendors && (
+        <div className="adm-alert" role="status">
+          <span>
+            {pendingCount} vendor {pendingCount === 1 ? 'application is' : 'applications are'} waiting for
+            review.
+          </span>
+          <Link className="adm-btn adm-btn--sm" href="/dashboard/vendors?status=PENDING">
+            Review now
+          </Link>
+        </div>
       )}
-    </>
+
+      {statsError ? (
+        <ErrorState title="Could not load platform stats" error={statsError} onRetry={loadStats} />
+      ) : (
+        <StatGrid>
+          <StatCard
+            label="Confirmed revenue"
+            value={stats ? formatNairaCompact(stats.revenue) : '—'}
+            valueTitle={stats ? formatNaira(stats.revenue) : undefined}
+            caption="Confirmed and delivered orders"
+            icon={<IconWallet />}
+            loading={!stats}
+          />
+          <StatCard
+            label="Orders"
+            value={stats ? formatNumber(stats.orderCount) : '—'}
+            caption={stats ? `Avg ${formatNaira(stats.avgOrderValue)}` : undefined}
+            icon={<IconPackage />}
+            href="/dashboard/orders"
+            loading={!stats}
+          />
+          <StatCard
+            label="Approved vendors"
+            value={stats ? formatNumber(stats.vendorApproved) : '—'}
+            caption={stats ? `${formatNumber(stats.listingCount)} listings` : undefined}
+            icon={<IconStore />}
+            href="/dashboard/vendors?status=APPROVED"
+            loading={!stats}
+          />
+          <StatCard
+            label="Pending approvals"
+            value={stats ? formatNumber(stats.vendorPending) : '—'}
+            caption="Vendors awaiting review"
+            icon={<IconUsers />}
+            href="/dashboard/vendors?status=PENDING"
+            actionable={pendingCount > 0}
+            loading={!stats}
+          />
+        </StatGrid>
+      )}
+
+      <div className="adm-chart-grid">
+        {canSeeVendors && (
+          <section className="adm-card">
+            <div className="adm-card-head">
+              <h2 className="adm-section-title">Awaiting approval</h2>
+              <Link className="adm-btn adm-btn--sm" href="/dashboard/vendors?status=PENDING">
+                View all
+              </Link>
+            </div>
+            {vendorsError ? (
+              <div style={{ padding: 'var(--space-4)' }}>
+                <InlineError message={vendorsError} onRetry={loadQueues} />
+              </div>
+            ) : pendingVendors === null ? (
+              <div style={{ padding: 'var(--space-4)' }}>
+                <LoadingBlock height={140} />
+              </div>
+            ) : pendingVendors.length === 0 ? (
+              <div className="adm-state">
+                <p className="adm-state-desc">Nothing waiting. All vendor applications are reviewed.</p>
+              </div>
+            ) : (
+              <ul className="adm-card-list">
+                {pendingVendors.map((v) => (
+                  <li key={v.id} className="adm-card-item">
+                    <div className="adm-card-item-head">
+                      <span className="adm-card-item-title">{v.businessName}</span>
+                      <span className="adm-audit-time">{formatRelative(v.createdAt)}</span>
+                    </div>
+                    <dl className="adm-card-item-fields">
+                      <div className="adm-card-item-field">
+                        <dt className="adm-micro-label">Owner</dt>
+                        <dd>{v.user.name}</dd>
+                      </div>
+                      <div className="adm-card-item-field">
+                        <dt className="adm-micro-label">Documents</dt>
+                        <dd>{v.documents.length}</dd>
+                      </div>
+                    </dl>
+                    {/* Triage without navigating — the point of a queue. */}
+                    {canApprove && (
+                      <div className="adm-card-item-actions">
+                        <button
+                          type="button"
+                          className="adm-btn adm-btn--sm adm-btn--primary"
+                          disabled={busyId === v.id}
+                          onClick={() => decide(v, 'APPROVED')}
+                          aria-label={`Approve ${v.businessName}`}
+                        >
+                          {busyId === v.id ? 'Working…' : 'Approve'}
+                        </button>
+                        <button
+                          type="button"
+                          className="adm-btn adm-btn--sm adm-btn--danger"
+                          disabled={busyId === v.id}
+                          onClick={() => decide(v, 'REJECTED')}
+                          aria-label={`Reject ${v.businessName}`}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {canSeeOrders && (
+          <section className="adm-card">
+            <div className="adm-card-head">
+              <h2 className="adm-section-title">Recent orders</h2>
+              <Link className="adm-btn adm-btn--sm" href="/dashboard/orders">
+                View all
+              </Link>
+            </div>
+            {ordersError ? (
+              <div style={{ padding: 'var(--space-4)' }}>
+                <InlineError message={ordersError} onRetry={loadQueues} />
+              </div>
+            ) : recentOrders === null ? (
+              <div style={{ padding: 'var(--space-4)' }}>
+                <LoadingBlock height={140} />
+              </div>
+            ) : recentOrders.length === 0 ? (
+              <div className="adm-state">
+                <p className="adm-state-desc">No orders yet.</p>
+              </div>
+            ) : (
+              <ul className="adm-card-list">
+                {recentOrders.map((o) => (
+                  <li key={o.id} className="adm-card-item">
+                    <div className="adm-card-item-head">
+                      <span className="adm-card-item-title" style={{ fontFamily: 'var(--font-mono)' }}>
+                        {shortId(o.id)}
+                      </span>
+                      <StatusBadge value={o.status} />
+                    </div>
+                    <dl className="adm-card-item-fields">
+                      <div className="adm-card-item-field">
+                        <dt className="adm-micro-label">Customer</dt>
+                        <dd>{o.consumer.name}</dd>
+                      </div>
+                      <div className="adm-card-item-field">
+                        <dt className="adm-micro-label">Total</dt>
+                        <dd className="adm-num">{formatNaira(o.totalAmount)}</dd>
+                      </div>
+                      <div className="adm-card-item-field">
+                        <dt className="adm-micro-label">Placed</dt>
+                        <dd>{formatRelative(o.createdAt)}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
+    </div>
   );
 }

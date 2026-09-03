@@ -1,318 +1,280 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
-import { useAdminSession } from '@/lib/admin-session-context';
-import { adminFetch } from '@/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { getJson, patchJson } from '@/admin/data/source';
+import { ErrorState, ForbiddenState, LoadingBlock } from '@/admin/primitives/states';
+import { usePermission } from '@/admin/permissions/use-permission';
+import { ROLE_GRANTS, ROLE_LABEL, type AdminRole } from '@/admin/permissions/permissions';
+import type { PlatformSettings } from '@/admin/modules/types';
 
-interface PlatformSettings {
-  maintenanceMode: boolean;
-  allowVendorSignups: boolean;
-  supportEmail: string | null;
-  platformFeePercent: number;
-}
+/**
+ * Settings — real, backed by the PlatformSettings singleton.
+ *
+ * Sections save independently rather than under one page-wide Save, and each
+ * shows what it will change. Admin-user management moved out to its own module.
+ *
+ * The role model is shown READ-ONLY: AdminRole is a hardcoded Prisma enum, not
+ * a table, so an editable permission matrix would have nothing to write to.
+ * Showing it read-only beats hiding it and leaving operators guessing.
+ */
 
-interface AdminUserRow {
-  id: string;
-  name: string;
-  email: string;
-  role: 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
-  isActive: boolean;
-  createdAt: string;
-}
+type Draft = Pick<
+  PlatformSettings,
+  'maintenanceMode' | 'allowVendorSignups' | 'supportEmail' | 'platformFeePercent'
+>;
 
 export default function SettingsPage() {
-  const { role } = useAdminSession();
-  const canEditSettings = role === 'SUPER_ADMIN' || role === 'OPERATIONS';
+  const canRead = usePermission('settings.read');
+  const canEdit = usePermission('settings.update');
 
-  return (
-    <>
-      <h1>Settings</h1>
-
-      <PlatformSettingsCard canEdit={canEditSettings} />
-
-      {role === 'SUPER_ADMIN' && <SubAdminsCard />}
-    </>
-  );
-}
-
-function PlatformSettingsCard({ canEdit }: { canEdit: boolean }) {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
-  const [supportEmail, setSupportEmail] = useState('');
-  const [feePercent, setFeePercent] = useState('0');
-  const [saved, setSaved] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
-  function load() {
-    adminFetch('/settings')
-      .then((res) => res.json())
-      .then((data) => {
-        setSettings(data.settings);
-        setSupportEmail(data.settings.supportEmail ?? '');
-        setFeePercent(String(data.settings.platformFeePercent));
-      });
-  }
-
-  useEffect(load, []);
-
-  async function patch(payload: Partial<PlatformSettings>) {
-    setSaved(false);
-    const res = await adminFetch('/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setSettings(data.settings);
-      setSaved(true);
-    }
-  }
-
-  async function handleDetailsSubmit(e: FormEvent) {
-    e.preventDefault();
-    await patch({ supportEmail: supportEmail || null, platformFeePercent: Number(feePercent) });
-  }
-
-  if (!settings) return <p className="loading-state">Loading…</p>;
-
-  return (
-    <div className="card">
-      <h2 style={{ marginTop: 0 }}>Platform settings</h2>
-
-      <div className="settings-row">
-        <div>
-          <strong>Maintenance mode</strong>
-          <p>Show a maintenance notice and block new orders across the platform.</p>
-        </div>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={settings.maintenanceMode}
-            disabled={!canEdit}
-            onChange={(e) => patch({ maintenanceMode: e.target.checked })}
-          />
-          <span className="switch-track" aria-hidden="true" />
-        </label>
-      </div>
-
-      <div className="settings-row">
-        <div>
-          <strong>Allow new vendor signups</strong>
-          <p>Turn off to temporarily stop new vendors from registering.</p>
-        </div>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={settings.allowVendorSignups}
-            disabled={!canEdit}
-            onChange={(e) => patch({ allowVendorSignups: e.target.checked })}
-          />
-          <span className="switch-track" aria-hidden="true" />
-        </label>
-      </div>
-
-      <form onSubmit={handleDetailsSubmit} style={{ marginTop: 12 }}>
-        <div className="field">
-          <label htmlFor="supportEmail">Support email</label>
-          <input
-            id="supportEmail"
-            type="email"
-            value={supportEmail}
-            disabled={!canEdit}
-            onChange={(e) => setSupportEmail(e.target.value)}
-            placeholder="support@4fgmonitor.app"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="feePercent">Platform fee (%)</label>
-          <input
-            id="feePercent"
-            type="number"
-            min={0}
-            max={100}
-            step="0.1"
-            value={feePercent}
-            disabled={!canEdit}
-            onChange={(e) => setFeePercent(e.target.value)}
-          />
-        </div>
-        {canEdit && (
-          <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>
-            Save
-          </button>
-        )}
-        {saved && (
-          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }} aria-live="polite">
-            Saved.
-          </p>
-        )}
-      </form>
-    </div>
-  );
-}
-
-function SubAdminsCard() {
-  const [admins, setAdmins] = useState<AdminUserRow[] | null>(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'OPERATIONS' | 'SUPPORT'>('OPERATIONS');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  function load() {
-    adminFetch('/admin-users')
-      .then((res) => res.json())
-      .then((data) => setAdmins(data.adminUsers));
-  }
-
-  useEffect(load, []);
-
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault();
+  const load = useCallback(() => {
     setError(null);
-    setSubmitting(true);
+    getJson<{ settings: PlatformSettings }>('/settings')
+      .then((r) => {
+        setSettings(r.settings);
+        setDraft({
+          maintenanceMode: r.settings.maintenanceMode,
+          allowVendorSignups: r.settings.allowVendorSignups,
+          supportEmail: r.settings.supportEmail,
+          platformFeePercent: r.settings.platformFeePercent
+        });
+      })
+      .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
+  }, []);
+
+  useEffect(load, [load]);
+
+  async function save(section: string, patch: Partial<Draft>) {
+    setSaving(section);
+    setSaveError(null);
+    setSaved(null);
     try {
-      const res = await adminFetch('/admin-users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, role })
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Could not create admin.');
-        return;
-      }
-      setName('');
-      setEmail('');
-      setPassword('');
-      load();
+      const res = await patchJson<{ settings: PlatformSettings }>('/settings', patch);
+      setSettings(res.settings);
+      setSaved(section);
+      window.setTimeout(() => setSaved(null), 3000);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSubmitting(false);
+      setSaving(null);
     }
   }
 
-  async function toggleActive(id: string, isActive: boolean) {
-    setBusyId(id);
-    try {
-      await adminFetch(`/admin-users/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !isActive })
-      });
-      load();
-    } finally {
-      setBusyId(null);
-    }
+  if (!canRead) return <ForbiddenState permission="settings.read" />;
+
+  if (error) {
+    return (
+      <div className="adm-page">
+        <h1 className="adm-page-title">Settings</h1>
+        <ErrorState title="Could not load settings" error={error} onRetry={load} />
+      </div>
+    );
   }
 
-  async function handleDelete(id: string) {
-    setBusyId(id);
-    try {
-      await adminFetch(`/admin-users/${id}`, { method: 'DELETE' });
-      load();
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const dirtyAccess =
+    draft && settings
+      ? draft.maintenanceMode !== settings.maintenanceMode ||
+        draft.allowVendorSignups !== settings.allowVendorSignups
+      : false;
+
+  const dirtyCommerce =
+    draft && settings
+      ? draft.platformFeePercent !== settings.platformFeePercent ||
+        (draft.supportEmail ?? '') !== (settings.supportEmail ?? '')
+      : false;
 
   return (
-    <div className="card">
-      <h2 style={{ marginTop: 0 }}>Sub-admins</h2>
-      <p className="subtitle" style={{ margin: '0 0 12px' }}>
-        Operations and support staff with scoped access — they can't manage settings or other admins.
-      </p>
-
-      <form onSubmit={handleCreate} style={{ marginBottom: 16 }}>
-        <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="field">
-            <label htmlFor="admin-name">Name</label>
-            <input id="admin-name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div className="field">
-            <label htmlFor="admin-email">Email</label>
-            <input id="admin-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
+    <div className="adm-page">
+      <header className="adm-page-header">
+        <div>
+          <h1 className="adm-page-title">Settings</h1>
+          <p className="adm-page-meta">Platform configuration. Every change is written to the audit log.</p>
         </div>
-        <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="field">
-            <label htmlFor="admin-password">Temporary password</label>
-            <input
-              id="admin-password"
-              type="password"
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="admin-role">Role</label>
-            <select id="admin-role" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-              <option value="OPERATIONS">Operations</option>
-              <option value="SUPPORT">Support</option>
-            </select>
-          </div>
-        </div>
-        {error && <p className="error-text">{error}</p>}
-        <button type="submit" className="btn btn-primary" style={{ width: 'auto' }} disabled={submitting}>
-          {submitting ? 'Creating…' : 'Create sub-admin'}
-        </button>
-      </form>
+      </header>
 
-      {!admins ? (
-        <p className="loading-state">Loading…</p>
-      ) : admins.length === 0 ? (
-        <p className="empty-state">No sub-admins yet.</p>
+      {!canEdit && (
+        <div className="adm-alert" role="note">
+          You have read-only access to settings. Editing requires the Operations role.
+        </div>
+      )}
+
+      {saveError && (
+        <div className="adm-inline-error" role="alert">
+          <span>{saveError}</span>
+        </div>
+      )}
+
+      {!draft || !settings ? (
+        <LoadingBlock height={220} />
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {admins.map((a) => (
-              <tr key={a.id}>
-                <td>{a.name}</td>
-                <td>{a.email}</td>
-                <td>
-                  <span className="admin-role-badge">{a.role}</span>
-                </td>
-                <td>
-                  <span className={`badge badge-${a.isActive ? 'approved' : 'rejected'}`}>
-                    {a.isActive ? 'Active' : 'Suspended'}
-                  </span>
-                </td>
-                <td>
-                  <div className="row-actions">
-                    <button
-                      type="button"
-                      className="btn btn-small"
-                      style={{ background: 'var(--border)', color: 'var(--text)' }}
-                      disabled={busyId === a.id}
-                      onClick={() => toggleActive(a.id, a.isActive)}
-                    >
-                      {a.isActive ? 'Suspend' : 'Reactivate'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-small btn-reject"
-                      disabled={busyId === a.id}
-                      onClick={() => handleDelete(a.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <section className="adm-card adm-card-pad">
+            <h2 className="adm-section-title">Access</h2>
+
+            <div className="adm-switch-row">
+              <span className="adm-switch-copy">
+                <strong>Maintenance mode</strong>
+                <span className="adm-field-help">
+                  Takes the consumer app offline. Customers cannot browse or order while this is on.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                className="adm-checkbox"
+                checked={draft.maintenanceMode}
+                disabled={!canEdit}
+                aria-label="Maintenance mode"
+                onChange={(e) => setDraft({ ...draft, maintenanceMode: e.target.checked })}
+              />
+            </div>
+
+            <div className="adm-switch-row">
+              <span className="adm-switch-copy">
+                <strong>Allow vendor signups</strong>
+                <span className="adm-field-help">
+                  When off, new vendors cannot register. Existing vendors are unaffected.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                className="adm-checkbox"
+                checked={draft.allowVendorSignups}
+                disabled={!canEdit}
+                aria-label="Allow vendor signups"
+                onChange={(e) => setDraft({ ...draft, allowVendorSignups: e.target.checked })}
+              />
+            </div>
+
+            {canEdit && (
+              <div className="adm-dialog-actions" style={{ marginTop: 'var(--space-4)' }}>
+                {saved === 'access' && <span className="adm-badge adm-badge--success">Saved</span>}
+                <button
+                  type="button"
+                  className="adm-btn adm-btn--primary"
+                  disabled={!dirtyAccess || saving === 'access'}
+                  onClick={() =>
+                    save('access', {
+                      maintenanceMode: draft.maintenanceMode,
+                      allowVendorSignups: draft.allowVendorSignups
+                    })
+                  }
+                >
+                  {saving === 'access' ? 'Saving…' : 'Save access settings'}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="adm-card adm-card-pad">
+            <h2 className="adm-section-title">Commerce and support</h2>
+
+            <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+              <label className="adm-field">
+                <span className="adm-field-label">Platform fee (%)</span>
+                <input
+                  type="number"
+                  className="adm-input"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={draft.platformFeePercent}
+                  disabled={!canEdit}
+                  onChange={(e) =>
+                    setDraft({ ...draft, platformFeePercent: Number(e.target.value) })
+                  }
+                />
+                <span className="adm-field-help">
+                  Taken from each confirmed order. Between 0 and 100.
+                </span>
+              </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">Support email</span>
+                <input
+                  type="email"
+                  className="adm-input"
+                  value={draft.supportEmail ?? ''}
+                  disabled={!canEdit}
+                  placeholder="support@4fgmonitor.com"
+                  onChange={(e) => setDraft({ ...draft, supportEmail: e.target.value || null })}
+                />
+                <span className="adm-field-help">Shown to customers in the consumer app.</span>
+              </label>
+            </div>
+
+            {canEdit && (
+              <div className="adm-dialog-actions" style={{ marginTop: 'var(--space-4)' }}>
+                {saved === 'commerce' && <span className="adm-badge adm-badge--success">Saved</span>}
+                <button
+                  type="button"
+                  className="adm-btn adm-btn--primary"
+                  disabled={!dirtyCommerce || saving === 'commerce'}
+                  onClick={() =>
+                    save('commerce', {
+                      platformFeePercent: draft.platformFeePercent,
+                      supportEmail: draft.supportEmail
+                    })
+                  }
+                >
+                  {saving === 'commerce' ? 'Saving…' : 'Save commerce settings'}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="adm-card adm-card-pad">
+            <h2 className="adm-section-title">Roles</h2>
+            <p className="adm-field-help" style={{ marginTop: 'var(--space-2)' }}>
+              Roles are defined in the database schema, not here, so they cannot be edited from the
+              console. Manage who holds each role under{' '}
+              <Link className="adm-link" href="/dashboard/admin-users" style={{ fontWeight: 600 }}>
+                Admin users
+              </Link>
+              .
+            </p>
+            <div className="adm-table-scroll" style={{ marginTop: 'var(--space-4)' }}>
+              <table className="adm-table">
+                <caption className="adm-sr-only">Role permissions</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className="adm-th">
+                      Role
+                    </th>
+                    <th scope="col" className="adm-th">
+                      Can do
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Object.keys(ROLE_GRANTS) as AdminRole[]).map((role) => (
+                    <tr key={role} className="adm-tr">
+                      <th scope="row" className="adm-td adm-td--primary">
+                        {ROLE_LABEL[role]}
+                      </th>
+                      <td className="adm-td" style={{ whiteSpace: 'normal' }}>
+                        {ROLE_GRANTS[role].includes('*')
+                          ? 'Everything, including managing admin accounts'
+                          : ROLE_GRANTS[role].join(', ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <p className="adm-field-help">
+            Last updated {new Date(settings.updatedAt).toLocaleString('en-NG')}.
+          </p>
+        </>
       )}
     </div>
   );

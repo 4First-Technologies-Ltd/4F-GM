@@ -51,31 +51,31 @@ enum AdminRole {
 }
 
 model User {
-  id               String            @id @default(uuid())
-  email            String            @unique
-  name             String
-  phone            String?
-  devicePhone      String?
-  avatarUrl        String?
-  password         String
-  role             Role              @default(CONSUMER)
-  emailVerified    Boolean           @default(false)
-  isSuspended      Boolean           @default(false)
-  otpCodeHash      String?
-  otpPurpose       OtpPurpose?
-  otpExpiresAt     DateTime?
-  otpAttempts      Int               @default(0)
-  pushEnabled      Boolean           @default(true)
-  emailNotifEnabled Boolean          @default(true)
-  smsAlertsEnabled  Boolean          @default(false)
-  unitPreference   UnitPreference    @default(KG)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  refreshTokens    RefreshToken[]
-  vendorProfile    VendorProfile?
-  orders           Order[]           @relation("ConsumerOrders")
-  cylinderProfiles CylinderProfile[]
-  addresses        Address[]
+  id                String            @id @default(uuid())
+  email             String            @unique
+  name              String
+  phone             String?
+  devicePhone       String?
+  avatarUrl         String?
+  password          String
+  role              Role              @default(CONSUMER)
+  emailVerified     Boolean           @default(false)
+  isSuspended       Boolean           @default(false)
+  otpCodeHash       String?
+  otpPurpose        OtpPurpose?
+  otpExpiresAt      DateTime?
+  otpAttempts       Int               @default(0)
+  pushEnabled       Boolean           @default(true)
+  emailNotifEnabled Boolean           @default(true)
+  smsAlertsEnabled  Boolean           @default(false)
+  unitPreference    UnitPreference    @default(KG)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  refreshTokens     RefreshToken[]
+  vendorProfile     VendorProfile?
+  orders            Order[]           @relation("ConsumerOrders")
+  cylinderProfiles  CylinderProfile[]
+  addresses         Address[]
 
   @@map("users")
 }
@@ -212,4 +212,45 @@ model PlatformSettings {
   updatedAt          DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+enum AuditAction {
+  VENDOR_APPROVED
+  VENDOR_REJECTED
+  VENDOR_STATUS_RESET
+  LISTING_STOCK_UPDATED
+  USER_CREATED
+  USER_UPDATED
+  USER_SUSPENDED
+  USER_UNSUSPENDED
+  USER_DELETED
+  ADMIN_CREATED
+  ADMIN_UPDATED
+  ADMIN_DEACTIVATED
+  ADMIN_DELETED
+  SETTINGS_UPDATED
+}
+
+// Append-only record of every mutating admin action.
+//
+// Actor fields are deliberately DENORMALISED rather than a relation to
+// AdminUser: the log must survive the admin being deleted, and the env-var root
+// account ("root") has no admin_users row at all.
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    String
+  actorName  String
+  actorEmail String
+  actorRole  AdminRole
+  action     AuditAction
+  resource   String
+  resourceId String?
+  summary    String
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
 }

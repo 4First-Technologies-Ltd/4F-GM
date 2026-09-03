@@ -17,6 +17,7 @@ import { Sentry } from './lib/sentry';
 import adminAuthRoutes from './routes/admin/auth';
 import adminAdminUsersRoutes from './routes/admin/adminUsers';
 import adminAnalyticsRoutes from './routes/admin/analytics';
+import adminAuditRoutes from './routes/admin/audit';
 import adminCustomersRoutes from './routes/admin/customers';
 import adminListingsRoutes from './routes/admin/listings';
 import adminOrdersRoutes from './routes/admin/orders';
@@ -68,6 +69,7 @@ export function createApp() {
   app.use('/api/admin/auth', adminAuthRoutes);
   app.use('/api/admin/admin-users', adminAdminUsersRoutes);
   app.use('/api/admin/analytics', adminAnalyticsRoutes);
+  app.use('/api/admin/audit', adminAuditRoutes);
   app.use('/api/admin/customers', adminCustomersRoutes);
   app.use('/api/admin/listings', adminListingsRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);

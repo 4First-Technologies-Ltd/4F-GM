@@ -1,21 +1,27 @@
 import { Router } from 'express';
+import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { requireAdmin } from '../../middleware/requireAdmin';
+import { requireAdmin, requireOperations } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
+import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
+import { writeAuditLog } from '../../lib/audit';
 
 const router = Router();
+
+const SORTABLE = ['createdAt', 'name', 'email'] as const;
 
 const LIST_SELECT = {
   id: true,
   name: true,
   email: true,
+  phone: true,
   role: true,
   emailVerified: true,
   isSuspended: true,
   createdAt: true,
-  vendorProfile: { select: { status: true } },
+  vendorProfile: { select: { id: true, status: true, businessName: true } },
   _count: { select: { orders: true } }
 } as const;
 
@@ -23,23 +29,41 @@ router.get(
   '/',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : undefined;
+    const query = parseListQuery(req);
+    const role = req.query.role;
+    const suspended = req.query.suspended;
+    const verified = req.query.verified;
 
-    const users = await prisma.user.findMany({
-      where: q
-        ? {
-            OR: [
-              { name: { contains: q, mode: 'insensitive' } },
-              { email: { contains: q, mode: 'insensitive' } }
-            ]
-          }
-        : undefined,
-      select: LIST_SELECT,
-      orderBy: { createdAt: 'desc' },
-      take: 200
-    });
+    const where: Prisma.UserWhereInput = {};
+    if (typeof role === 'string' && role in Role) {
+      where.role = role as Role;
+    }
+    if (suspended === 'true' || suspended === 'false') {
+      where.isSuspended = suspended === 'true';
+    }
+    if (verified === 'true' || verified === 'false') {
+      where.emailVerified = verified === 'true';
+    }
+    if (query.q) {
+      where.OR = [
+        { name: { contains: query.q, mode: 'insensitive' } },
+        { email: { contains: query.q, mode: 'insensitive' } },
+        { phone: { contains: query.q, mode: 'insensitive' } }
+      ];
+    }
 
-    return res.json({ users });
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: LIST_SELECT,
+        orderBy: orderBy(query, SORTABLE, 'createdAt'),
+        skip: query.skip,
+        take: query.take
+      }),
+      prisma.user.count({ where })
+    ]);
+
+    return res.json(paginated(users, total, query));
   })
 );
 
@@ -53,7 +77,7 @@ const createSchema = z.object({
 
 router.post(
   '/',
-  requireAdmin,
+  requireOperations,
   asyncHandler(async (req, res) => {
     const result = createSchema.safeParse(req.body);
     if (!result.success) {
@@ -77,6 +101,14 @@ router.post(
         emailVerified: true
       },
       select: LIST_SELECT
+    });
+
+    await writeAuditLog(req, {
+      action: 'USER_CREATED',
+      resource: 'user',
+      resourceId: user.id,
+      summary: `Created ${result.data.role.toLowerCase()} ${user.name} (${user.email})`,
+      metadata: { role: result.data.role, email: user.email }
     });
 
     return res.status(201).json({ user });
@@ -146,7 +178,7 @@ const patchSchema = z.object({
 
 router.patch(
   '/:id',
-  requireAdmin,
+  requireOperations,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = patchSchema.safeParse(req.body);
@@ -186,19 +218,44 @@ router.patch(
       }
     });
 
+    // Suspension is the consequential change here, so it gets its own action
+    // rather than being buried inside a generic "updated" entry.
+    if (result.data.isSuspended !== undefined && result.data.isSuspended !== existing.isSuspended) {
+      await writeAuditLog(req, {
+        action: result.data.isSuspended ? 'USER_SUSPENDED' : 'USER_UNSUSPENDED',
+        resource: 'user',
+        resourceId: id,
+        summary: `${existing.name} (${existing.email}) ${result.data.isSuspended ? 'suspended' : 'reinstated'}`,
+        metadata: { email: existing.email }
+      });
+    } else {
+      const changed = Object.keys(rest).concat(password ? ['password'] : [], email ? ['email'] : []);
+      await writeAuditLog(req, {
+        action: 'USER_UPDATED',
+        resource: 'user',
+        resourceId: id,
+        summary: `Updated ${existing.name} (${existing.email}): ${changed.join(', ') || 'no fields'}`,
+        // Never record the password itself, hashed or otherwise — only that it changed.
+        metadata: { fields: changed }
+      });
+    }
+
     return res.json({ user });
   })
 );
 
 router.delete(
   '/:id',
-  requireAdmin,
+  requireOperations,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const existing = await prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
+        name: true,
+        email: true,
+        role: true,
         _count: { select: { orders: true } },
         vendorProfile: { select: { _count: { select: { orders: true } } } }
       }
@@ -214,6 +271,15 @@ router.delete(
     }
 
     await prisma.user.delete({ where: { id } });
+
+    await writeAuditLog(req, {
+      action: 'USER_DELETED',
+      resource: 'user',
+      resourceId: id,
+      summary: `Deleted ${existing.role.toLowerCase()} ${existing.name} (${existing.email})`,
+      metadata: { email: existing.email, role: existing.role }
+    });
+
     return res.json({ ok: true });
   })
 );

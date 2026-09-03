@@ -21,9 +21,11 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 
 **`gas-monitor-backend/` is the live, deployed API** — Express + Prisma + PostgreSQL on Railway at `https://gas-monitor-backend-production.up.railway.app`, port `9000` locally. Routes live in `src/routes/{auth,vendor,orders,ordersWebhook,cylinders,addresses,analytics,contact}.ts` and `src/routes/admin/{adminUsers,analytics,auth,customers,listings,orders,settings,stats,users,vendors}.ts`. It has a `GET /health` endpoint and CORS gated by the `CORS_ORIGINS` env var.
 
-`gas-monitor-web` and `gas-monitor-admin` both call this backend via `NEXT_PUBLIC_API_URL` — their own `app/api/**` routes are thin proxies, not independent business logic. Their local `prisma/schema.prisma` + `DATABASE_URL`/`DIRECT_URL` (Supabase Postgres) still exist and are queried directly for some data, but auth/vendor/order/cylinder logic should be looked up in `gas-monitor-backend/src/routes/` first, not reimplemented in the Next.js apps.
+`gas-monitor-web` and `gas-monitor-admin` both call this backend via `NEXT_PUBLIC_API_URL`.
 
-`gas-monitor-web/prisma/schema.prisma` and `gas-monitor-admin/prisma/schema.prisma` are **two separate copies of the same schema**, kept in sync manually (no shared package) — when you change one, mirror the change in the other.
+**`gas-monitor-admin` has no server-side data layer of its own.** Its `app/api/**`, `lib/server/**` and `prisma/` directories were deleted in the Admin Dashboard OS refactor (2026-09-03): they were an unreachable byte-for-byte copy of `src/routes/admin/*`, left behind when the backend was split out. `@prisma/client`, `prisma`, `bcryptjs` and `jsonwebtoken` were dropped from its dependencies at the same time. The admin now talks to the backend exclusively through `lib/api.ts` → `adminFetch`. Do not reintroduce Prisma there.
+
+`gas-monitor-web/prisma/schema.prisma` is a second copy of the schema kept in sync manually with `gas-monitor-backend/prisma/schema.prisma`. **The backend is the migration owner** — its `start` script runs `prisma migrate deploy`, and it is currently ahead of web (`devicePhone`, `audit_logs`). Add migrations there and mirror the schema into web.
 
 ## Projects at a glance
 
@@ -32,7 +34,7 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 | `gas-monitor` | Expo SDK 54, expo-router, React 19 | Metro (`npm start`) | EAS Build (see below) |
 | `gas-monitor-backend` | Express, Prisma, PostgreSQL | `9000` | Railway — `gas-monitor-backend-production.up.railway.app` |
 | `gas-monitor-web` | Next.js 15 App Router | `3000`* | `4fgmonitor.com` |
-| `gas-monitor-admin` | Next.js 15 App Router | `3010` | `4fgmpanel.4fgmonitor.com` |
+| `gas-monitor-admin` | Next.js 15 App Router (no Prisma) | `3010` | `4fgmpanel.4fgmonitor.com` |
 | `landing` | Static HTML + Supabase Edge Functions | — | — |
 
 *This machine also runs an unrelated project ("Ekorafon") on ports 3000/3001/3002. **Never assume those ports are free or safe to kill** — verify with `netstat -ano | grep :<port>` and check the response body actually looks like a 4FG app before touching any process on them. `gas-monitor-admin` was deliberately moved to port `3010` to avoid this collision.
@@ -43,7 +45,17 @@ Two roles shared across mobile, web, and backend: `CONSUMER` and `VENDOR` (Prism
 
 ## Admin panel auth
 
-`gas-monitor-admin` login is **not** part of the `User`/`Role` system. It checks env `ADMIN_USERNAME`/`ADMIN_PASSWORD` first (signs in as `SUPER_ADMIN`), then falls back to an `AdminUser` table (`AdminRole`: `SUPER_ADMIN` / `OPERATIONS` / `SUPPORT`, bcrypt-hashed passwords). Role scoping: `SUPPORT` gets no settings access; sub-admin management (`/api/admin-users*`) is `SUPER_ADMIN`-only via `requireSuperAdmin`.
+`gas-monitor-admin` login is **not** part of the `User`/`Role` system. It checks env `ADMIN_USERNAME`/`ADMIN_PASSWORD` first (signs in as `SUPER_ADMIN`), then falls back to an `AdminUser` table (`AdminRole`: `SUPER_ADMIN` / `OPERATIONS` / `SUPPORT`, bcrypt-hashed passwords).
+
+Role scoping is **rank-based** and lives in `gas-monitor-backend/src/middleware/requireAdmin.ts` (`SUPPORT` 0 < `OPERATIONS` 1 < `SUPER_ADMIN` 2):
+
+| Guard | Minimum role | Applied to |
+|---|---|---|
+| `requireAdmin` | SUPPORT | all admin reads |
+| `requireOperations` | OPERATIONS | vendor approval, listing stock, user create/update/delete, settings |
+| `requireSuperAdmin` | SUPER_ADMIN | `/api/admin/admin-users*` |
+
+Every mutating admin route writes to `audit_logs` via `src/lib/audit.ts`. The audit trail is append-only and surfaced at `/dashboard/audit`.
 
 ## Mobile app builds (EAS)
 
@@ -76,5 +88,5 @@ Full mobile design system: `gas-monitor/design-system/MASTER.md`.
 
 - Mobile screens, routing, and API client methods → `gas-monitor/CLAUDE.md`
 - Backend route implementations → `gas-monitor-backend/src/routes/`
-- Admin panel pages and RBAC → `gas-monitor-admin/app/dashboard/`
+- Admin panel pages and RBAC → `gas-monitor-admin/app/dashboard/` (thin routes) and `gas-monitor-admin/admin/` (the resource engine, primitives, permissions and per-module configs). Its architecture and remaining gaps are documented in `gas-monitor-admin/ADMIN_DASHBOARD_REPORT.md`.
 - Top-level product overview and setup steps → `README.md`

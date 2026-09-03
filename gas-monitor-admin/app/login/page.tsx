@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminFetch } from '@/lib/api';
+import { IconDiamond } from '@/components/icons';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,44 +24,64 @@ export default function LoginPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        // Surface the server's own message rather than a generic string.
         setError(body.error ?? 'Login failed');
         return;
       }
       router.replace('/dashboard');
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="login-shell">
-      <div className="login-card">
-        <h1>4FG Admin</h1>
-        <p className="subtitle">Sign in to manage the gas monitor platform.</p>
-        <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="username">Username or email</label>
+    <main className="adm-login">
+      <div className="adm-login-card">
+        <div className="adm-login-brand">
+          <IconDiamond className="adm-login-logo" />
+          <div>
+            <h1 className="adm-page-title">4FG Admin</h1>
+            <p className="adm-page-meta">Sign in to manage the gas monitor platform.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+          <label className="adm-field" htmlFor="username">
+            <span className="adm-field-label">Username or email</span>
             <input
               id="username"
+              className="adm-input"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              autoFocus
               required
             />
-          </div>
-          <div className="field">
-            <label htmlFor="password">Password</label>
+          </label>
+
+          <label className="adm-field" htmlFor="password">
+            <span className="adm-field-label">Password</span>
             <input
               id="password"
+              className="adm-input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               required
+              aria-describedby={error ? 'login-error' : undefined}
             />
-          </div>
-          {error && <p className="error-text">{error}</p>}
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+          </label>
+
+          {error && (
+            <p id="login-error" className="adm-field-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" className="adm-btn adm-btn--primary" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
