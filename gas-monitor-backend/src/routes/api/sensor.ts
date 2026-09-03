@@ -10,14 +10,14 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { ussdService } from '@/services/ussd-service'; // Your USSD service instance
-import { prisma } from '@/lib/db'; // Your Prisma instance
-import { authenticateToken } from '@/middleware/auth'; // Your auth middleware
+import { ussdService, USSDResponse } from '../../services/ussd-service';
+import { prisma } from '../../lib/prisma';
+import { requireAuth } from '../../middleware/requireAuth';
 
 const router = Router();
 
 // Apply auth middleware to all routes
-router.use(authenticateToken);
+router.use(requireAuth);
 
 /**
  * GET /api/sensor/reading
@@ -36,7 +36,7 @@ router.use(authenticateToken);
  */
 router.get('/reading', async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.sub;
 
     if (!userId) {
       return res.status(401).json({
@@ -59,7 +59,8 @@ router.get('/reading', async (req: Request, res: Response) => {
     }
 
     // Query device with retry logic (up to 2 retries on timeout)
-    let result;
+    // The loop below always runs at least once, so result is assigned before use.
+    let result!: USSDResponse;
     for (let attempt = 0; attempt < 3; attempt++) {
       result = await ussdService.queryDeviceWeight(user.devicePhone);
 
@@ -102,7 +103,7 @@ router.get('/reading', async (req: Request, res: Response) => {
  */
 router.post('/tare', async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.sub;
 
     if (!userId) {
       return res.status(401).json({
@@ -154,7 +155,7 @@ router.post('/tare', async (req: Request, res: Response) => {
  */
 router.post('/minimum-level', async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.sub;
     const { level } = req.body;
 
     if (!userId) {

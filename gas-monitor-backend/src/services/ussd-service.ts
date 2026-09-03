@@ -9,7 +9,7 @@
 
 import axios from 'axios';
 
-interface USSDResponse {
+export interface USSDResponse {
   weight: number;
   temperature?: number;
   pressure?: number;
@@ -192,10 +192,8 @@ export class USSDService {
     temperature?: number;
     pressure?: number;
   } {
-    const result = {
+    const result: { weight: number; temperature?: number; pressure?: number } = {
       weight: 0,
-      temperature: undefined,
-      pressure: undefined,
     };
 
     try {

@@ -1,5 +1,29 @@
 import axios, { AxiosInstance } from 'axios';
 
+/**
+ * Termii requires recipients in international format without a leading "+".
+ * Converts Nigerian local numbers (0803...) to 234803... and strips "+".
+ */
+function toInternational(phone: string): string {
+  const digits = phone.replace(/[^\d]/g, '');
+  if (digits.startsWith('234')) return digits;
+  if (digits.startsWith('0')) return `234${digits.slice(1)}`;
+  return digits;
+}
+
+/** Pull the real reason out of an axios error (Termii returns it in the body). */
+function describeAxiosError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const body = error.response?.data;
+    const detail =
+      body && typeof body === 'object'
+        ? (body as any).message || JSON.stringify(body)
+        : body;
+    return `${error.message}${detail ? ` — ${detail}` : ''}`;
+  }
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
 export interface TermiiSendResponse {
   code: string;
   message_id: string;
@@ -51,16 +75,17 @@ export class TermiiService {
   async sendSms(phoneNumber: string, message: string): Promise<TermiiSendResponse> {
     try {
       const response = await this.client.post<TermiiSendResponse>('/sms/send', {
-        to: phoneNumber,
+        to: toInternational(phoneNumber),
         from: this.senderId,
         sms: message,
         type: 'plain',
+        channel: 'generic',
         api_key: this.apiKey,
       });
 
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to send SMS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to send SMS: ${describeAxiosError(error)}`);
     }
   }
 
@@ -74,18 +99,17 @@ export class TermiiService {
   async sendUssdCommand(devicePhoneNumber: string, ussdCommand: string): Promise<TermiiSendResponse> {
     try {
       const response = await this.client.post<TermiiSendResponse>('/sms/send', {
-        to: devicePhoneNumber,
+        to: toInternational(devicePhoneNumber),
         from: this.senderId,
         sms: ussdCommand,
         type: 'plain',
+        channel: 'generic',
         api_key: this.apiKey,
       });
 
       return response.data;
     } catch (error) {
-      throw new Error(
-        `Failed to send USSD command: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      throw new Error(`Failed to send USSD command: ${describeAxiosError(error)}`);
     }
   }
 
@@ -95,16 +119,17 @@ export class TermiiService {
   async sendBulkSms(recipients: string[], message: string): Promise<TermiiSendResponse> {
     try {
       const response = await this.client.post<TermiiSendResponse>('/sms/send/bulk', {
-        to: recipients,
+        to: recipients.map(toInternational),
         from: this.senderId,
         sms: message,
         type: 'plain',
+        channel: 'generic',
         api_key: this.apiKey,
       });
 
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to send bulk SMS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to send bulk SMS: ${describeAxiosError(error)}`);
     }
   }
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { prisma } from '../lib/prisma';
 import { UssdCommandBuilder, parseUssdResponse } from '../lib/ussd-handler';
-import { getTermiiService } from '../services/termii-service';
+import { getTermiiService, TermiiService, TermiiSendResponse } from '../services/termii-service';
 
 const router = Router();
 
@@ -15,6 +15,48 @@ const deviceConfigs = new Map<string, any>();
 
 // Default device phone number (will be configurable per user)
 const DEFAULT_DEVICE_PHONE = process.env.DEVICE_PHONE_NUMBER || '08000000000';
+
+// ── USSD rate limiting ───────────────────────────────────────────────────────
+// Every USSD command is a billable SMS to the device. Guard against runaway
+// polling (e.g. a stuck client) and double-submits with a per-device-phone
+// minimum interval between commands.
+const USSD_MIN_INTERVAL_MS = Number(process.env.USSD_MIN_INTERVAL_MS) || 15_000;
+const lastUssdSentAt = new Map<string, number>();
+
+function ussdThrottleRemainingMs(devicePhone: string): number {
+  const last = lastUssdSentAt.get(devicePhone);
+  if (!last) return 0;
+  return Math.max(0, USSD_MIN_INTERVAL_MS - (Date.now() - last));
+}
+
+/**
+ * Send a USSD command unless the same device phone was messaged within the
+ * throttle window. Returns null when the send was skipped, so read-style
+ * callers can fall back to cached/mock data and write-style callers can return
+ * a 429.
+ */
+async function sendUssdThrottled(
+  termii: TermiiService,
+  devicePhone: string,
+  command: string
+): Promise<TermiiSendResponse | null> {
+  const remaining = ussdThrottleRemainingMs(devicePhone);
+  if (remaining > 0) {
+    console.warn(
+      `[TERMII] Throttled USSD to ${devicePhone} (${Math.ceil(remaining / 1000)}s remaining): ${command}`
+    );
+    return null;
+  }
+  // Reserve the slot before awaiting so concurrent requests can't both slip through.
+  lastUssdSentAt.set(devicePhone, Date.now());
+  try {
+    return await termii.sendUssdCommand(devicePhone, command);
+  } catch (err) {
+    // A failed send shouldn't hold the lock for the full window — release most of it.
+    lastUssdSentAt.set(devicePhone, Date.now() - USSD_MIN_INTERVAL_MS + 3_000);
+    throw err;
+  }
+}
 
 // ── Sensor APIs ──────────────────────────────────────────────────────────────
 
@@ -34,7 +76,7 @@ router.get('/sensor/reading', async (req: Request, res: Response) => {
         const ussdBuilder = new UssdCommandBuilder('1234');
         const command = ussdBuilder.queryInfo();
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
-        await termii.sendUssdCommand(devicePhone, command);
+        await sendUssdThrottled(termii, devicePhone, command);
       } catch (termiiErr) {
         console.error('Termii error:', termiiErr);
       }
@@ -74,9 +116,16 @@ router.post('/sensor/tare', async (req: Request, res: Response) => {
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
 
         console.log(`[TERMII] Sending TARE command to device ${devicePhone}: ${command}`);
-        const termiiResponse = await termii.sendUssdCommand(devicePhone, command);
+        const termiiResponse = await sendUssdThrottled(termii, devicePhone, command);
 
-        if (termiiResponse.code !== 'success') {
+        if (!termiiResponse) {
+          return res.status(429).json({
+            error: 'A command was just sent to this device. Wait a few seconds and try again.',
+            termiiStatus: 'THROTTLED',
+          });
+        }
+
+        if (termiiResponse.code !== 'success' && termiiResponse.code !== 'ok') {
           console.error(`[TERMII] Command failed: ${termiiResponse.code} - ${termiiResponse.message}`);
           return res.status(400).json({
             error: `Termii failed: ${termiiResponse.message}`,
@@ -140,9 +189,16 @@ router.post('/sensor/minimum-level', async (req: Request, res: Response) => {
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
 
         console.log(`[TERMII] Sending MINIMUM command to device ${devicePhone}: ${command}`);
-        const termiiResponse = await termii.sendUssdCommand(devicePhone, command);
+        const termiiResponse = await sendUssdThrottled(termii, devicePhone, command);
 
-        if (termiiResponse.code !== 'success') {
+        if (!termiiResponse) {
+          return res.status(429).json({
+            error: 'A command was just sent to this device. Wait a few seconds and try again.',
+            termiiStatus: 'THROTTLED',
+          });
+        }
+
+        if (termiiResponse.code !== 'success' && termiiResponse.code !== 'ok') {
           console.error(`[TERMII] Command failed: ${termiiResponse.code} - ${termiiResponse.message}`);
           return res.status(400).json({
             error: `Termii failed: ${termiiResponse.message}`,
@@ -208,7 +264,7 @@ router.get('/info', async (req: Request, res: Response) => {
         const ussdBuilder = new UssdCommandBuilder('1234');
         const command = ussdBuilder.queryInfo();
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
-        await termii.sendUssdCommand(devicePhone, command);
+        await sendUssdThrottled(termii, devicePhone, command);
       } catch (termiiErr) {
         console.error('Termii error:', termiiErr);
       }
@@ -249,9 +305,16 @@ router.post('/config/phone', async (req: Request, res: Response) => {
         const devicePhone = DEFAULT_DEVICE_PHONE;
 
         console.log(`[TERMII] Sending USER command to device ${devicePhone}: ${command}`);
-        const termiiResponse = await termii.sendUssdCommand(devicePhone, command);
+        const termiiResponse = await sendUssdThrottled(termii, devicePhone, command);
 
-        if (termiiResponse.code !== 'success') {
+        if (!termiiResponse) {
+          return res.status(429).json({
+            error: 'A command was just sent to this device. Wait a few seconds and try again.',
+            termiiStatus: 'THROTTLED',
+          });
+        }
+
+        if (termiiResponse.code !== 'success' && termiiResponse.code !== 'ok') {
           console.error(`[TERMII] Command failed: ${termiiResponse.code} - ${termiiResponse.message}`);
           return res.status(400).json({
             error: `Termii failed: ${termiiResponse.message}`,
@@ -330,7 +393,7 @@ router.post('/config/location', async (req: Request, res: Response) => {
         const ussdBuilder = new UssdCommandBuilder('1234');
         const command = ussdBuilder.setLocation(locationName);
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
-        await termii.sendUssdCommand(devicePhone, command);
+        await sendUssdThrottled(termii, devicePhone, command);
       } catch (termiiErr) {
         console.error('Termii error:', termiiErr);
       }
@@ -371,7 +434,7 @@ router.post('/config/password', async (req: Request, res: Response) => {
         const ussdBuilder = new UssdCommandBuilder(oldPassword);
         const command = ussdBuilder.changePassword(oldPassword, newPassword);
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
-        await termii.sendUssdCommand(devicePhone, command);
+        await sendUssdThrottled(termii, devicePhone, command);
       } catch (termiiErr) {
         console.error('Termii error:', termiiErr);
       }
@@ -407,7 +470,7 @@ router.post('/factory-reset', async (req: Request, res: Response) => {
       try {
         const termii = getTermiiService();
         const devicePhone = deviceConfigs.get(`${userId}:phone_number`) || DEFAULT_DEVICE_PHONE;
-        await termii.sendUssdCommand(devicePhone, command);
+        await sendUssdThrottled(termii, devicePhone, command);
       } catch (termiiErr) {
         console.error('Termii error:', termiiErr);
       }

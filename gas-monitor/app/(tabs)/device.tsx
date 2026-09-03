@@ -35,7 +35,8 @@ export default function DeviceScreen() {
   const deviceConfig = useDeviceConfig();
 
   // Device settings state
-  const [autoSync, setAutoSync] = useState(true);
+  // Auto-sync defaults OFF: every sync fires a billable USSD SMS to the device.
+  const [autoSync, setAutoSync] = useState(false);
   const [lowAlerts, setLowAlerts] = useState(true);
   const [criticalAlerts, setCriticalAlerts] = useState(true);
 
@@ -47,15 +48,19 @@ export default function DeviceScreen() {
   const [oldPasswordInput, setOldPasswordInput] = useState('');
   const [newPasswordInput, setNewPasswordInput] = useState('');
 
-  // Fetch sensor reading on mount and periodically if auto-sync enabled
+  // Fetch sensor reading once on mount. Periodic polling only when the user
+  // explicitly opts in via Auto-sync — each poll costs a real USSD SMS, so the
+  // interval is deliberately long (5 min). Manual refresh is always available.
   useEffect(() => {
     fetch();
     deviceConfig.fetchConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    if (autoSync) {
-      const interval = setInterval(fetch, 30000); // Refresh every 30 seconds
-      return () => clearInterval(interval);
-    }
+  useEffect(() => {
+    if (!autoSync) return;
+    const interval = setInterval(fetch, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
   }, [autoSync, fetch]);
 
   const handleSetPhoneNumber = async () => {
@@ -262,7 +267,7 @@ export default function DeviceScreen() {
           </View>
           <ToggleRow
             label="Auto-sync"
-            sub="Sync readings every 30 seconds"
+            sub="Poll the device every 5 min (uses SMS credit)"
             value={autoSync}
             onToggle={setAutoSync}
           />
