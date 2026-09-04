@@ -44,7 +44,30 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   VERIFIED: { tone: 'success', label: 'Verified' },
   UNVERIFIED: { tone: 'warning', label: 'Unverified' },
   PAID: { tone: 'success', label: 'Paid' },
-  UNPAID: { tone: 'warning', label: 'Unpaid' }
+  UNPAID: { tone: 'warning', label: 'Unpaid' },
+
+  // Error categories — mapped by MEANING, not by name. A validation failure is
+  // not an incident, so USER_ERROR is neutral rather than red.
+  ATTACK: { tone: 'error', label: 'Attack' },
+  SYSTEM_RISK: { tone: 'error', label: 'System risk' },
+  SERVER_ERROR: { tone: 'warning', label: 'Server error' },
+  USER_ERROR: { tone: 'neutral', label: 'User error' },
+  UNKNOWN: { tone: 'neutral', label: 'Unknown' },
+
+  // Severity
+  CRITICAL: { tone: 'error', label: 'Critical' },
+  HIGH: { tone: 'error', label: 'High' },
+  MEDIUM: { tone: 'warning', label: 'Medium' },
+  LOW: { tone: 'neutral', label: 'Low' },
+
+  // Blocklist
+  BLOCKED: { tone: 'error', label: 'Blocked' },
+  EXPIRED_BLOCK: { tone: 'neutral', label: 'Expired' },
+  RESOLVED: { tone: 'success', label: 'Resolved' },
+  UNRESOLVED: { tone: 'warning', label: 'Unresolved' },
+  ALL: { tone: 'error', label: 'All traffic' },
+  AUTH: { tone: 'warning', label: 'Auth only' },
+  API: { tone: 'warning', label: 'API only' }
 };
 
 /**

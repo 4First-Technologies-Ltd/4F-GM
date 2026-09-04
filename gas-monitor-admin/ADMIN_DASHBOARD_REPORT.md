@@ -181,6 +181,90 @@ with that message; a normal build still passes and bakes in
 The check is scoped to the build phase only: at `next start` the value is already
 in the bundle and is legitimately absent from the runtime environment.
 
+## Round 2 — security and observability (2026-09-04)
+
+Added after review: the OS registry had no `security`, `error-logs` or
+`server-logs` modules at all. That was a gap in the skill, not a gas-monitor
+decision, and it would have recurred on every future install. The skill now
+carries all three (22 modules), every profile recommends security and
+error-logs, and Phase 1 detection probes for trust-proxy, rate limiting, helmet
+and error persistence.
+
+**Built here — UI only, by decision.** Enforcement lands at the VPS stage.
+
+| Route | Module | State |
+|---|---|---|
+| `/dashboard/security` | blocked addresses: list, filters, block/lift/remove, detail | **UI only — no backend** |
+| `/dashboard/error-logs` | errors by category (incl. ATTACK) and severity, resolve/reopen, stack + redacted context | **UI only — no backend** |
+
+`server-logs` was **skipped**: Render owns the logs and the filesystem is
+ephemeral. There is nothing for the app to read. Logs live in the Render console.
+
+### Both pages carry a standing notice
+
+Each renders a permanent banner saying it is not connected. This is deliberate
+and should not be removed until the backend exists — on the security page an
+empty list must not imply protection, and on the error page an empty list must
+not read as "no attacks".
+
+### Backend work these need
+
+**Security** — `TODO(admin-os)` in `admin/modules/security.tsx`:
+
+```
+GET    /api/admin/security/blocked-ips?page&limit&q&sort&dir&active&scope
+POST   /api/admin/security/blocked-ips   { ipAddress, reason?, scope, expiresAt? }
+PATCH  /api/admin/security/blocked-ips/:id   { active }
+DELETE /api/admin/security/blocked-ips/:id
+authz  read -> requireAdmin; block/unblock -> requireSuperAdmin
+audit  every block and unblock writes an AuditLog entry
+```
+
+**BLOCKING PREREQUISITE — `app.set('trust proxy', 1)` is not set.** On Render,
+`req.ip` is the load balancer's address. Wire enforcement before fixing that and
+every record holds the same address, and the first block takes the API offline.
+Fix trust-proxy first, always.
+
+**Error logs** — `TODO(admin-os)` in `admin/modules/error-logs.tsx`:
+
+```
+GET   /api/admin/error-logs?page&limit&q&sort&dir&category&severity&resolved
+PATCH /api/admin/error-logs/:id   { resolved }
+authz read -> requireAdmin; resolve -> requireOperations
+```
+
+Nothing persists errors today: `captureException` sends to Sentry, and
+`src/routes/internalSentryWebhook.ts` forwards issue alerts to Telegram without
+storing them. The cheapest honest path to real data is extending that existing
+webhook to also insert an `ErrorLog` row. **Do not query the Sentry API from the
+browser** — it needs a privileged token.
+
+### Permission grants
+
+`security.block` and `security.unblock` are **SUPER_ADMIN only**, not OPERATIONS.
+A bad block can take the platform offline, so it sits with the highest role.
+`errors.resolve` is OPERATIONS.
+
+### Security decisions worth knowing
+
+- **Redaction.** `admin/primitives/redact.ts` masks credential-shaped keys and
+  values (authorization, cookie, token, JWT-shaped strings) before request
+  context is rendered. This is a last line of defence — **the server must redact
+  at capture time**, or secrets sit in the database and in every export.
+- **Stack traces and context are attacker-influenced text.** Rendered as escaped,
+  pre-formatted content inside a disclosure, never as HTML.
+- **Category colours map by meaning.** ATTACK and SYSTEM_RISK are error-toned;
+  USER_ERROR is neutral, because a validation failure is not an incident.
+
+### Not done, deliberately
+
+**No pricing module.** GoBuyMe's is 2,327 lines because delivery pricing has
+zones, surge windows and distance buckets. Gas-monitor's entire pricing model is
+`platformFeePercent` on `PlatformSettings` and `pricePerKg` per listing — both
+already surfaced in Settings and Listings. Building zones and surge here would be
+inventing UI for data that does not exist. If gas-monitor should grow real
+pricing rules, that is a product decision and a schema change first.
+
 ## Follow-ups not done
 
 - **`gas-monitor-web/prisma/schema.prisma` was not updated** with the `AuditLog`

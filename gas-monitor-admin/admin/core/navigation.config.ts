@@ -1,6 +1,8 @@
 import {
+  IconBug,
   IconChartBar,
   IconGrid,
+  IconKey,
   IconPackage,
   IconScroll,
   IconSettings,
@@ -65,7 +67,8 @@ export const NAVIGATION: NavSection[] = [
         permission: 'orders.read',
         badge: { key: 'pendingOrders', tone: 'warning' }
       },
-      { label: 'Listings', route: '/dashboard/listings', icon: IconTag, permission: 'listings.read' }
+      { label: 'Listings', route: '/dashboard/listings', icon: IconTag, permission: 'listings.read' },
+      { label: 'Error logs', route: '/dashboard/error-logs', icon: IconBug, permission: 'errors.read' }
     ]
   },
   {
@@ -76,8 +79,9 @@ export const NAVIGATION: NavSection[] = [
     section: 'System',
     items: [
       { label: 'Audit log', route: '/dashboard/audit', icon: IconScroll, permission: 'audit.read' },
+      { label: 'Security', route: '/dashboard/security', icon: IconShield, permission: 'security.read' },
       { label: 'Settings', route: '/dashboard/settings', icon: IconSettings, permission: 'settings.read' },
-      { label: 'Admin users', route: '/dashboard/admin-users', icon: IconShield, permission: 'admins.read' }
+      { label: 'Admin users', route: '/dashboard/admin-users', icon: IconKey, permission: 'admins.read' }
     ]
   }
 ];

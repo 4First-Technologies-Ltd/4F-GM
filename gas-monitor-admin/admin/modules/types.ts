@@ -134,3 +134,48 @@ export interface PlatformSettings {
   platformFeePercent: number;
   updatedAt: string;
 }
+
+/* ------------------------------------------------------------- security --- */
+/*
+ * NOTE: none of the shapes below are backed by an endpoint yet. They describe
+ * the contract the backend is expected to implement — see the TODO(admin-os)
+ * markers in security.tsx and error-logs.tsx, and ADMIN_DASHBOARD_REPORT.md.
+ */
+
+export type BlockScope = 'ALL' | 'AUTH' | 'API';
+
+export interface BlockedIpRow {
+  id: string;
+  ipAddress: string;
+  reason: string | null;
+  scope: BlockScope;
+  active: boolean;
+  /** null = permanent */
+  expiresAt: string | null;
+  hitCount: number;
+  createdAt: string;
+  createdByName: string | null;
+}
+
+export type ErrorCategory = 'USER_ERROR' | 'SERVER_ERROR' | 'ATTACK' | 'SYSTEM_RISK' | 'UNKNOWN';
+export type ErrorSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface ErrorLogRow {
+  id: string;
+  message: string;
+  category: ErrorCategory;
+  severity: ErrorSeverity;
+  source: string | null;
+  path: string | null;
+  method: string | null;
+  statusCode: number | null;
+  ipAddress: string | null;
+  userId: string | null;
+  stack: string | null;
+  context: Record<string, unknown> | null;
+  resolved: boolean;
+  resolvedAt: string | null;
+  escalatedAt: string | null;
+  occurrences: number;
+  createdAt: string;
+}

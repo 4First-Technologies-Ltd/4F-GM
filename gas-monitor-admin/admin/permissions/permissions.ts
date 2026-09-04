@@ -41,7 +41,10 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
     'users.update',
     'users.suspend',
     'users.delete',
+    'errors.resolve',
     'settings.update'
+    // security.block / security.unblock deliberately excluded: a bad block can
+    // take the whole platform offline, so it stays with SUPER_ADMIN.
   ],
   SUPER_ADMIN: ['*']
 };

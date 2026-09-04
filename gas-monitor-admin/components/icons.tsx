@@ -198,3 +198,22 @@ export function IconMoon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconBug({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M8 6a4 4 0 0 1 8 0" />
+      <rect x="7" y="8" width="10" height="12" rx="5" />
+      <path d="M3 12h4M17 12h4M4 7l3 2M20 7l-3 2M4 18l3-2M20 18l-3-2" />
+    </svg>
+  );
+}
+
+export function IconKey({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <circle cx="8" cy="15" r="4" />
+      <path d="M10.8 12.2 20 3M17 6l2.5 2.5M14.5 8.5 17 11" />
+    </svg>
+  );
+}
