@@ -152,6 +152,35 @@ Two things must happen, in this order:
    `{ data, pagination }` from the list endpoints. Deploying the admin first
    leaves every list empty.
 
+## Post-deploy corrections (2026-09-03)
+
+Two issues surfaced after the first deploy attempt.
+
+**1. `Dockerfile` broke — my regression.** Removing `prisma/`, `@prisma/client`
+and the `prisma` CLI left four dead lines in the Dockerfile:
+`RUN npx prisma generate` and three `COPY` lines pointing at
+`node_modules/.prisma`, `node_modules/@prisma/client` and `/app/prisma`. Any
+Docker build would have failed. Fixed: those lines are gone, along with the
+now-unneeded `openssl` install (it was only there for the Prisma query engine).
+
+I checked source imports before deleting but not the build files. The validation
+sweep should have grepped `Dockerfile` for references to deleted paths.
+
+**2. Deployed admin calling `http://localhost:9000`.** Pre-existing, not caused by
+this refactor — `lib/api.ts` is untouched and the previous login page used the
+same `adminFetch`. `NEXT_PUBLIC_API_URL` is inlined at **build** time, and
+`.env`/`.env.*` are excluded from both git and Docker, so any build that does not
+receive the variable silently bakes in the localhost fallback.
+
+Hardened rather than left as a footgun: `next.config.js` now throws during
+`phase-production-build` when `NEXT_PUBLIC_API_URL` is unset, naming where to set
+it for local, Netlify and Docker. Verified — a build without the variable fails
+with that message; a normal build still passes and bakes in
+`https://ugo.4fgmonitor.com`.
+
+The check is scoped to the build phase only: at `next start` the value is already
+in the bundle and is legitimately absent from the runtime environment.
+
 ## Follow-ups not done
 
 - **`gas-monitor-web/prisma/schema.prisma` was not updated** with the `AuditLog`
