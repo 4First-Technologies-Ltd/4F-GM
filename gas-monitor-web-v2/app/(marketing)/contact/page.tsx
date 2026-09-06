@@ -11,6 +11,7 @@ import {
 } from "@/components/motion/select";
 import { Checkbox } from "@/components/motion/checkbox";
 import { Button } from "@/components/motion/button/base";
+import { SocialShareModal } from "@/components/site/SocialShareModal";
 type Status = "idle" | "sending" | "sent" | "error";
 
 const TOPICS = [
@@ -82,8 +83,8 @@ export default function ContactPage() {
         them here.
       </p>
 
-      <div className="mt-4 grid gap-16 lg:grid-cols-2 lg:items-start">
-        <div className="space-y-8 lg:order-1">
+      <div className="mt-4 grid gap-16 lg:grid-cols-2">
+        <div className="flex h-full flex-col gap-8 lg:order-1">
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-widest">
               Address
@@ -133,9 +134,16 @@ export default function ContactPage() {
               {CONTACT_INFO.hours}
             </p>
           </div>
+
+          <div className="mt-auto">
+            <SocialShareModal />
+          </div>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-5 lg:order-2 lg:-mt-24">
+        <form
+          onSubmit={onSubmit}
+          className="flex flex-col gap-5 lg:order-2 lg:-mt-24"
+        >
         <Input
           label="Your name"
           value={name}
@@ -182,24 +190,26 @@ export default function ContactPage() {
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <Checkbox
-            checked={consent}
-            onCheckedChange={setConsent}
-            label="I agree to be contacted about this enquiry."
-          />
-          <Button
-            type="submit"
-            size="lg"
-            disabled={!canSubmit || status === "sending"}
-          >
-            {status === "sending" ? "Sending…" : "Send message"}
-          </Button>
-        </div>
+        <div className="lg:mt-auto">
+          <div className="flex items-center justify-between gap-4">
+            <Checkbox
+              checked={consent}
+              onCheckedChange={setConsent}
+              label="I agree to be contacted about this enquiry."
+            />
+            <Button
+              type="submit"
+              size="lg"
+              disabled={!canSubmit || status === "sending"}
+            >
+              {status === "sending" ? "Sending…" : "Send message"}
+            </Button>
+          </div>
 
-        {error ? (
-          <p className="text-sm text-destructive">{error}</p>
-        ) : null}
+          {error ? (
+            <p className="mt-3 text-sm text-destructive">{error}</p>
+          ) : null}
+        </div>
         </form>
       </div>
     </main>

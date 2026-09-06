@@ -99,7 +99,7 @@ export const LISTINGS: Listing[] = [
     id: 'l3',
     vendor: 'Total Gas Depot',
     initials: 'TG',
-    color: '#E65100',
+    color: '#D14700',
     title: '50 kg bulk LPG refill',
     description:
       'High-volume LPG refill for restaurants, bakeries, and commercial kitchens. Weighed and certified at the Ikoyi depot before delivery.',
@@ -161,7 +161,7 @@ export const LISTINGS: Listing[] = [
     id: 'l6',
     vendor: 'Industrial Gas Co.',
     initials: 'IG',
-    color: '#E65100',
+    color: '#D14700',
     title: 'Bulk tank LPG supply (100 kg+)',
     description:
       'Scheduled bulk LPG deliveries for estates, hotels, and factories with on-site tank filling from Apapa.',
@@ -244,7 +244,7 @@ export const LISTINGS: Listing[] = [
     id: 'l10',
     vendor: 'Total Gas Depot',
     initials: 'TG',
-    color: '#E65100',
+    color: '#D14700',
     title: 'Gas regulator & safety accessories',
     description:
       'High-quality regulators, valves, fittings, and safety clips. Certified for cooking and industrial use.',

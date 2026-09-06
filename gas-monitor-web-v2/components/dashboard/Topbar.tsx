@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Menu, Bell } from 'lucide-react';
+import { ThemeToggle } from '@/components/site/ThemeToggle';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Overview',
@@ -47,6 +48,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
         {/* Actions */}
         <div className="flex items-center gap-2 md:gap-4">
+          <ThemeToggle />
           <button
             type="button"
             className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"

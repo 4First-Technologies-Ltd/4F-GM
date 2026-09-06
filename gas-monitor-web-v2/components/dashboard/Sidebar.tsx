@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { LogoEmblem } from '@/components/site/Logo';
 import {
   Grid3x3,
   Package,
@@ -75,7 +76,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
         {/* Header */}
         <div className="flex items-center justify-between gap-3 p-4 border-b border-border">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <span className="text-lg font-bold text-primary">4F</span>
+            <LogoEmblem size={28} />
             <span className="text-xs font-medium text-foreground hidden sm:block">4FG Monitor</span>
           </Link>
           <button

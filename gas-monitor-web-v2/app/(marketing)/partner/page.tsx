@@ -44,6 +44,9 @@ export default function PartnerPage() {
         <ButtonLink href="/vendor-sign-up" size="lg">
           Apply to sell
         </ButtonLink>
+        <ButtonLink href="/pricing" variant="outline" size="lg">
+          See partner plans
+        </ButtonLink>
         <ButtonLink href="/contact" variant="outline" size="lg">
           Talk to us first
         </ButtonLink>

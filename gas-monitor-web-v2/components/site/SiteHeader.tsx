@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { ButtonLink } from "@/components/motion/button/base";
+import { ThemeToggle } from "@/components/site/ThemeToggle";
+import { LogoEmblem } from "@/components/site/Logo";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/product", label: "Product" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/partner", label: "For vendors" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/downloads", label: "Get the app" },
 ];
 
@@ -39,9 +42,7 @@ export function SiteHeader() {
           href="/"
           className="flex items-center gap-2 font-mono text-sm font-semibold tracking-[0.18em] text-foreground"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
-            4F
-          </span>
+          <LogoEmblem size={40} priority />
           4FG MONITOR
         </Link>
 
@@ -57,21 +58,25 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-2 md:flex">
           <ButtonLink href="/sign-in" size="md">
             Sign in
           </ButtonLink>
+          <ThemeToggle />
         </div>
 
-        <button
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
           type="button"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="grid h-10 w-10 place-items-center rounded-md border border-border bg-card/70 backdrop-blur md:hidden"
+          className="grid h-10 w-10 place-items-center rounded-md border border-border bg-card/70 backdrop-blur"
         >
           {open ? <X size={18} /> : <Menu size={18} />}
-        </button>
+          </button>
+        </div>
       </div>
 
       <div

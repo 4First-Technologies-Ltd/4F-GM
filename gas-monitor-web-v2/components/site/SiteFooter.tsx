@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoLockup } from "@/components/site/Logo";
 
 const groups = [
   {
@@ -13,6 +14,7 @@ const groups = [
     title: "Vendors",
     links: [
       { href: "/partner", label: "Become a vendor" },
+      { href: "/pricing", label: "Partner plans" },
       { href: "/sign-in", label: "Vendor sign in" },
     ],
   },
@@ -29,12 +31,7 @@ export function SiteFooter() {
     <footer className="relative z-10 border-t border-border bg-background/80 backdrop-blur">
       <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 md:grid-cols-4">
         <div>
-          <div className="flex items-center gap-2 font-mono text-sm font-semibold tracking-[0.18em]">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
-              4F
-            </span>
-            4FG MONITOR
-          </div>
+          <LogoLockup width={168} className="-ml-1" />
           <p className="mt-4 max-w-xs text-sm text-muted-foreground">
             Real-time gas cylinder monitoring, automatic reorder, and a vetted
             vendor marketplace.

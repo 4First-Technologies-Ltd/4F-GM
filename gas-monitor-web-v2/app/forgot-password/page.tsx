@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { authApi } from '@/lib/api';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
+import { LogoEmblem } from '@/components/site/Logo';
 import { Eye, EyeOff } from 'lucide-react';
 
 type Step = 'email' | 'reset' | 'done';
@@ -78,7 +79,7 @@ export default function ForgotPasswordPage() {
         <div className="rounded-2xl bg-card p-8 shadow-lg">
           {/* Brand Header */}
           <Link href="/" className="inline-flex items-center gap-2 mb-6 hover:opacity-80 transition-opacity">
-            <span className="text-lg font-bold text-primary">4F</span>
+            <LogoEmblem size={40} />
             <span className="text-sm font-medium text-foreground">4FG Smart Gas Monitor</span>
           </Link>
 

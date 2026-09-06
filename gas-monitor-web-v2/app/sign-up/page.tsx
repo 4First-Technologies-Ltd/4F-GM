@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Input } from '@/components/motion/input';
 import { Checkbox } from '@/components/motion/checkbox';
 import { Button } from '@/components/motion/button/base';
+import { LogoEmblem } from '@/components/site/Logo';
 import { Eye, EyeOff } from 'lucide-react';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
@@ -76,7 +77,7 @@ export default function SignUpPage() {
         <div className="rounded-2xl bg-card p-8 shadow-lg">
           {/* Brand Header */}
           <Link href="/" className="inline-flex items-center gap-2 mb-6 hover:opacity-80 transition-opacity">
-            <span className="text-lg font-bold text-primary">4F</span>
+            <LogoEmblem size={40} />
             <span className="text-sm font-medium text-foreground">4FG Smart Gas Monitor</span>
           </Link>
 
