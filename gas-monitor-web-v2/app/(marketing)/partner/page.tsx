@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ButtonLink } from "@/components/motion/button/base";
+import { VendorPathModal } from "@/components/site/VendorPathModal";
 
 export const metadata: Metadata = {
   title: "For vendors",
@@ -41,9 +42,7 @@ export default function PartnerPage() {
       </p>
 
       <div className="mt-8 flex flex-wrap gap-4">
-        <ButtonLink href="/vendor-sign-up" size="lg">
-          Apply to sell
-        </ButtonLink>
+        <VendorPathModal />
         <ButtonLink href="/pricing" variant="outline" size="lg">
           See partner plans
         </ButtonLink>

@@ -5,6 +5,12 @@ import { Send } from "lucide-react";
 import { PhoneMockup } from "@/components/mobile/phone-mockup";
 import { TiltCard } from "@/components/motion/tilt-card";
 
+/**
+ * Launch target for the countdown. Set this to the real launch moment —
+ * once it passes, the countdown hides itself rather than sitting on zeros.
+ */
+const LAUNCH_DATE = "2026-10-05T00:00:00+01:00";
+
 interface Countdown {
   days: number;
   hours: number;
@@ -12,33 +18,39 @@ interface Countdown {
   seconds: number;
 }
 
+function remaining(target: number): Countdown | null {
+  const distance = target - Date.now();
+  if (distance <= 0) return null;
+  return {
+    days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+    minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+    seconds: Math.floor((distance % (1000 * 60)) / 1000),
+  };
+}
+
 function CountdownTimer() {
-  const [countdown, setCountdown] = useState<Countdown>({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
+  // Null until the client has ticked once — the server can't know "now",
+  // and rendering a stale time would mismatch on hydration.
+  const [countdown, setCountdown] = useState<Countdown | null>(null);
 
   useEffect(() => {
-    const launchDate = new Date("2025-09-22T00:00:00Z").getTime();
+    const launchDate = new Date(LAUNCH_DATE).getTime();
 
-    const interval = setInterval(() => {
-      const now = new Date().getTime();
-      const distance = launchDate - now;
+    const tick = () => {
+      const next = remaining(launchDate);
+      setCountdown(next);
+      // Target reached (or already past) — nothing left to count.
+      if (!next) clearInterval(interval);
+    };
 
-      if (distance > 0) {
-        setCountdown({
-          days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((distance % (1000 * 60)) / 1000),
-        });
-      }
-    }, 1000);
+    const interval = setInterval(tick, 1000);
+    tick(); // Paint the real numbers immediately, not a second late.
 
     return () => clearInterval(interval);
   }, []);
+
+  if (!countdown) return null;
 
   return (
     <div className="mt-8 flex gap-8">

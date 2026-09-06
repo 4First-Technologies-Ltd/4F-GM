@@ -14,6 +14,7 @@ import {
 import { BeatSection } from "@/components/scroll/BeatSection";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
 import { ButtonLink } from "@/components/motion/button/base";
+import { VendorPathModal } from "@/components/site/VendorPathModal";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -220,9 +221,7 @@ export default function PricingPage() {
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <ButtonLink href="/sign-up" size="lg">
-              Join the marketplace
-            </ButtonLink>
+            <VendorPathModal label="Join the marketplace" />
             <ButtonLink href="/contact" variant="outline" size="lg">
               Talk to us first
             </ButtonLink>
@@ -450,9 +449,7 @@ export default function PricingPage() {
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <ButtonLink href="/sign-up" size="lg">
-              Apply to sell
-            </ButtonLink>
+            <VendorPathModal label="Apply to sell" />
             <ButtonLink href="/contact" variant="outline" size="lg">
               Contact the team
             </ButtonLink>

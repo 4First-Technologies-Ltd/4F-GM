@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Input } from '@/components/motion/input';
@@ -14,10 +14,14 @@ const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 
 type Role = 'CONSUMER' | 'VENDOR';
 
-export default function SignUpPage() {
+function SignUpForm() {
   const { register } = useAuth();
   const router = useRouter();
-  const [role, setRole] = useState<Role>('CONSUMER');
+  const searchParams = useSearchParams();
+  // `/sign-up?role=vendor` lands straight on the vendor application.
+  const [role, setRole] = useState<Role>(
+    searchParams.get('role')?.toLowerCase() === 'vendor' ? 'VENDOR' : 'CONSUMER'
+  );
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -262,5 +266,15 @@ export default function SignUpPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SignUpPage() {
+  // useSearchParams needs a Suspense boundary so the page can still be
+  // prerendered instead of opting the whole route into dynamic rendering.
+  return (
+    <Suspense fallback={null}>
+      <SignUpForm />
+    </Suspense>
   );
 }

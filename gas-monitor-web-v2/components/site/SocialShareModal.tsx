@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Share2, X as CloseIcon } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Share2 } from "lucide-react";
 import { Button } from "@/components/motion/button/base";
-import { EASE_OUT, SPRING_PANEL } from "@/lib/ease";
+import { Modal } from "@/components/motion/modal";
 
 type Social = {
   name: string;
@@ -63,99 +61,7 @@ function BrandMark({ social }: { social: Social }) {
 
 export function SocialShareModal() {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const reduce = useReducedMotion();
-
-  useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const modal = (
-    <AnimatePresence>
-      {open ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="share-modal-title"
-        >
-          <motion.div
-            className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: EASE_OUT }}
-            onClick={() => setOpen(false)}
-          />
-
-          <motion.div
-            className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl"
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
-            transition={SPRING_PANEL}
-          >
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close"
-              className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <CloseIcon className="h-4 w-4" />
-            </button>
-
-            <h2 id="share-modal-title" className="text-lg font-semibold">
-              Follow 4FG Monitor
-            </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Find us on social — news, product updates and vendor
-              announcements.
-            </p>
-
-            <ul className="mt-6 space-y-2">
-              {SOCIALS.map((s) => (
-                <li key={s.name}>
-                  <a
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-3 rounded-xl border border-border/70 px-4 py-3 transition-colors hover:border-border hover:bg-primary/[0.06]"
-                  >
-                    <span
-                      className="text-muted-foreground transition-colors group-hover:text-[var(--brand)]"
-                      style={{ ["--brand" as string]: s.brand }}
-                    >
-                      <BrandMark social={s} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">
-                        {s.name}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {s.handle}
-                      </span>
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        </div>
-      ) : null}
-    </AnimatePresence>
-  );
+  const close = useCallback(() => setOpen(false), []);
 
   return (
     <>
@@ -170,7 +76,41 @@ export function SocialShareModal() {
         <Share2 className="h-4 w-4" />
         Share &amp; follow
       </Button>
-      {mounted ? createPortal(modal, document.body) : null}
+
+      <Modal open={open} onClose={close} labelledBy="share-modal-title">
+        <h2 id="share-modal-title" className="text-lg font-semibold">
+          Follow 4FG Monitor
+        </h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Find us on social — news, product updates and vendor announcements.
+        </p>
+
+        <ul className="mt-6 space-y-2">
+          {SOCIALS.map((s) => (
+            <li key={s.name}>
+              <a
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-3 rounded-xl border border-border/70 px-4 py-3 transition-colors hover:border-border hover:bg-primary/[0.06]"
+              >
+                <span
+                  className="text-muted-foreground transition-colors group-hover:text-[var(--brand)]"
+                  style={{ ["--brand" as string]: s.brand }}
+                >
+                  <BrandMark social={s} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{s.name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {s.handle}
+                  </span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </>
   );
 }
