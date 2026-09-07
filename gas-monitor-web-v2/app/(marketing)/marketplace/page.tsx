@@ -17,11 +17,15 @@ import {
   LISTINGS,
   CATEGORY_LABEL,
   GAS_TYPE_LABEL,
-  AREAS,
   SIZES,
   Category,
-  GasType
+  GasType,
+  isPurchasable,
+  sellerRoleOf,
+  SELLER_ROLE_LABEL,
+  MONITOR_MOQ
 } from '@/lib/catalog';
+import { citiesIn, STATE_NAMES } from '@/lib/nigeria';
 import { formatNaira } from '@/lib/format';
 
 const PRICE_BANDS = [
@@ -39,7 +43,8 @@ export default function MarketplacePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [gasTypes, setGasTypes] = useState<GasType[]>([]);
   const [priceBand, setPriceBand] = useState<(typeof PRICE_BANDS)[number]['id']>('all');
-  const [area, setArea] = useState<string>('all');
+  const [stateFilter, setStateFilter] = useState<string>('all');
+  const [city, setCity] = useState<string>('all');
   const [size, setSize] = useState<string>('all');
   const [minRating, setMinRating] = useState(0);
   const [openNow, setOpenNow] = useState(false);
@@ -58,7 +63,8 @@ export default function MarketplacePage() {
     categories.length +
     gasTypes.length +
     (priceBand !== 'all' ? 1 : 0) +
-    (area !== 'all' ? 1 : 0) +
+    (stateFilter !== 'all' ? 1 : 0) +
+    (city !== 'all' ? 1 : 0) +
     (size !== 'all' ? 1 : 0) +
     (minRating > 0 ? 1 : 0) +
     (openNow ? 1 : 0);
@@ -67,7 +73,8 @@ export default function MarketplacePage() {
     setCategories([]);
     setGasTypes([]);
     setPriceBand('all');
-    setArea('all');
+    setStateFilter('all');
+    setCity('all');
     setSize('all');
     setMinRating(0);
     setOpenNow(false);
@@ -77,13 +84,18 @@ export default function MarketplacePage() {
     const band = PRICE_BANDS.find((b) => b.id === priceBand)!;
     const q = query.trim().toLowerCase();
     const filtered = LISTINGS.filter((item) => {
-      if (q && ![item.title, item.vendor, item.location, item.area, CATEGORY_LABEL[item.category]].some((v) => v.toLowerCase().includes(q))) {
+      if (q && ![item.title, item.vendor, item.location, item.city, item.state, CATEGORY_LABEL[item.category]].some((v) => v.toLowerCase().includes(q))) {
         return false;
       }
       if (categories.length > 0 && !categories.includes(item.category)) return false;
       if (gasTypes.length > 0 && !item.gasTypes.some((t) => gasTypes.includes(t))) return false;
-      if (item.price < band.min || item.price > band.max) return false;
-      if (area !== 'all' && item.area !== area) return false;
+      // Dealers carry no price; a price band is a question about buying, so
+      // they drop out of a banded search rather than pretending to cost 0.
+      if (priceBand !== 'all' && (item.price === undefined || item.price < band.min || item.price > band.max)) {
+        return false;
+      }
+      if (stateFilter !== 'all' && item.state !== stateFilter) return false;
+      if (city !== 'all' && item.city !== city) return false;
       if (size !== 'all' && !item.sizes.includes(size)) return false;
       if (minRating > 0 && item.rating < minRating) return false;
       if (openNow && !item.isOpen) return false;
@@ -95,16 +107,16 @@ export default function MarketplacePage() {
         sorted.sort((a, b) => b.rating - a.rating);
         break;
       case 'priceAsc':
-        sorted.sort((a, b) => a.price - b.price);
+        sorted.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
         break;
       case 'priceDesc':
-        sorted.sort((a, b) => b.price - a.price);
+        sorted.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
         break;
       default:
         sorted.sort((a, b) => Number(b.featured ?? false) - Number(a.featured ?? false) || b.rating - a.rating);
     }
     return sorted;
-  }, [query, categories, gasTypes, priceBand, area, size, minRating, openNow, sort]);
+  }, [query, categories, gasTypes, priceBand, stateFilter, city, size, minRating, openNow, sort]);
 
   const featuredVendors = useMemo(() => {
     const seen = new Set<string>();
@@ -318,21 +330,50 @@ export default function MarketplacePage() {
                   ))}
                 </fieldset>
 
-                {/* Location Filter */}
-                <fieldset className="border-t border-border/70 pt-4">
+                {/* Location Filter — state, then city within that state */}
+                <fieldset className="space-y-2 border-t border-border/70 pt-4">
                   <legend className="mb-3 text-sm font-medium">Location</legend>
+                  <label className="sr-only" htmlFor="filter-state">
+                    State
+                  </label>
                   <select
-                    value={area}
-                    onChange={(e) => setArea(e.target.value)}
+                    id="filter-state"
+                    value={stateFilter}
+                    onChange={(e) => {
+                      // A city only means something inside its state.
+                      setStateFilter(e.target.value);
+                      setCity('all');
+                    }}
                     className="w-full rounded border border-border/70 bg-background px-3 py-2 text-sm"
                   >
-                    <option value="all">All of Lagos</option>
-                    {AREAS.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
+                    <option value="all">All states</option>
+                    {STATE_NAMES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
                       </option>
                     ))}
                   </select>
+
+                  {stateFilter !== 'all' && (
+                    <>
+                      <label className="sr-only" htmlFor="filter-city">
+                        City
+                      </label>
+                      <select
+                        id="filter-city"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="w-full rounded border border-border/70 bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="all">Anywhere in {stateFilter}</option>
+                        {citiesIn(stateFilter).map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                 </fieldset>
 
                 {/* Gas Type Filter */}
@@ -474,10 +515,20 @@ export default function MarketplacePage() {
                           <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                             {CATEGORY_LABEL[item.category]}
                           </span>
-                          {item.deliveryToday && (
-                            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                              Same-day
+                          {sellerRoleOf(item) === 'dealer' ? (
+                            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                              Authorized dealer
                             </span>
+                          ) : sellerRoleOf(item) === 'manufacturer' ? (
+                            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                              Min. order {item.minOrderQty ?? MONITOR_MOQ}
+                            </span>
+                          ) : (
+                            item.deliveryToday && (
+                              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                                Same-day
+                              </span>
+                            )
                           )}
                         </div>
 
@@ -510,18 +561,38 @@ export default function MarketplacePage() {
                             <span className="text-muted-foreground">({item.reviews})</span>
                           </span>
                           <span className="flex items-center gap-1">
-                            <MapPin size={12} /> {item.area}
+                            <MapPin size={12} /> {item.city}, {item.state}
                           </span>
                         </div>
 
                         <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-4">
-                          <div>
-                            <p className="text-xs text-muted-foreground">From</p>
-                            <p className="font-semibold">{formatNaira(item.price)}</p>
-                          </div>
-                          <span className="text-sm font-medium text-primary hover:underline">
-                            Order now →
-                          </span>
+                          {isPurchasable(item) ? (
+                            <>
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  {item.minOrderQty ? `From (min ${item.minOrderQty})` : 'From'}
+                                </p>
+                                <p className="font-semibold">{formatNaira(item.price!)}</p>
+                              </div>
+                              <span className="text-sm font-medium text-primary hover:underline">
+                                Order now →
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="min-w-0">
+                                <p className="text-xs text-muted-foreground">
+                                  {SELLER_ROLE_LABEL[sellerRoleOf(item)]}
+                                </p>
+                                <p className="truncate text-sm font-medium">
+                                  {item.contact?.phone ?? 'Contact for details'}
+                                </p>
+                              </div>
+                              <span className="text-sm font-medium text-primary hover:underline">
+                                Contact →
+                              </span>
+                            </>
+                          )}
                         </div>
                       </Link>
                     </TiltCard>

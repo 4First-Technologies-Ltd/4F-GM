@@ -130,9 +130,33 @@ model VendorProfile {
   updatedAt       DateTime         @updatedAt
   documents       VendorDocument[]
   listings        GasListing[]
-  orders          Order[]          @relation("VendorOrders")
+  orders          Order[]            @relation("VendorOrders")
+  planChanges     VendorPlanChange[]
 
   @@map("vendor_profiles")
+}
+
+/// Who moved a vendor between plans.
+enum PlanChangeActor {
+  VENDOR
+  ADMIN
+}
+
+/// Append-only record of every partner-plan move.
+model VendorPlanChange {
+  id               String          @id @default(uuid())
+  vendorId         String
+  vendor           VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  fromPlan         VendorPlan
+  toPlan           VendorPlan
+  actor            PlanChangeActor
+  actorName        String?
+  actorEmail       String?
+  bypassedCooldown Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+
+  @@index([vendorId, createdAt])
+  @@map("vendor_plan_changes")
 }
 
 model VendorDocument {

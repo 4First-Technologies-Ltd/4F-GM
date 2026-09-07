@@ -115,6 +115,25 @@ export function PlanSection({
         </Button>
       )}
 
+      {!!profile.planChanges?.length && (
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Plan history
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            {profile.planChanges.map((c) => (
+              <li key={c.id} className="text-sm text-muted-foreground">
+                <span className="text-foreground">
+                  {PLANS[c.fromPlan].name} → {PLANS[c.toPlan].name}
+                </span>{' '}
+                · {formatDate(c.createdAt)}
+                {c.actor === 'ADMIN' && ' · changed by 4FG'}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {open && (
         <div className="mt-5 space-y-4">
           <PlanPicker

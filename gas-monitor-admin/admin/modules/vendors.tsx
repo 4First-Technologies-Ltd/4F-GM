@@ -123,6 +123,13 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
         { value: 'APPROVED', label: 'Approved' },
         { value: 'REJECTED', label: 'Rejected' }
       ]
+    },
+    {
+      key: 'plan',
+      label: 'Plan',
+      type: 'select',
+      secondary: true,
+      options: PLAN_KEYS.map((plan) => ({ value: plan, label: planLabel(plan) }))
     }
   ],
 
@@ -240,6 +247,35 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
       }
     ],
     extra: (v) => (
+      <>
+      <section className="adm-detail-section">
+        <h3 className="adm-micro-label">Plan history ({v.planChanges?.length ?? 0})</h3>
+        {!v.planChanges?.length ? (
+          <p className="adm-muted">
+            No plan changes — still on the plan chosen at sign-up.
+          </p>
+        ) : (
+          <ul className="adm-doc-list">
+            {v.planChanges.map((c) => (
+              <li key={c.id} className="adm-doc-item">
+                <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {PLANS[c.fromPlan].name} → {planLabel(c.toPlan)}
+                  <span className="adm-td-sub">
+                    {c.actor === 'ADMIN'
+                      ? `by ${c.actorName ?? 'an operator'}${c.actorEmail ? ` (${c.actorEmail})` : ''}`
+                      : 'by the vendor'}
+                    {c.bypassedCooldown ? ' · cooldown overridden' : ''}
+                  </span>
+                </span>
+                <span className="adm-muted" title={formatDateTime(c.createdAt)}>
+                  {formatRelative(c.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="adm-detail-section">
         <h3 className="adm-micro-label">Documents ({v.documents.length})</h3>
         {v.documents.length === 0 ? (
@@ -263,6 +299,7 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
           </ul>
         )}
       </section>
+      </>
     )
   },
 

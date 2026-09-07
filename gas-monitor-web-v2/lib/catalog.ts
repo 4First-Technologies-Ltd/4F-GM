@@ -1,4 +1,23 @@
 export type Category = 'refill' | 'cylinder' | 'monitor' | 'accessories';
+
+/**
+ * Who is behind a listing.
+ *  - `vendor`       marketplace gas vendor (refills, cylinders, accessories)
+ *  - `manufacturer` 4First Technologies — the only seller of the 4FG Monitor
+ *  - `dealer`       authorized 4FG Monitor dealer: retails single units,
+ *                   reached by phone/e-mail rather than platform checkout
+ */
+export type SellerRole = 'vendor' | 'manufacturer' | 'dealer';
+
+/** The manufacturer. Only this seller may list the 4FG Monitor for sale. */
+export const MANUFACTURER = '4First Technologies Limited';
+
+/** Minimum order quantity on the 4FG Monitor, in units. */
+export const MONITOR_MOQ = 10;
+
+/** The manufacturer's 4FG Monitor listing — the one place to buy the device. */
+export const MONITOR_LISTING_ID = 'l9';
+
 export type GasType = 'cooking' | 'medical' | 'industrial' | 'bulk';
 
 export interface Listing {
@@ -12,10 +31,21 @@ export interface Listing {
   gasTypes: GasType[];
   sizes: string[];
   location: string;
-  area: string;
+  state: string;
+  city: string;
+  /** Approximate coordinates, used to place the pin on the location map. */
+  lat?: number;
+  lng?: number;
   image?: string;
   gallery?: { src: string; alt: string; tone: 'dark' | 'light' }[];
-  price: number;
+  /** Absent for dealers — their retail price is agreed on contact, not here. */
+  price?: number;
+  /** Minimum order quantity. The 4FG Monitor ships in tens. */
+  minOrderQty?: number;
+  /** Defaults to `vendor` when absent. */
+  sellerRole?: SellerRole;
+  /** Full contact route for dealers, who sell off-platform. */
+  contact?: { phone: string; email?: string };
   rating: number;
   reviews: number;
   isOpen: boolean;
@@ -39,7 +69,38 @@ export const GAS_TYPE_LABEL: Record<GasType, string> = {
   bulk: 'Bulk LPG'
 };
 
-export const AREAS = ['Lekki', 'Victoria Island', 'Ikoyi', 'Surulere', 'Lagos Marina', 'Apapa'];
+export const SELLER_ROLE_LABEL: Record<SellerRole, string> = {
+  vendor: 'Vendor',
+  manufacturer: 'Manufacturer',
+  dealer: 'Authorized dealer'
+};
+
+export function sellerRoleOf(listing: Listing): SellerRole {
+  return listing.sellerRole ?? 'vendor';
+}
+
+/**
+ * Whether the listing can go through platform checkout. Dealers retail the
+ * monitor themselves, but off-platform — customers contact them directly, so
+ * there is no price or cart for a dealer listing here.
+ */
+export function isPurchasable(listing: Listing): boolean {
+  return sellerRoleOf(listing) !== 'dealer' && typeof listing.price === 'number';
+}
+
+/** Floor on the quantity selector; 1 for everything but the 4FG Monitor. */
+export function minQuantityFor(listing: Listing): number {
+  return listing.minOrderQty ?? 1;
+}
+
+/** Authorized dealers for the 4FG Monitor, nearest-state-first when given one. */
+export function monitorDealers(state?: string): Listing[] {
+  const dealers = LISTINGS.filter((l) => sellerRoleOf(l) === 'dealer');
+  if (!state || state === 'all') return dealers;
+  return [...dealers].sort((a, b) =>
+    a.state === state === (b.state === state) ? 0 : a.state === state ? -1 : 1
+  );
+}
 
 export const SIZES = ['6 kg', '12.5 kg', '25 kg', '50 kg'];
 
@@ -64,7 +125,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking'],
     sizes: ['6 kg', '12.5 kg', '50 kg'],
     location: '14 Admiralty Way, Lekki Phase 1',
-    area: 'Lekki',
+    state: 'Lagos',
+    city: 'Lekki',
     price: 11500,
     rating: 4.8,
     reviews: 214,
@@ -86,7 +148,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking'],
     sizes: ['6 kg', '12.5 kg'],
     location: '18 Bode Thomas St, Surulere',
-    area: 'Surulere',
+    state: 'Lagos',
+    city: 'Surulere',
     price: 5800,
     rating: 4.3,
     reviews: 96,
@@ -107,7 +170,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking', 'bulk'],
     sizes: ['12.5 kg', '50 kg'],
     location: '5 Kingsway Rd, Ikoyi',
-    area: 'Ikoyi',
+    state: 'Lagos',
+    city: 'Ikoyi',
     price: 43000,
     rating: 4.5,
     reviews: 158,
@@ -128,7 +192,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['medical'],
     sizes: ['Medical O₂'],
     location: '22 Adeola Odeku St, Victoria Island',
-    area: 'Victoria Island',
+    state: 'Lagos',
+    city: 'Victoria Island',
     price: 28000,
     rating: 4.9,
     reviews: 87,
@@ -149,7 +214,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['medical', 'industrial'],
     sizes: ['Argon', 'CO₂', 'N₂'],
     location: '3 Broad St, Lagos Marina',
-    area: 'Lagos Marina',
+    state: 'Lagos',
+    city: 'Lagos Marina',
     price: 35000,
     rating: 4.7,
     reviews: 64,
@@ -169,7 +235,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['industrial', 'bulk'],
     sizes: ['50 kg', '100 kg', 'Bulk Tank'],
     location: '11 Creek Rd, Apapa',
-    area: 'Apapa',
+    state: 'Lagos',
+    city: 'Apapa',
     price: 92000,
     rating: 4.6,
     reviews: 41,
@@ -189,7 +256,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking'],
     sizes: ['12.5 kg'],
     location: '14 Admiralty Way, Lekki Phase 1',
-    area: 'Lekki',
+    state: 'Lagos',
+    city: 'Lekki',
     price: 38500,
     rating: 4.8,
     reviews: 52,
@@ -210,7 +278,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking'],
     sizes: ['6 kg'],
     location: '18 Bode Thomas St, Surulere',
-    area: 'Surulere',
+    state: 'Lagos',
+    city: 'Surulere',
     price: 22000,
     rating: 4.3,
     reviews: 21,
@@ -219,25 +288,33 @@ export const LISTINGS: Listing[] = [
     verified: true
   },
   {
+    // The only sellable 4FG Monitor listing on the marketplace. Everyone else
+    // who carries the device is an authorized dealer (enquiries only).
     id: 'l9',
-    vendor: 'Ardova Gas Ltd',
-    initials: 'AG',
+    vendor: MANUFACTURER,
+    initials: '4F',
     color: '#2D7450',
     title: '4FG Smart Gas Monitor',
     description:
-      'Know your exact gas level, get refill alerts, and reorder in one tap. The 4FG Monitor connects to any standard LPG cylinder.',
+      'Know your exact gas level, get refill alerts, and reorder in one tap. The 4FG Monitor connects to any standard LPG cylinder. Sold direct by 4First Technologies Limited in trade packs of 10 units or more.',
     category: 'monitor',
     gasTypes: ['cooking'],
     sizes: ['Universal'],
-    location: '14 Admiralty Way, Lekki Phase 1',
-    area: 'Lekki',
+    location: 'Imo Digital City, 23 Egbu Road, Owerri',
+    lat: 5.4901,
+    lng: 7.0442,
+    state: 'Imo',
+    city: 'Owerri',
     price: 45000,
+    minOrderQty: MONITOR_MOQ,
+    sellerRole: 'manufacturer',
+    contact: { phone: '+234 906 476 8335', email: '4fg@4firsttechnologies.com' },
     rating: 4.9,
     reviews: 124,
     isOpen: true,
-    hours: '7am – 9pm',
+    hours: '8am – 6pm',
     featured: true,
-    deliveryToday: true,
+    deliveryToday: false,
     verified: true
   },
   {
@@ -252,7 +329,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking', 'industrial'],
     sizes: ['Universal'],
     location: '5 Kingsway Rd, Ikoyi',
-    area: 'Ikoyi',
+    state: 'Lagos',
+    city: 'Ikoyi',
     price: 8500,
     rating: 4.6,
     reviews: 34,
@@ -272,7 +350,8 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking', 'industrial'],
     sizes: ['All sizes'],
     location: '3 Broad St, Lagos Marina',
-    area: 'Lagos Marina',
+    state: 'Lagos',
+    city: 'Lagos Marina',
     price: 5000,
     rating: 4.8,
     reviews: 47,
@@ -292,13 +371,139 @@ export const LISTINGS: Listing[] = [
     gasTypes: ['cooking'],
     sizes: ['6 kg', '12.5 kg'],
     location: '18 Bode Thomas St, Surulere',
-    area: 'Surulere',
+    state: 'Lagos',
+    city: 'Surulere',
     price: 6500,
     rating: 4.4,
     reviews: 112,
     isOpen: true,
     hours: '7am – 10pm',
     deliveryToday: true,
+    verified: true
+  },
+
+  /* ---------------------------------------------------------------------- */
+  /* Authorized 4FG Monitor dealers. Contact details only — dealers demo and  */
+  /* support the device, orders go through 4First Technologies Limited.       */
+  /* ---------------------------------------------------------------------- */
+  {
+    id: 'd1',
+    vendor: 'Ardova Gas Ltd',
+    initials: 'AG',
+    color: '#2D7450',
+    title: '4FG Monitor — authorized dealer (Lagos)',
+    description:
+      'Authorized dealer for Lagos Island. Buy a 4FG Monitor over the counter, have it fitted to your cylinder, and get after-sales support locally.',
+    category: 'monitor',
+    gasTypes: ['cooking'],
+    sizes: ['Universal'],
+    location: '14 Admiralty Way, Lekki Phase 1',
+    lat: 6.4413,
+    lng: 3.4709,
+    state: 'Lagos',
+    city: 'Lekki',
+    sellerRole: 'dealer',
+    contact: { phone: '+234 801 234 5678', email: 'lekki@ardovagas.example' },
+    rating: 4.8,
+    reviews: 41,
+    isOpen: true,
+    hours: '7am – 9pm',
+    verified: true
+  },
+  {
+    id: 'd2',
+    vendor: 'HomeGas Express',
+    initials: 'HG',
+    color: '#2D7450',
+    title: '4FG Monitor — authorized dealer (Surulere)',
+    description:
+      'Authorized dealer for mainland Lagos. Units in stock for walk-in purchase, with installation help and warranty support.',
+    category: 'monitor',
+    gasTypes: ['cooking'],
+    sizes: ['Universal'],
+    location: '18 Bode Thomas St, Surulere',
+    lat: 6.4966,
+    lng: 3.3515,
+    state: 'Lagos',
+    city: 'Surulere',
+    sellerRole: 'dealer',
+    contact: { phone: '+234 802 345 6789' },
+    rating: 4.4,
+    reviews: 28,
+    isOpen: true,
+    hours: '8am – 7pm',
+    verified: true
+  },
+  {
+    id: 'd3',
+    vendor: 'Niger Delta Gas Services',
+    initials: 'ND',
+    color: '#1565C0',
+    title: '4FG Monitor — authorized dealer (Port Harcourt)',
+    description:
+      'Authorized dealer for Rivers State. Retails the 4FG Monitor with fitting, warranty claims and on-site support.',
+    category: 'monitor',
+    gasTypes: ['cooking'],
+    sizes: ['Universal'],
+    location: '7 Aba Road, Port Harcourt',
+    lat: 4.8156,
+    lng: 7.0134,
+    state: 'Rivers',
+    city: 'Port Harcourt',
+    sellerRole: 'dealer',
+    contact: { phone: '+234 803 456 7890', email: 'ph@ndgas.example' },
+    rating: 4.6,
+    reviews: 19,
+    isOpen: true,
+    hours: '8am – 6pm',
+    verified: true
+  },
+  {
+    id: 'd4',
+    vendor: 'Capital Gas Partners',
+    initials: 'CG',
+    color: '#D14700',
+    title: '4FG Monitor — authorized dealer (Abuja)',
+    description:
+      'Authorized dealer covering Abuja and the surrounding districts. Units available in store, plus fitting and support for installed monitors.',
+    category: 'monitor',
+    gasTypes: ['cooking'],
+    sizes: ['Universal'],
+    location: '12 Aminu Kano Crescent, Wuse II',
+    lat: 9.0820,
+    lng: 7.4622,
+    state: 'Federal Capital Territory',
+    city: 'Wuse',
+    sellerRole: 'dealer',
+    contact: { phone: '+234 805 678 9012', email: 'abuja@capitalgas.example' },
+    rating: 4.7,
+    reviews: 33,
+    isOpen: true,
+    hours: '8am – 6pm',
+    verified: true
+  },
+  {
+    id: 'd5',
+    vendor: 'Eastern Gas Hub',
+    initials: 'EG',
+    color: '#2D7450',
+    title: '4FG Monitor — authorized dealer (Owerri)',
+    description:
+      'Authorized dealer for the South-East, based in Owerri. Retails the 4FG Monitor with same-week fitting and support visits.',
+    category: 'monitor',
+    gasTypes: ['cooking'],
+    sizes: ['Universal'],
+    location: '5 Wetheral Road, Owerri',
+    lat: 5.4840,
+    lng: 7.0351,
+    state: 'Imo',
+    city: 'Owerri',
+    sellerRole: 'dealer',
+    contact: { phone: '+234 806 789 0123' },
+    rating: 4.5,
+    reviews: 12,
+    isOpen: true,
+    hours: '8am – 6pm',
     verified: true
   }
 ];

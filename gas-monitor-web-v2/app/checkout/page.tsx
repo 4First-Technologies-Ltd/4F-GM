@@ -10,30 +10,18 @@ import { Input } from '@/components/motion/input';
 import { Checkbox } from '@/components/motion/checkbox';
 import { Button } from '@/components/motion/button/base';
 import { Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import {
+  getListing,
+  isPurchasable,
+  minQuantityFor,
+  MANUFACTURER,
+  MONITOR_LISTING_ID,
+  MONITOR_MOQ
+} from '@/lib/catalog';
 
-// Mock data for catalog - in real app this would come from a catalog service
 const AREAS = ['Lagos', 'Abuja', 'Port Harcourt', 'Kano', 'Ibadan', 'Other'];
 const DELIVERY_FEE = 2000;
 const MAX_QUANTITY = 20;
-
-const MOCK_CATALOG = {
-  '1': {
-    id: '1',
-    title: 'Standard Gas Cylinder 12.5kg',
-    vendor: 'GasX Nigeria',
-    price: 8500,
-    category: 'COOKING',
-    sizes: ['12.5kg', '25kg', '50kg'],
-    image: null,
-    color: '#2D7450',
-    initials: 'GX',
-    rating: 4.5
-  }
-};
-
-function getListing(id: string) {
-  return MOCK_CATALOG[id as keyof typeof MOCK_CATALOG];
-}
 
 type CheckoutMode = 'guest' | 'signin' | 'signup';
 
@@ -47,7 +35,12 @@ function CheckoutContent() {
   }, [searchParams]);
 
   const initialSize = searchParams.get('size') ?? item?.sizes[0] ?? '';
-  const initialQty = Math.min(MAX_QUANTITY, Math.max(1, Number(searchParams.get('qty')) || 1));
+  // Trade-pack items (the 4FG Monitor) carry a minimum order quantity.
+  const minQty = item ? minQuantityFor(item) : 1;
+  const initialQty = Math.min(
+    MAX_QUANTITY,
+    Math.max(minQty, Number(searchParams.get('qty')) || minQty)
+  );
 
   const [size, setSize] = useState(initialSize);
   const [quantity, setQuantity] = useState(initialQty);
@@ -119,7 +112,40 @@ function CheckoutContent() {
     );
   }
 
-  const subtotal = item.price * quantity;
+  // Authorized dealers take enquiries, not orders — reaching checkout with one
+  // means a stale link, so send the customer to the seller who can fulfil it.
+  if (!isPurchasable(item)) {
+    return (
+      <div className="max-w-md mx-auto">
+        <div className="rounded-2xl bg-card border border-border p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-2">
+            Buy this one from the dealer
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {item.vendor} is an authorized dealer and sells the 4FG Monitor
+            directly — contact them for stock and pricing. Online checkout is for
+            trade packs of {MONITOR_MOQ} units or more from {MANUFACTURER}.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/marketplace/${item.id}`}
+              className="inline-block px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              Contact {item.vendor}
+            </Link>
+            <Link
+              href={`/marketplace/${MONITOR_LISTING_ID}`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Order a trade pack
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const subtotal = item.price! * quantity;
   const total = subtotal + DELIVERY_FEE;
   const isGuest = !user;
 
@@ -761,7 +787,9 @@ function CheckoutContent() {
 
           {/* Product Card */}
           <div className="pb-6 border-b border-border">
-            <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary mb-3" style={{ background: item.color }}>
+            {/* The tile is painted with the vendor's own brand colour, so the
+                initials need a fixed light foreground, not a themed one. */}
+            <div className="w-16 h-16 rounded-lg flex items-center justify-center text-xs font-bold text-white mb-3" style={{ background: item.color }}>
               {item.initials}
             </div>
             <p className="text-xs text-muted-foreground mb-1">GAS</p>
@@ -804,8 +832,8 @@ function CheckoutContent() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  disabled={quantity <= 1}
+                  onClick={() => setQuantity((q) => Math.max(minQty, q - 1))}
+                  disabled={quantity <= minQty}
                   className="px-3 py-2 rounded-lg border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   aria-label="Decrease quantity"
                 >
@@ -814,12 +842,12 @@ function CheckoutContent() {
                 <input
                   id="sum-qty"
                   type="number"
-                  min={1}
+                  min={minQty}
                   max={MAX_QUANTITY}
                   value={quantity}
                   onChange={(e) => {
                     const v = Number(e.target.value);
-                    if (Number.isFinite(v)) setQuantity(Math.min(MAX_QUANTITY, Math.max(1, Math.round(v))));
+                    if (Number.isFinite(v)) setQuantity(Math.min(MAX_QUANTITY, Math.max(minQty, Math.round(v))));
                   }}
                   className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-center focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-colors"
                 />
@@ -833,6 +861,11 @@ function CheckoutContent() {
                   +
                 </button>
               </div>
+              {minQty > 1 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Minimum order {minQty} units — sold in trade packs by {item.vendor}.
+                </p>
+              )}
             </div>
           </div>
 
@@ -840,7 +873,7 @@ function CheckoutContent() {
           <dl className="py-6 space-y-3 border-b border-border">
             <div className="flex justify-between">
               <dt className="text-sm text-muted-foreground">
-                {formatNaira(item.price)} × {quantity}
+                {formatNaira(item.price!)} × {quantity}
               </dt>
               <dd className="text-sm font-medium text-foreground">{formatNaira(subtotal)}</dd>
             </div>

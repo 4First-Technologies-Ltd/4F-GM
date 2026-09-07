@@ -27,7 +27,20 @@ export interface VendorRow {
   createdAt: string;
   user: { id: string; name: string; email: string; createdAt: string };
   documents: { id: string; url: string; fileName: string }[];
+  /** Newest first, capped server-side. Present on detail reads only. */
+  planChanges?: VendorPlanChangeRow[];
   _count: { listings: number; orders: number };
+}
+
+export interface VendorPlanChangeRow {
+  id: string;
+  fromPlan: VendorPlan;
+  toPlan: VendorPlan;
+  actor: 'VENDOR' | 'ADMIN';
+  actorName: string | null;
+  actorEmail: string | null;
+  bypassedCooldown: boolean;
+  createdAt: string;
 }
 
 export interface OrderRow {

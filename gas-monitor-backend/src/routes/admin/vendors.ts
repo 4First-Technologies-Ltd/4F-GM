@@ -10,7 +10,7 @@ import { cooldownExpiry, PLANS } from '../../lib/plans';
 
 const router = Router();
 
-const SORTABLE = ['createdAt', 'businessName', 'status'] as const;
+const SORTABLE = ['createdAt', 'businessName', 'status', 'plan'] as const;
 
 const LIST_INCLUDE = {
   user: { select: { id: true, name: true, email: true, createdAt: true } },
@@ -28,6 +28,10 @@ router.get(
     const where: Prisma.VendorProfileWhereInput = {};
     if (typeof status === 'string' && status in VendorStatus) {
       where.status = status as VendorStatus;
+    }
+    const plan = req.query.plan;
+    if (typeof plan === 'string' && plan in VendorPlan) {
+      where.plan = plan as VendorPlan;
     }
     if (query.q) {
       where.OR = [
@@ -59,7 +63,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const vendor = await prisma.vendorProfile.findUnique({
       where: { id: req.params.id },
-      include: LIST_INCLUDE
+      // Plan history is only worth loading for one vendor, not a whole page.
+      include: {
+        ...LIST_INCLUDE,
+        planChanges: { orderBy: { createdAt: 'desc' }, take: 20 }
+      }
     });
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
@@ -140,12 +148,29 @@ router.patch(
     }
 
     const now = new Date();
-    const updated = await prisma.vendorProfile.update({
-      where: { id },
-      // An admin change starts a fresh cooldown too, so the vendor cannot
-      // immediately undo it.
-      data: { plan, planChangedAt: now, planLockedUntil: cooldownExpiry(now) }
-    });
+    const bypassedCooldown = !!vendor.planLockedUntil && vendor.planLockedUntil > now;
+
+    const [updated] = await prisma.$transaction([
+      prisma.vendorProfile.update({
+        where: { id },
+        // An admin change starts a fresh cooldown too, so the vendor cannot
+        // immediately undo it.
+        data: { plan, planChangedAt: now, planLockedUntil: cooldownExpiry(now) }
+      }),
+      prisma.vendorPlanChange.create({
+        data: {
+          vendorId: id,
+          fromPlan: vendor.plan,
+          toPlan: plan,
+          actor: 'ADMIN',
+          // Snapshotted, so the entry survives the operator being deleted.
+          actorName: req.admin?.name ?? null,
+          actorEmail: req.admin?.username ?? null,
+          bypassedCooldown,
+          createdAt: now
+        }
+      })
+    ]);
 
     await writeAuditLog(req, {
       action: 'VENDOR_PLAN_CHANGED',
@@ -156,7 +181,7 @@ router.patch(
         from: vendor.plan,
         to: plan,
         businessName: vendor.businessName,
-        bypassedCooldown: !!vendor.planLockedUntil && vendor.planLockedUntil > now
+        bypassedCooldown
       }
     });
 

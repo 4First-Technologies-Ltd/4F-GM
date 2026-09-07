@@ -302,6 +302,16 @@ export interface GasListing {
   updatedAt: string;
 }
 
+export interface VendorPlanChange {
+  id: string;
+  fromPlan: VendorPlan;
+  toPlan: VendorPlan;
+  actor: 'VENDOR' | 'ADMIN';
+  actorName?: string | null;
+  bypassedCooldown: boolean;
+  createdAt: string;
+}
+
 export interface VendorProfile {
   id: string;
   businessName: string;
@@ -317,6 +327,8 @@ export interface VendorProfile {
   planLockedUntil?: string | null;
   documents?: VendorDocument[];
   listings?: GasListing[];
+  /** Newest first, capped server-side. */
+  planChanges?: VendorPlanChange[];
 }
 
 export interface UpdateVendorProfilePayload {

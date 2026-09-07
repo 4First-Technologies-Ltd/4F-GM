@@ -15,7 +15,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const profile = await prisma.vendorProfile.findUnique({
       where: { userId: req.user!.sub },
-      include: { documents: true, listings: true }
+      include: {
+        documents: true,
+        listings: true,
+        planChanges: { orderBy: { createdAt: 'desc' }, take: 10 }
+      }
     });
 
     if (!profile) {
@@ -139,10 +143,26 @@ router.patch(
     }
 
     const now = new Date();
-    const profile = await prisma.vendorProfile.update({
-      where: { userId: req.user!.sub },
-      data: { plan, planChangedAt: now, planLockedUntil: cooldownExpiry(now) }
-    });
+    // The profile update and its history row move together: a switch that is
+    // not recorded would leave the commercial trail with a hole in it.
+    // History row first, so the profile read below already includes it and the
+    // client gets the same shape GET /me returns.
+    const [, profile] = await prisma.$transaction([
+      prisma.vendorPlanChange.create({
+        data: {
+          vendorId: existing.id,
+          fromPlan: existing.plan,
+          toPlan: plan,
+          actor: 'VENDOR',
+          createdAt: now
+        }
+      }),
+      prisma.vendorProfile.update({
+        where: { userId: req.user!.sub },
+        data: { plan, planChangedAt: now, planLockedUntil: cooldownExpiry(now) },
+        include: { planChanges: { orderBy: { createdAt: 'desc' }, take: 10 } }
+      })
+    ]);
 
     return res.json({ profile });
   })
