@@ -1,4 +1,7 @@
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
+import type { VendorPlan } from './plans';
+
+export type { VendorPlan };
 
 // The API lives in the standalone gas-monitor-backend service (Express + Prisma).
 // Set NEXT_PUBLIC_API_URL to its origin; defaults to the local dev backend (port 9000).
@@ -309,6 +312,9 @@ export interface VendorProfile {
   lng?: number;
   phone: string;
   status: VendorStatus;
+  plan: VendorPlan;
+  planChangedAt?: string | null;
+  planLockedUntil?: string | null;
   documents?: VendorDocument[];
   listings?: GasListing[];
 }
@@ -332,6 +338,7 @@ export interface CreateVendorProfilePayload {
   businessName: string;
   businessAddress: string;
   phone: string;
+  plan: VendorPlan;
   lat?: number;
   lng?: number;
 }
@@ -365,6 +372,19 @@ export const vendorApi = {
       method: 'PATCH',
       auth: true,
       body: JSON.stringify(payload)
+    });
+    return data.profile;
+  },
+
+  /**
+   * Switch partner plan. Applies immediately and starts a cooldown — the
+   * backend answers 409 `PLAN_LOCKED` if one is still running.
+   */
+  async changePlan(plan: VendorPlan): Promise<VendorProfile> {
+    const data = await request<{ profile: VendorProfile }>('/api/vendor/plan', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ plan })
     });
     return data.profile;
   },

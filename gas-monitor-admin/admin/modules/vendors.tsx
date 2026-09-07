@@ -1,7 +1,40 @@
 import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
 import { formatDateTime, formatNumber, formatRelative } from '@/admin/primitives/format';
-import type { VendorRow } from './types';
+import { adminFetch } from '@/lib/api';
+import type { VendorPlan, VendorRow } from './types';
+
+/**
+ * Partner plans, mirroring gas-monitor-backend/src/lib/plans.ts. The commission
+ * is what the platform takes from a completed marketplace order.
+ */
+const PLANS: Record<VendorPlan, { name: string; commissionPercent: number }> = {
+  BASIC: { name: 'Basic', commissionPercent: 5 },
+  GROWTH: { name: 'Growth', commissionPercent: 7 },
+  PRO: { name: 'Pro / Premium', commissionPercent: 10 }
+};
+
+const PLAN_KEYS: VendorPlan[] = ['BASIC', 'GROWTH', 'PRO'];
+
+function planLabel(plan: VendorPlan): string {
+  return `${PLANS[plan].name} (${PLANS[plan].commissionPercent}%)`;
+}
+
+/**
+ * Plan changes go to a dedicated endpoint, not the generic PATCH — it bypasses
+ * the vendor-facing 14-day cooldown and writes its own audit entry.
+ */
+async function setPlan(id: string, plan: VendorPlan): Promise<void> {
+  const res = await adminFetch(`/vendors/${id}/plan`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Request failed (${res.status})`);
+  }
+}
 
 /**
  * Vendors — the supply side, with the approval queue.
@@ -40,6 +73,18 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
       )
     },
     { key: 'status', header: 'Status', accessor: (v) => v.status, type: 'status', sortable: true, priority: 1 },
+    {
+      key: 'plan',
+      header: 'Plan',
+      accessor: (v) => v.plan,
+      priority: 1,
+      render: (v) => (
+        <>
+          {PLANS[v.plan].name}
+          <span className="adm-td-sub">{PLANS[v.plan].commissionPercent}% commission</span>
+        </>
+      )
+    },
     { key: 'owner', header: 'Owner', accessor: (v) => v.user.name, priority: 2 },
     { key: 'phone', header: 'Phone', accessor: (v) => v.phone, priority: 3 },
     {
@@ -115,7 +160,26 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
         h.toast(`${vendor.businessName} rejected`);
         h.refresh();
       }
-    }
+    },
+    // One action per target plan: the action engine has no input control, and
+    // a vendor's plan is a short closed set.
+    ...PLAN_KEYS.map((plan) => ({
+      key: `plan-${plan.toLowerCase()}`,
+      label: `Move to ${planLabel(plan)}`,
+      permission: 'vendors.approve',
+      disabledHint: 'Requires the Operations role',
+      visible: (v: VendorRow) => v.plan !== plan,
+      confirm: {
+        title: `Move to the ${PLANS[plan].name} plan?`,
+        body: `The vendor starts paying ${PLANS[plan].commissionPercent}% commission on orders completed from now on, and is held on this plan for 14 days. This ignores any cooldown they are currently under and is recorded in the audit log.`,
+        confirmLabel: `Move to ${PLANS[plan].name}`
+      },
+      run: async (vendor: VendorRow, h: { toast: (m: string) => void; refresh: () => void }) => {
+        await setPlan(vendor.id, plan);
+        h.toast(`${vendor.businessName} moved to ${PLANS[plan].name}`);
+        h.refresh();
+      }
+    }))
   ],
 
   detail: {
@@ -136,6 +200,27 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
             accessor: (v) => (v.lat != null && v.lng != null ? `${v.lat}, ${v.lng}` : null)
           },
           { key: 'registered', label: 'Registered', accessor: (v) => v.createdAt, type: 'date' }
+        ]
+      },
+      {
+        title: 'Partner plan',
+        fields: [
+          { key: 'plan', label: 'Plan', accessor: (v) => planLabel(v.plan) },
+          {
+            key: 'planChangedAt',
+            label: 'Last changed',
+            accessor: (v) => v.planChangedAt,
+            type: 'date'
+          },
+          {
+            key: 'planLockedUntil',
+            label: 'Cooldown ends',
+            accessor: (v) =>
+              v.planLockedUntil && new Date(v.planLockedUntil) > new Date()
+                ? v.planLockedUntil
+                : null,
+            type: 'date'
+          }
         ]
       },
       {

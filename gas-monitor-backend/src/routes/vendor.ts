@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
+import { VendorPlan } from '@prisma/client';
 import { listingSchema } from '../lib/vendorSchemas';
 import { asyncHandler } from '../lib/asyncHandler';
+import { cooldownExpiry, daysRemaining, isLocked, PLANS } from '../lib/plans';
 
 const router = Router();
 
@@ -28,6 +30,11 @@ const profileSchema = z.object({
   businessName: z.string().min(1, 'Business name is required'),
   businessAddress: z.string().min(1, 'Business address is required'),
   phone: z.string().min(1, 'Phone number is required'),
+  // Vendors choose their partner plan at sign-up — there is no default here on
+  // purpose, the commission rate is a commitment they have to make explicitly.
+  plan: z.nativeEnum(VendorPlan, {
+    errorMap: () => ({ message: 'Choose a partner plan' })
+  }),
   lat: z.number().optional(),
   lng: z.number().optional()
 });
@@ -41,16 +48,22 @@ router.post(
       return res.status(400).json({ error: result.error.errors[0].message });
     }
 
+    const { plan, ...details } = result.data;
+
     const profile = await prisma.vendorProfile.upsert({
       where: { userId: req.user!.sub },
-      create: { userId: req.user!.sub, ...result.data },
-      update: result.data
+      create: { userId: req.user!.sub, plan, ...details },
+      // Re-posting the profile must not become a back door around the plan
+      // cooldown — switching plans goes through PATCH /plan only.
+      update: details
     });
 
     return res.status(201).json({ profile });
   })
 );
 
+// Deliberately no `plan` key: zod strips unknown fields, so a plan smuggled
+// into a profile update is dropped rather than applied. Use PATCH /plan.
 const patchSchema = z.object({
   businessName: z.string().min(1).optional(),
   businessAddress: z.string().min(1).optional(),
@@ -78,6 +91,57 @@ router.patch(
     const profile = await prisma.vendorProfile.update({
       where: { userId: req.user!.sub },
       data: result.data
+    });
+
+    return res.json({ profile });
+  })
+);
+
+const planSchema = z.object({
+  plan: z.nativeEnum(VendorPlan, {
+    errorMap: () => ({ message: 'Choose a partner plan' })
+  })
+});
+
+/**
+ * Switch partner plan. The new plan applies immediately and locks the vendor
+ * out of switching again for the cooldown window — see `lib/plans.ts`.
+ */
+router.patch(
+  '/plan',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const result = planSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.errors[0].message });
+    }
+
+    const existing = await prisma.vendorProfile.findUnique({
+      where: { userId: req.user!.sub }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Vendor profile not found' });
+    }
+
+    const { plan } = result.data;
+
+    if (plan === existing.plan) {
+      return res.status(400).json({ error: `You are already on the ${PLANS[plan].name} plan` });
+    }
+
+    if (isLocked(existing.planLockedUntil)) {
+      const days = daysRemaining(existing.planLockedUntil!);
+      return res.status(409).json({
+        error: `You can change plan again in ${days} day${days === 1 ? '' : 's'}`,
+        code: 'PLAN_LOCKED',
+        planLockedUntil: existing.planLockedUntil
+      });
+    }
+
+    const now = new Date();
+    const profile = await prisma.vendorProfile.update({
+      where: { userId: req.user!.sub },
+      data: { plan, planChangedAt: now, planLockedUntil: cooldownExpiry(now) }
     });
 
     return res.json({ profile });

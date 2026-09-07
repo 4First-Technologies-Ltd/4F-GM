@@ -6,6 +6,7 @@
  */
 
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VendorPlan = 'BASIC' | 'GROWTH' | 'PRO';
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 export type UserRole = 'CONSUMER' | 'VENDOR';
@@ -18,6 +19,9 @@ export interface VendorRow {
   bio: string | null;
   phone: string;
   status: VendorStatus;
+  plan: VendorPlan;
+  planChangedAt: string | null;
+  planLockedUntil: string | null;
   lat: number | null;
   lng: number | null;
   createdAt: string;

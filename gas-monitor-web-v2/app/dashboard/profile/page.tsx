@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { vendorApi, VendorProfile, ApiRequestError } from '@/lib/api';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
+import { PlanSection } from '@/components/vendor/PlanSection';
 import { AlertCircle, Check } from 'lucide-react';
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
@@ -331,6 +332,11 @@ export default function ProfilePage() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Partner plan (Vendors only, once the profile exists) */}
+      {user.role === 'VENDOR' && vendorProfile && (
+        <PlanSection profile={vendorProfile} onUpdated={setVendorProfile} />
       )}
     </div>
   );

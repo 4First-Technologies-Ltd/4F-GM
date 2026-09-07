@@ -19,6 +19,14 @@ enum VendorStatus {
   REJECTED
 }
 
+/// Marketplace partner plans. Commission rates live in the backend
+/// (`src/lib/plans.ts`) — the enum is only the identity of the plan.
+enum VendorPlan {
+  BASIC
+  GROWTH
+  PRO
+}
+
 enum GasType {
   COOKING
   MEDICAL
@@ -115,6 +123,9 @@ model VendorProfile {
   lng             Float?
   phone           String
   status          VendorStatus     @default(PENDING)
+  plan            VendorPlan       @default(BASIC)
+  planChangedAt   DateTime?
+  planLockedUntil DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   documents       VendorDocument[]

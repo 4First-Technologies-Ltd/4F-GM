@@ -19,6 +19,14 @@ enum VendorStatus {
   REJECTED
 }
 
+/// Marketplace partner plans. The commission rate each one carries lives in
+/// `src/lib/plans.ts` — the enum is only the identity of the plan.
+enum VendorPlan {
+  BASIC
+  GROWTH
+  PRO
+}
+
 enum GasType {
   COOKING
   MEDICAL
@@ -116,6 +124,15 @@ model VendorProfile {
   lng             Float?
   phone           String
   status          VendorStatus     @default(PENDING)
+  /// Partner plan the vendor sells under. New vendors pick one at sign-up;
+  /// BASIC is the default only so pre-existing rows backfill sensibly.
+  plan            VendorPlan       @default(BASIC)
+  /// When the plan last changed. Null for vendors who never switched.
+  planChangedAt   DateTime?
+  /// Cooldown expiry: the vendor cannot switch again until this passes.
+  /// Stored rather than derived so changing the cooldown length later does
+  /// not retroactively move locks vendors were already promised.
+  planLockedUntil DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   documents       VendorDocument[]
@@ -229,6 +246,7 @@ enum AuditAction {
   ADMIN_DEACTIVATED
   ADMIN_DELETED
   SETTINGS_UPDATED
+  VENDOR_PLAN_CHANGED
 }
 
 // Append-only record of every mutating admin action.

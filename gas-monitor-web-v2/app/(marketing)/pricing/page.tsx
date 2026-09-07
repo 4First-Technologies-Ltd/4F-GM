@@ -15,6 +15,7 @@ import { BeatSection } from "@/components/scroll/BeatSection";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
 import { ButtonLink } from "@/components/motion/button/base";
 import { VendorPathModal } from "@/components/site/VendorPathModal";
+import { planRate } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -36,7 +37,7 @@ type Plan = {
 const plans: Plan[] = [
   {
     name: "Basic Plan",
-    rate: "5%",
+    rate: planRate("BASIC"),
     tagline:
       "Built for businesses that want to get online and become discoverable.",
     features: [
@@ -55,7 +56,7 @@ const plans: Plan[] = [
   },
   {
     name: "Growth Plan",
-    rate: "7%",
+    rate: planRate("GROWTH"),
     tagline:
       "Built for businesses ready to reach more customers and grow their sales.",
     inherits: "Everything in the 5% plan, plus:",
@@ -80,7 +81,7 @@ const plans: Plan[] = [
   },
   {
     name: "Pro / Premium Plan",
-    rate: "10%",
+    rate: planRate("PRO"),
     tagline:
       "Built for established gas businesses looking for maximum visibility, data and growth.",
     inherits: "Everything in the 7% plan, plus:",

@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { Prisma, VendorStatus } from '@prisma/client';
+import { Prisma, VendorPlan, VendorStatus } from '@prisma/client';
 import { z } from 'zod';
 import { requireAdmin, requireOperations } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 import { writeAuditLog } from '../../lib/audit';
+import { cooldownExpiry, PLANS } from '../../lib/plans';
 
 const router = Router();
 
@@ -103,6 +104,60 @@ router.patch(
       resourceId: id,
       summary: `${vendor.businessName}: ${vendor.status} → ${status}`,
       metadata: { from: vendor.status, to: status, businessName: vendor.businessName }
+    });
+
+    return res.json({ vendor: updated });
+  })
+);
+
+const planSchema = z.object({
+  plan: z.nativeEnum(VendorPlan)
+});
+
+/**
+ * Change a vendor's partner plan on their behalf. Unlike the vendor-facing
+ * route this ignores the cooldown — an operator correcting a mistake should
+ * not have to wait out a lock the vendor triggered.
+ */
+router.patch(
+  '/:id/plan',
+  requireOperations,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = planSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.errors[0].message });
+    }
+
+    const vendor = await prisma.vendorProfile.findUnique({ where: { id } });
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    const { plan } = result.data;
+    if (plan === vendor.plan) {
+      return res.status(400).json({ error: `Vendor is already on the ${PLANS[plan].name} plan` });
+    }
+
+    const now = new Date();
+    const updated = await prisma.vendorProfile.update({
+      where: { id },
+      // An admin change starts a fresh cooldown too, so the vendor cannot
+      // immediately undo it.
+      data: { plan, planChangedAt: now, planLockedUntil: cooldownExpiry(now) }
+    });
+
+    await writeAuditLog(req, {
+      action: 'VENDOR_PLAN_CHANGED',
+      resource: 'vendor',
+      resourceId: id,
+      summary: `${vendor.businessName}: plan ${PLANS[vendor.plan].name} → ${PLANS[plan].name}`,
+      metadata: {
+        from: vendor.plan,
+        to: plan,
+        businessName: vendor.businessName,
+        bypassedCooldown: !!vendor.planLockedUntil && vendor.planLockedUntil > now
+      }
     });
 
     return res.json({ vendor: updated });
