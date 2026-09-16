@@ -33,6 +33,9 @@ router.get(
 const profileSchema = z.object({
   businessName: z.string().min(1, 'Business name is required'),
   businessAddress: z.string().min(1, 'Business address is required'),
+  // Optional for older mobile clients; the web sign-up always sends both.
+  state: z.string().trim().min(2).max(80).optional(),
+  city: z.string().trim().min(2).max(80).optional(),
   phone: z.string().min(1, 'Phone number is required'),
   // Vendors choose their partner plan at sign-up — there is no default here on
   // purpose, the commission rate is a commitment they have to make explicitly.
@@ -71,6 +74,8 @@ router.post(
 const patchSchema = z.object({
   businessName: z.string().min(1).optional(),
   businessAddress: z.string().min(1).optional(),
+  state: z.string().trim().min(2).max(80).optional(),
+  city: z.string().trim().min(2).max(80).optional(),
   phone: z.string().min(1).optional(),
   bio: z.string().max(500).nullable().optional(),
   logoUrl: z.string().url().nullable().optional(),

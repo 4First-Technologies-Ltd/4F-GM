@@ -117,6 +117,10 @@ model VendorProfile {
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   businessName    String
   businessAddress String
+  /// Nigerian state and city the vendor trades from. Nullable only because
+  /// vendors created before these were collected have neither.
+  state           String?
+  city            String?
   bio             String?
   logoUrl         String?
   lat             Float?
@@ -243,6 +247,11 @@ model PlatformSettings {
   allowVendorSignups Boolean  @default(true)
   supportEmail       String?
   platformFeePercent Float    @default(0)
+  /// 4FG Monitor, sold by 4First direct. Whole naira. The backend prices
+  /// monitor orders from these; the web only displays them.
+  monitorUnitPrice   Int      @default(45000)
+  monitorDeliveryFee Int      @default(2000)
+  monitorMinQuantity Int      @default(10)
   updatedAt          DateTime @updatedAt
 
   @@map("platform_settings")

@@ -6,6 +6,7 @@ import { vendorApi, VendorProfile, ApiRequestError } from '@/lib/api';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
 import { PlanSection } from '@/components/vendor/PlanSection';
+import { StateCityFields } from '@/components/vendor/StateCityFields';
 import { AlertCircle, Check } from 'lucide-react';
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
@@ -35,6 +36,8 @@ export default function ProfilePage() {
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
   const [businessName, setBusinessName] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
+  const [vendorState, setVendorState] = useState('');
+  const [vendorCity, setVendorCity] = useState('');
   const [businessPhone, setBusinessPhone] = useState('');
   const [bio, setBio] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -56,6 +59,8 @@ export default function ProfilePage() {
         setVendorProfile(profile);
         setBusinessName(profile.businessName);
         setBusinessAddress(profile.businessAddress);
+        setVendorState(profile.state ?? '');
+        setVendorCity(profile.city ?? '');
         setBusinessPhone(profile.phone);
         setBio(profile.bio ?? '');
         setLogoUrl(profile.logoUrl ?? null);
@@ -89,12 +94,18 @@ export default function ProfilePage() {
   async function handleBusinessSubmit(e: FormEvent) {
     e.preventDefault();
     setBusinessError(null);
+    if (!vendorState || !vendorCity.trim()) {
+      setBusinessError('Choose the state and city you trade from.');
+      return;
+    }
     setSavingBusiness(true);
     setBusinessSaved(false);
     try {
       const updated = await vendorApi.updateProfile({
         businessName,
         businessAddress,
+        state: vendorState,
+        city: vendorCity.trim(),
         phone: businessPhone,
         bio: bio || null,
         logoUrl: logoUrl || null
@@ -263,6 +274,18 @@ export default function ProfilePage() {
               required
               classNames={{ root: 'w-full' }}
             />
+
+            {/* Mounted once the profile loads so a saved "Other" city opens as typed text. */}
+            {vendorProfile && (
+              <StateCityFields
+                state={vendorState}
+                city={vendorCity}
+                onStateChange={setVendorState}
+                onCityChange={setVendorCity}
+                required
+                disabled={savingBusiness}
+              />
+            )}
 
             <Input
               label="Business phone"

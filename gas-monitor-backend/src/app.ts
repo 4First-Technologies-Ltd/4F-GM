@@ -10,6 +10,7 @@ import addressesRoutes from './routes/addresses';
 import analyticsRoutes from './routes/analytics';
 import contactRoutes from './routes/contact';
 import deviceRoutes from './routes/device';
+import marketplaceRoutes from './routes/marketplace';
 import { paystackWebhookHandler } from './routes/ordersWebhook';
 import { sentryWebhookHandler } from './routes/internalSentryWebhook';
 import { Sentry } from './lib/sentry';
@@ -63,6 +64,7 @@ export function createApp() {
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/contact', contactRoutes);
   app.use('/api/device', deviceRoutes);
+  app.use('/api/marketplace', marketplaceRoutes);
 
   // Admin API — namespaced under /api/admin to avoid colliding with the
   // consumer routes above (e.g. GET /api/orders vs admin's "all orders" list).

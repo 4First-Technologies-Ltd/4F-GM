@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Search,
@@ -13,6 +13,7 @@ import {
 import { TiltCard } from '@/components/motion/tilt-card';
 import { PhoneMockup } from '@/components/mobile/phone-mockup';
 import { AnimatedBadge } from '@/components/motion/animated-badge';
+import { SellerMark } from '@/components/marketplace/SellerMark';
 import {
   LISTINGS,
   CATEGORY_LABEL,
@@ -23,8 +24,10 @@ import {
   isPurchasable,
   sellerRoleOf,
   SELLER_ROLE_LABEL,
-  MONITOR_MOQ
+  MONITOR_MOQ,
+  type Listing
 } from '@/lib/catalog';
+import { fetchAllListings } from '@/lib/marketplace';
 import { citiesIn, STATE_NAMES } from '@/lib/nigeria';
 import { formatNaira } from '@/lib/format';
 
@@ -50,6 +53,18 @@ export default function MarketplacePage() {
   const [openNow, setOpenNow] = useState(false);
   const [sort, setSort] = useState<SortKey>('featured');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Platform listings render immediately; approved vendors' listings join once fetched.
+  const [listings, setListings] = useState<Listing[]>(LISTINGS);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllListings().then((all) => {
+      if (!cancelled) setListings(all);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function toggleCategory(cat: Category) {
     setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
@@ -83,7 +98,7 @@ export default function MarketplacePage() {
   const results = useMemo(() => {
     const band = PRICE_BANDS.find((b) => b.id === priceBand)!;
     const q = query.trim().toLowerCase();
-    const filtered = LISTINGS.filter((item) => {
+    const filtered = listings.filter((item) => {
       if (q && ![item.title, item.vendor, item.location, item.city, item.state, CATEGORY_LABEL[item.category]].some((v) => v.toLowerCase().includes(q))) {
         return false;
       }
@@ -116,12 +131,12 @@ export default function MarketplacePage() {
         sorted.sort((a, b) => Number(b.featured ?? false) - Number(a.featured ?? false) || b.rating - a.rating);
     }
     return sorted;
-  }, [query, categories, gasTypes, priceBand, stateFilter, city, size, minRating, openNow, sort]);
+  }, [listings, query, categories, gasTypes, priceBand, stateFilter, city, size, minRating, openNow, sort]);
 
   const featuredVendors = useMemo(() => {
     const seen = new Set<string>();
-    return LISTINGS.filter((l) => l.featured && !seen.has(l.vendor) && seen.add(l.vendor));
-  }, []);
+    return listings.filter((l) => l.featured && !seen.has(l.vendor) && seen.add(l.vendor));
+  }, [listings]);
 
   return (
     <main>
@@ -181,21 +196,14 @@ export default function MarketplacePage() {
                 ))}
               </div>
 
-              {/* Stats */}
-              <div className="mt-8 grid grid-cols-3 gap-4">
-                <div>
-                  <div className="text-2xl font-semibold">25+</div>
-                  <div className="text-sm text-muted-foreground">Verified vendors</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-semibold">1,400+</div>
-                  <div className="text-sm text-muted-foreground">Orders delivered</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-semibold">Under 3 hrs</div>
-                  <div className="text-sm text-muted-foreground">Avg. delivery time</div>
-                </div>
-              </div>
+              {/* Merchant onboarding — sellers list themselves */}
+              <p className="mt-8 text-sm text-muted-foreground">
+                Sell gas, cylinders or accessories?{' '}
+                <Link href="/sign-up?role=vendor" className="font-medium text-primary hover:underline">
+                  Sign up as a vendor
+                </Link>{' '}
+                and set up your store profile.
+              </p>
             </div>
 
             <div className="relative flex items-center justify-center">
@@ -227,16 +235,17 @@ export default function MarketplacePage() {
               >
                 <div className="p-6">
                   <div className="flex items-start gap-3">
-                    <div
-                      className="grid h-12 w-12 place-items-center rounded-lg text-sm font-semibold text-white"
-                      style={{ backgroundColor: v.color }}
-                    >
-                      {v.initials}
-                    </div>
+                    <SellerMark listing={v} size={48} className="h-12 w-12 rounded-lg" textClassName="text-sm" />
                     <div className="flex-1">
                       <h3 className="font-semibold">{v.vendor}</h3>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Star size={12} className="fill-current" /> {v.rating.toFixed(1)} · {v.reviews} reviews
+                        {v.reviews > 0 ? (
+                          <>
+                            <Star size={12} className="fill-current" /> {v.rating.toFixed(1)} · {v.reviews} reviews
+                          </>
+                        ) : (
+                          'New on 4FG'
+                        )}
                       </span>
                     </div>
                   </div>
@@ -264,6 +273,16 @@ export default function MarketplacePage() {
                 </div>
               </TiltCard>
             ))}
+            <Link
+              href="/sign-up?role=vendor"
+              className="flex flex-col justify-center rounded-lg border border-dashed border-border/70 bg-card/30 p-6 transition-colors hover:border-primary/50"
+            >
+              <h3 className="font-semibold">Your store here</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Sign up as a vendor, set up your profile and start listing once approved.
+              </p>
+              <span className="mt-4 text-sm font-medium text-primary">Become a vendor →</span>
+            </Link>
           </div>
         </div>
       </section>
@@ -537,12 +556,7 @@ export default function MarketplacePage() {
                         </h3>
 
                         <div className="mt-3 flex items-center gap-2">
-                          <div
-                            className="grid h-8 w-8 place-items-center rounded text-xs font-semibold text-white"
-                            style={{ backgroundColor: item.color }}
-                          >
-                            {item.initials}
-                          </div>
+                          <SellerMark listing={item} size={32} className="h-8 w-8 rounded" />
                           <div className="flex-1">
                             <p className="text-sm font-medium">{item.vendor}</p>
                             <span className="text-xs text-muted-foreground">
@@ -557,11 +571,17 @@ export default function MarketplacePage() {
 
                         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Star size={12} className="fill-current" /> {item.rating.toFixed(1)}
-                            <span className="text-muted-foreground">({item.reviews})</span>
+                            {item.reviews > 0 ? (
+                              <>
+                                <Star size={12} className="fill-current" /> {item.rating.toFixed(1)}
+                                <span className="text-muted-foreground">({item.reviews})</span>
+                              </>
+                            ) : (
+                              'New'
+                            )}
                           </span>
                           <span className="flex items-center gap-1">
-                            <MapPin size={12} /> {item.city}, {item.state}
+                            <MapPin size={12} /> {[item.city, item.state].filter(Boolean).join(', ') || item.location}
                           </span>
                         </div>
 

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import axios from 'axios';
@@ -7,6 +7,15 @@ import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { PAYSTACK_BASE, CALLBACK_URL, paystackHeaders } from '../lib/paystack';
 import { asyncHandler } from '../lib/asyncHandler';
+import {
+  MAX_ORDER_QUANTITY,
+  PLATFORM_PRODUCTS,
+  PricingError,
+  priceListingOrder,
+  pricePlatformOrder,
+  type PlatformProduct,
+  type PricedOrder
+} from '../lib/pricing';
 
 const router = Router();
 
@@ -44,13 +53,52 @@ router.get(
   })
 );
 
-const initSchema = z.object({
-  supplierName: z.string().min(1),
+/**
+ * What is being bought. Marketplace listings (`listingId`) and platform
+ * products (`product`) are priced on the server and any client total is
+ * ignored. Orders with neither come from older clients (the mobile app's
+ * built-in supplier list) and still carry their own name and total.
+ */
+const orderItemShape = {
+  listingId: z.string().uuid().optional(),
+  product: z.enum(Object.keys(PLATFORM_PRODUCTS) as [PlatformProduct, ...PlatformProduct[]]).optional(),
+  supplierName: z.string().min(1).optional(),
+  totalAmount: z.number().positive().optional(),
   cylinderSize: z.string().min(1),
-  quantity: z.number().int().min(1).max(10),
-  totalAmount: z.number().positive(),
+  quantity: z.number().int().min(1).max(MAX_ORDER_QUANTITY, `You can order at most ${MAX_ORDER_QUANTITY} at a time`),
   deliveryAddress: z.string().min(5)
-});
+};
+
+type OrderItem = z.infer<z.ZodObject<typeof orderItemShape>>;
+
+function checkOrderItem(item: OrderItem, ctx: z.RefinementCtx) {
+  if (item.listingId && item.product) {
+    ctx.addIssue({ code: 'custom', message: 'Order either a listing or a product, not both' });
+  } else if (!item.listingId && !item.product && (!item.supplierName || item.totalAmount == null)) {
+    ctx.addIssue({ code: 'custom', message: 'supplierName and totalAmount are required' });
+  }
+}
+
+async function priceOrder(item: OrderItem): Promise<PricedOrder> {
+  if (item.listingId) return priceListingOrder(item.listingId, item.cylinderSize, item.quantity);
+  if (item.product) return pricePlatformOrder(item.product, item.cylinderSize, item.quantity);
+  return { supplierName: item.supplierName!, unitPrice: 0, totalAmount: item.totalAmount! };
+}
+
+/** Prices the order, or answers the request with the pricing error. */
+async function priceOrRespond(item: OrderItem, res: Response): Promise<PricedOrder | null> {
+  try {
+    return await priceOrder(item);
+  } catch (err) {
+    if (err instanceof PricingError) {
+      res.status(err.status).json({ error: err.message });
+      return null;
+    }
+    throw err;
+  }
+}
+
+const initSchema = z.object(orderItemShape).superRefine(checkOrderItem);
 
 router.post(
   '/initialize',
@@ -61,7 +109,11 @@ router.post(
       return res.status(400).json({ error: result.error.errors[0].message });
     }
 
-    const { supplierName, cylinderSize, quantity, totalAmount, deliveryAddress } = result.data;
+    const { cylinderSize, quantity, deliveryAddress } = result.data;
+
+    const priced = await priceOrRespond(result.data, res);
+    if (!priced) return;
+    const { supplierName, totalAmount, listingId, vendorId } = priced;
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) {
@@ -72,6 +124,8 @@ router.post(
     const order = await prisma.order.create({
       data: {
         consumerId: req.user!.sub,
+        listingId,
+        vendorId,
         supplierName,
         cylinderSize,
         quantity,
@@ -158,15 +212,13 @@ router.post(
   })
 );
 
-const guestInitSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(2).max(120).optional(),
-  supplierName: z.string().min(1),
-  cylinderSize: z.string().min(1),
-  quantity: z.number().int().min(1).max(10),
-  totalAmount: z.number().positive(),
-  deliveryAddress: z.string().min(5)
-});
+const guestInitSchema = z
+  .object({
+    email: z.string().email(),
+    name: z.string().min(2).max(120).optional(),
+    ...orderItemShape
+  })
+  .superRefine(checkOrderItem);
 
 router.post(
   '/guest/initialize',
@@ -176,7 +228,11 @@ router.post(
       return res.status(400).json({ error: result.error.errors[0].message });
     }
 
-    const { email, name, supplierName, cylinderSize, quantity, totalAmount, deliveryAddress } = result.data;
+    const { email, name, cylinderSize, quantity, deliveryAddress } = result.data;
+
+    const priced = await priceOrRespond(result.data, res);
+    if (!priced) return;
+    const { supplierName, totalAmount, listingId, vendorId } = priced;
 
     // Attach the order to an existing account with this email, or create a
     // lightweight guest account (unverified, random password) to own the order.
@@ -196,6 +252,8 @@ router.post(
     const order = await prisma.order.create({
       data: {
         consumerId: user.id,
+        listingId,
+        vendorId,
         supplierName,
         cylinderSize,
         quantity,

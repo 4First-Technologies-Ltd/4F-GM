@@ -149,6 +149,10 @@ export interface PlatformSettings {
   allowVendorSignups: boolean;
   supportEmail: string | null;
   platformFeePercent: number;
+  /** 4FG Monitor terms, whole naira. The backend prices monitor orders from these. */
+  monitorUnitPrice: number;
+  monitorDeliveryFee: number;
+  monitorMinQuantity: number;
   updatedAt: string;
 }
 

@@ -5,8 +5,6 @@ import { Star, MapPin, Check, Phone, Mail, Clock } from "lucide-react";
 import { ButtonLink } from "@/components/motion/button/base";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
 import {
-  LISTINGS,
-  getListing,
   CATEGORY_LABEL,
   isPurchasable,
   sellerRoleOf,
@@ -16,12 +14,14 @@ import {
   MONITOR_MOQ,
   monitorDealers,
 } from "@/lib/catalog";
+import { findListing, kgOf, priceFor } from "@/lib/marketplace";
 import { LocationMap } from "@/components/marketplace/LocationMap";
+import { SellerMark } from "@/components/marketplace/SellerMark";
 import { formatNaira } from "@/lib/format";
 
-export function generateStaticParams() {
-  return LISTINGS.map((l) => ({ id: l.id }));
-}
+// Vendor listings come and go as vendors add, edit or lose approval, so the
+// page renders on request with a short cache rather than being prebuilt.
+const FETCH_INIT = { next: { revalidate: 60 } };
 
 export async function generateMetadata({
   params,
@@ -29,7 +29,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const listing = getListing(id);
+  const listing = await findListing(id, FETCH_INIT);
   return {
     title: listing ? `${listing.title} — ${listing.vendor}` : "Listing",
     description: listing?.description,
@@ -42,8 +42,9 @@ export default async function ListingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const listing = getListing(id);
+  const listing = await findListing(id, FETCH_INIT);
   if (!listing) notFound();
+  const perKg = listing.pricePerKg != null;
 
   return (
     <main className="mx-auto max-w-5xl px-6 pb-24 pt-32">
@@ -58,23 +59,24 @@ export default async function ListingPage({
         <div>
           <div className="flex items-start gap-3">
             <AnimatedBadge status={listing.isOpen ? "success" : "info"} size="sm">
-              {listing.isOpen ? "Open now" : listing.hours}
+              {perKg ? listing.hours : listing.isOpen ? "Open now" : listing.hours}
             </AnimatedBadge>
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Star size={12} className="fill-current" />
-              {listing.rating.toFixed(1)} · {listing.reviews} reviews
+              {listing.reviews > 0 ? (
+                <>
+                  <Star size={12} className="fill-current" />
+                  {listing.rating.toFixed(1)} · {listing.reviews} reviews
+                </>
+              ) : (
+                "New on 4FG"
+              )}
             </span>
           </div>
 
           <h1 className="mt-4 text-4xl font-semibold">{listing.title}</h1>
 
           <div className="mt-4 flex items-center gap-2">
-            <div
-              className="grid h-10 w-10 place-items-center rounded-lg text-xs font-semibold text-white"
-              style={{ backgroundColor: listing.color }}
-            >
-              {listing.initials}
-            </div>
+            <SellerMark listing={listing} size={48} className="h-12 w-12 rounded-lg" />
             <div>
               <p className="font-medium">
                 {listing.vendor}
@@ -105,14 +107,16 @@ export default async function ListingPage({
             </div>
           </dl>
 
-          {/* Where to find a dealer in person. */}
-          {sellerRoleOf(listing) === "dealer" &&
+          {/* Where to find a dealer or vendor in person. */}
+          {sellerRoleOf(listing) !== "manufacturer" &&
             listing.lat != null &&
             listing.lng != null && (
               <section className="mt-10">
-                <h2 className="text-lg font-semibold">Find this dealer</h2>
+                <h2 className="text-lg font-semibold">{sellerRoleOf(listing) === "dealer" ? "Find this dealer" : "Where to find this vendor"}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Walk in to see the monitor, buy a unit, or have one fitted.
+                  {sellerRoleOf(listing) === "dealer"
+                    ? "Walk in to see the monitor, buy a unit, or have one fitted."
+                    : "Deliveries go out from this address."}
                 </p>
                 <div className="mt-4">
                   <LocationMap
@@ -132,13 +136,13 @@ export default async function ListingPage({
             )}
 
           {/* Retail runs through the dealer network; trade packs come direct. */}
-          {listing.id === MONITOR_LISTING_ID && (
+          {listing.id === MONITOR_LISTING_ID && monitorDealers().length > 0 && (
             <section className="mt-10">
               <h2 className="text-lg font-semibold">Authorized dealers</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Prefer to buy a single unit in person? These authorized dealers
                 retail the 4FG Monitor, fit it and support it. Orders of{" "}
-                {MONITOR_MOQ} units or more are supplied direct by {MANUFACTURER}.
+                {listing.minOrderQty ?? MONITOR_MOQ} units or more are supplied direct by {MANUFACTURER}.
               </p>
               <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                 {monitorDealers().map((d) => (
@@ -175,8 +179,12 @@ export default async function ListingPage({
             <>
               <p className="text-sm text-muted-foreground">Price</p>
               <p className="mt-1 font-mono text-3xl font-semibold">
-                {formatNaira(listing.price!)}
-                {listing.minOrderQty ? (
+                {formatNaira(perKg ? listing.pricePerKg! : listing.price!)}
+                {perKg ? (
+                  <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">
+                    / kg
+                  </span>
+                ) : listing.minOrderQty ? (
                   <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">
                     / unit
                   </span>
@@ -199,6 +207,19 @@ export default async function ListingPage({
                 </div>
               ) : null}
 
+              {perKg && (
+                <ul className="mt-4 space-y-1 text-sm">
+                  {listing.sizes
+                    .filter((s) => kgOf(s) != null)
+                    .map((s) => (
+                      <li key={s} className="flex justify-between">
+                        <span className="text-muted-foreground">{s}</span>
+                        <span className="font-medium">{formatNaira(priceFor(listing, s)!)}</span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+
               {listing.deliveryToday && (
                 <p className="mt-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary w-fit">
                   Same-day delivery available
@@ -206,14 +227,20 @@ export default async function ListingPage({
               )}
 
               <div className="mt-6 flex flex-col gap-3">
-                <ButtonLink
-                  href={`/checkout?item=${listing.id}${
-                    listing.minOrderQty ? `&qty=${listing.minOrderQty}` : ""
-                  }`}
-                  size="lg"
-                >
-                  Order now
-                </ButtonLink>
+                {listing.isOpen || !perKg ? (
+                  <ButtonLink
+                    href={`/checkout?item=${listing.id}${
+                      listing.minOrderQty ? `&qty=${listing.minOrderQty}` : ""
+                    }`}
+                    size="lg"
+                  >
+                    Order now
+                  </ButtonLink>
+                ) : (
+                  <p className="rounded-full bg-muted px-4 py-3 text-center text-sm font-medium text-muted-foreground">
+                    Out of stock
+                  </p>
+                )}
                 <ButtonLink href="/sign-in" variant="outline" size="lg">
                   Sign in to save
                 </ButtonLink>
@@ -307,7 +334,7 @@ export default async function ListingPage({
               </a>
 
               <p className="mt-4 text-xs text-muted-foreground">
-                Buying 10 or more?{" "}
+                Buying {MONITOR_MOQ} or more?{" "}
                 <Link
                   href={`/marketplace/${MONITOR_LISTING_ID}`}
                   className="font-medium text-primary hover:underline"

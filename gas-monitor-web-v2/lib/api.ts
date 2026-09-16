@@ -228,11 +228,18 @@ export const authApi = {
 
 // ── Orders API ────────────────────────────────────────────────────────────────
 
+/**
+ * The backend prices `listingId` (an approved vendor's listing) and `product`
+ * (sold by 4First) orders itself. `supplierName` + `totalAmount` are only for
+ * legacy orders that name neither.
+ */
 export interface InitializeOrderPayload {
-  supplierName: string;
+  listingId?: string;
+  product?: 'MONITOR';
+  supplierName?: string;
+  totalAmount?: number;
   cylinderSize: string;
   quantity: number;
-  totalAmount: number;
   deliveryAddress: string;
 }
 
@@ -316,6 +323,8 @@ export interface VendorProfile {
   id: string;
   businessName: string;
   businessAddress: string;
+  state?: string | null;
+  city?: string | null;
   bio?: string | null;
   logoUrl?: string | null;
   lat?: number;
@@ -334,6 +343,8 @@ export interface VendorProfile {
 export interface UpdateVendorProfilePayload {
   businessName?: string;
   businessAddress?: string;
+  state?: string;
+  city?: string;
   phone?: string;
   bio?: string | null;
   logoUrl?: string | null;
@@ -349,6 +360,8 @@ export interface VendorOrder extends Order {
 export interface CreateVendorProfilePayload {
   businessName: string;
   businessAddress: string;
+  state: string;
+  city: string;
   phone: string;
   plan: VendorPlan;
   lat?: number;

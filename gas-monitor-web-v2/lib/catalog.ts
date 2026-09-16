@@ -37,11 +37,17 @@ export interface Listing {
   lat?: number;
   lng?: number;
   image?: string;
+  /** Seller brand logo (transparent background). Initials are shown without one. */
+  logo?: string;
   gallery?: { src: string; alt: string; tone: 'dark' | 'light' }[];
   /** Absent for dealers — their retail price is agreed on contact, not here. */
   price?: number;
+  /** Vendor listings are priced per kg; the unit price then depends on size. */
+  pricePerKg?: number;
   /** Minimum order quantity. The 4FG Monitor ships in tens. */
   minOrderQty?: number;
+  /** Per-order delivery fee when it differs from DELIVERY_FEE (the 4FG Monitor's is admin-set). */
+  deliveryFee?: number;
   /** Defaults to `vendor` when absent. */
   sellerRole?: SellerRole;
   /** Full contact route for dealers, who sell off-platform. */
@@ -104,195 +110,32 @@ export function monitorDealers(state?: string): Listing[] {
 
 export const SIZES = ['6 kg', '12.5 kg', '25 kg', '50 kg'];
 
-export const DELIVERY_FEE = 1500;
+// Vendor-listing delivery fee and order limit. Mirror
+// gas-monitor-backend/src/lib/pricing.ts, which prices the order; the web only
+// previews these numbers. 4FG Monitor terms are admin-set, not listed here.
+export const DELIVERY_FEE = 2000;
 
-export const MAX_QUANTITY = 10;
+export const MAX_QUANTITY = 20;
+
+/** Size for vendor listings sold loose by the kilogram (quantity = kg). */
+export const PER_KG_SIZE = 'Per kg';
 
 export function getListing(id: string): Listing | undefined {
   return LISTINGS.find((l) => l.id === id);
 }
 
+/**
+ * Platform-owned listings only. Every other merchant signs up as a vendor
+ * (/sign-up?role=vendor), sets up their own profile and adds their listings
+ * from the vendor dashboard, so no third-party seller is hardcoded here.
+ */
 export const LISTINGS: Listing[] = [
   {
-    id: 'l1',
-    vendor: 'Ardova Gas Ltd',
-    initials: 'AG',
-    color: '#2D7450',
-    title: '12.5 kg cooking gas refill',
-    description:
-      'Certified LPG refill for your 12.5 kg cylinder, filled to exact weight and sealed before dispatch. Delivered by Ardova Gas Ltd from Lekki Phase 1.',
-    category: 'refill',
-    gasTypes: ['cooking'],
-    sizes: ['6 kg', '12.5 kg', '50 kg'],
-    location: '14 Admiralty Way, Lekki Phase 1',
-    state: 'Lagos',
-    city: 'Lekki',
-    price: 11500,
-    rating: 4.8,
-    reviews: 214,
-    isOpen: true,
-    hours: '7am – 9pm',
-    featured: true,
-    deliveryToday: true,
-    verified: true
-  },
-  {
-    id: 'l2',
-    vendor: 'HomeGas Express',
-    initials: 'HG',
-    color: '#2D7450',
-    title: '6 kg cooking gas refill',
-    description:
-      'Quick LPG refill for compact 6 kg cylinders — ideal for small households and student apartments. Same-day delivery within Surulere.',
-    category: 'refill',
-    gasTypes: ['cooking'],
-    sizes: ['6 kg', '12.5 kg'],
-    location: '18 Bode Thomas St, Surulere',
-    state: 'Lagos',
-    city: 'Surulere',
-    price: 5800,
-    rating: 4.3,
-    reviews: 96,
-    isOpen: true,
-    hours: '8am – 7pm',
-    deliveryToday: true,
-    verified: true
-  },
-  {
-    id: 'l3',
-    vendor: 'Total Gas Depot',
-    initials: 'TG',
-    color: '#D14700',
-    title: '50 kg bulk LPG refill',
-    description:
-      'High-volume LPG refill for restaurants, bakeries, and commercial kitchens. Weighed and certified at the Ikoyi depot before delivery.',
-    category: 'refill',
-    gasTypes: ['cooking', 'bulk'],
-    sizes: ['12.5 kg', '50 kg'],
-    location: '5 Kingsway Rd, Ikoyi',
-    state: 'Lagos',
-    city: 'Ikoyi',
-    price: 43000,
-    rating: 4.5,
-    reviews: 158,
-    isOpen: true,
-    hours: '6am – 8pm',
-    featured: true,
-    verified: true
-  },
-  {
-    id: 'l4',
-    vendor: 'MedGas Nigeria',
-    initials: 'MG',
-    color: '#1565C0',
-    title: 'Medical O₂ cylinder supply',
-    description:
-      'Medical-grade oxygen cylinders supplied with valid certification, available around the clock for clinics and home care.',
-    category: 'refill',
-    gasTypes: ['medical'],
-    sizes: ['Medical O₂'],
-    location: '22 Adeola Odeku St, Victoria Island',
-    state: 'Lagos',
-    city: 'Victoria Island',
-    price: 28000,
-    rating: 4.9,
-    reviews: 87,
-    isOpen: true,
-    hours: '24 hrs',
-    featured: true,
-    verified: true
-  },
-  {
-    id: 'l5',
-    vendor: 'ProMed Gases',
-    initials: 'PM',
-    color: '#1565C0',
-    title: 'Industrial argon & CO₂ refill',
-    description:
-      'Argon, CO₂, and nitrogen refills for welding shops and industrial users, with purity certificates on every order.',
-    category: 'refill',
-    gasTypes: ['medical', 'industrial'],
-    sizes: ['Argon', 'CO₂', 'N₂'],
-    location: '3 Broad St, Lagos Marina',
-    state: 'Lagos',
-    city: 'Lagos Marina',
-    price: 35000,
-    rating: 4.7,
-    reviews: 64,
-    isOpen: true,
-    hours: '8am – 6pm',
-    verified: true
-  },
-  {
-    id: 'l6',
-    vendor: 'Industrial Gas Co.',
-    initials: 'IG',
-    color: '#D14700',
-    title: 'Bulk tank LPG supply (100 kg+)',
-    description:
-      'Scheduled bulk LPG deliveries for estates, hotels, and factories with on-site tank filling from Apapa.',
-    category: 'refill',
-    gasTypes: ['industrial', 'bulk'],
-    sizes: ['50 kg', '100 kg', 'Bulk Tank'],
-    location: '11 Creek Rd, Apapa',
-    state: 'Lagos',
-    city: 'Apapa',
-    price: 92000,
-    rating: 4.6,
-    reviews: 41,
-    isOpen: false,
-    hours: 'Opens 6am',
-    verified: true
-  },
-  {
-    id: 'l7',
-    vendor: 'Ardova Gas Ltd',
-    initials: 'AG',
-    color: '#2D7450',
-    title: 'New 12.5 kg cylinder (with valve)',
-    description:
-      'Brand-new 12.5 kg LPG cylinder with a factory-fitted valve and safety seal. Comes empty — add a refill to have it delivered filled.',
-    category: 'cylinder',
-    gasTypes: ['cooking'],
-    sizes: ['12.5 kg'],
-    location: '14 Admiralty Way, Lekki Phase 1',
-    state: 'Lagos',
-    city: 'Lekki',
-    price: 38500,
-    rating: 4.8,
-    reviews: 52,
-    isOpen: true,
-    hours: '7am – 9pm',
-    deliveryToday: true,
-    verified: true
-  },
-  {
-    id: 'l8',
-    vendor: 'HomeGas Express',
-    initials: 'HG',
-    color: '#2D7450',
-    title: 'New 6 kg cylinder',
-    description:
-      'Fresh 6 kg LPG cylinder, perfect for new customers or replacing a lost one. Includes first-time activation support.',
-    category: 'cylinder',
-    gasTypes: ['cooking'],
-    sizes: ['6 kg'],
-    location: '18 Bode Thomas St, Surulere',
-    state: 'Lagos',
-    city: 'Surulere',
-    price: 22000,
-    rating: 4.3,
-    reviews: 21,
-    isOpen: true,
-    hours: '8am – 7pm',
-    verified: true
-  },
-  {
-    // The only sellable 4FG Monitor listing on the marketplace. Everyone else
-    // who carries the device is an authorized dealer (enquiries only).
+    // The only sellable 4FG Monitor listing on the marketplace.
     id: 'l9',
     vendor: MANUFACTURER,
     initials: '4F',
+    logo: '/images/brands/4first-technologies.png',
     color: '#2D7450',
     title: '4FG Smart Gas Monitor',
     description:
@@ -305,6 +148,8 @@ export const LISTINGS: Listing[] = [
     lng: 7.0442,
     state: 'Imo',
     city: 'Owerri',
+    // Fallback only: the live price, delivery fee and minimum order come from
+    // admin settings via lib/marketplace.ts `withMonitorTerms`.
     price: 45000,
     minOrderQty: MONITOR_MOQ,
     sellerRole: 'manufacturer',
@@ -315,195 +160,6 @@ export const LISTINGS: Listing[] = [
     hours: '8am – 6pm',
     featured: true,
     deliveryToday: false,
-    verified: true
-  },
-  {
-    id: 'l10',
-    vendor: 'Total Gas Depot',
-    initials: 'TG',
-    color: '#D14700',
-    title: 'Gas regulator & safety accessories',
-    description:
-      'High-quality regulators, valves, fittings, and safety clips. Certified for cooking and industrial use.',
-    category: 'accessories',
-    gasTypes: ['cooking', 'industrial'],
-    sizes: ['Universal'],
-    location: '5 Kingsway Rd, Ikoyi',
-    state: 'Lagos',
-    city: 'Ikoyi',
-    price: 8500,
-    rating: 4.6,
-    reviews: 34,
-    isOpen: true,
-    hours: '6am – 8pm',
-    verified: true
-  },
-  {
-    id: 'l11',
-    vendor: 'ProMed Gases',
-    initials: 'PM',
-    color: '#1565C0',
-    title: 'Cylinder test & certification',
-    description:
-      'Annual cylinder safety testing and certification by qualified technicians. Valid for 12 months.',
-    category: 'accessories',
-    gasTypes: ['cooking', 'industrial'],
-    sizes: ['All sizes'],
-    location: '3 Broad St, Lagos Marina',
-    state: 'Lagos',
-    city: 'Lagos Marina',
-    price: 5000,
-    rating: 4.8,
-    reviews: 47,
-    isOpen: true,
-    hours: '8am – 6pm',
-    verified: true
-  },
-  {
-    id: 'l12',
-    vendor: 'HomeGas Express',
-    initials: 'HG',
-    color: '#2D7450',
-    title: 'Delivery-only: Same-day gas service',
-    description:
-      'Last-minute refill? We deliver within 2 hours in Surulere and surrounding areas. Payment on delivery accepted.',
-    category: 'refill',
-    gasTypes: ['cooking'],
-    sizes: ['6 kg', '12.5 kg'],
-    location: '18 Bode Thomas St, Surulere',
-    state: 'Lagos',
-    city: 'Surulere',
-    price: 6500,
-    rating: 4.4,
-    reviews: 112,
-    isOpen: true,
-    hours: '7am – 10pm',
-    deliveryToday: true,
-    verified: true
-  },
-
-  /* ---------------------------------------------------------------------- */
-  /* Authorized 4FG Monitor dealers. Contact details only — dealers demo and  */
-  /* support the device, orders go through 4First Technologies Limited.       */
-  /* ---------------------------------------------------------------------- */
-  {
-    id: 'd1',
-    vendor: 'Ardova Gas Ltd',
-    initials: 'AG',
-    color: '#2D7450',
-    title: '4FG Monitor — authorized dealer (Lagos)',
-    description:
-      'Authorized dealer for Lagos Island. Buy a 4FG Monitor over the counter, have it fitted to your cylinder, and get after-sales support locally.',
-    category: 'monitor',
-    gasTypes: ['cooking'],
-    sizes: ['Universal'],
-    location: '14 Admiralty Way, Lekki Phase 1',
-    lat: 6.4413,
-    lng: 3.4709,
-    state: 'Lagos',
-    city: 'Lekki',
-    sellerRole: 'dealer',
-    contact: { phone: '+234 801 234 5678', email: 'lekki@ardovagas.example' },
-    rating: 4.8,
-    reviews: 41,
-    isOpen: true,
-    hours: '7am – 9pm',
-    verified: true
-  },
-  {
-    id: 'd2',
-    vendor: 'HomeGas Express',
-    initials: 'HG',
-    color: '#2D7450',
-    title: '4FG Monitor — authorized dealer (Surulere)',
-    description:
-      'Authorized dealer for mainland Lagos. Units in stock for walk-in purchase, with installation help and warranty support.',
-    category: 'monitor',
-    gasTypes: ['cooking'],
-    sizes: ['Universal'],
-    location: '18 Bode Thomas St, Surulere',
-    lat: 6.4966,
-    lng: 3.3515,
-    state: 'Lagos',
-    city: 'Surulere',
-    sellerRole: 'dealer',
-    contact: { phone: '+234 802 345 6789' },
-    rating: 4.4,
-    reviews: 28,
-    isOpen: true,
-    hours: '8am – 7pm',
-    verified: true
-  },
-  {
-    id: 'd3',
-    vendor: 'Niger Delta Gas Services',
-    initials: 'ND',
-    color: '#1565C0',
-    title: '4FG Monitor — authorized dealer (Port Harcourt)',
-    description:
-      'Authorized dealer for Rivers State. Retails the 4FG Monitor with fitting, warranty claims and on-site support.',
-    category: 'monitor',
-    gasTypes: ['cooking'],
-    sizes: ['Universal'],
-    location: '7 Aba Road, Port Harcourt',
-    lat: 4.8156,
-    lng: 7.0134,
-    state: 'Rivers',
-    city: 'Port Harcourt',
-    sellerRole: 'dealer',
-    contact: { phone: '+234 803 456 7890', email: 'ph@ndgas.example' },
-    rating: 4.6,
-    reviews: 19,
-    isOpen: true,
-    hours: '8am – 6pm',
-    verified: true
-  },
-  {
-    id: 'd4',
-    vendor: 'Capital Gas Partners',
-    initials: 'CG',
-    color: '#D14700',
-    title: '4FG Monitor — authorized dealer (Abuja)',
-    description:
-      'Authorized dealer covering Abuja and the surrounding districts. Units available in store, plus fitting and support for installed monitors.',
-    category: 'monitor',
-    gasTypes: ['cooking'],
-    sizes: ['Universal'],
-    location: '12 Aminu Kano Crescent, Wuse II',
-    lat: 9.0820,
-    lng: 7.4622,
-    state: 'Federal Capital Territory',
-    city: 'Wuse',
-    sellerRole: 'dealer',
-    contact: { phone: '+234 805 678 9012', email: 'abuja@capitalgas.example' },
-    rating: 4.7,
-    reviews: 33,
-    isOpen: true,
-    hours: '8am – 6pm',
-    verified: true
-  },
-  {
-    id: 'd5',
-    vendor: 'Eastern Gas Hub',
-    initials: 'EG',
-    color: '#2D7450',
-    title: '4FG Monitor — authorized dealer (Owerri)',
-    description:
-      'Authorized dealer for the South-East, based in Owerri. Retails the 4FG Monitor with same-week fitting and support visits.',
-    category: 'monitor',
-    gasTypes: ['cooking'],
-    sizes: ['Universal'],
-    location: '5 Wetheral Road, Owerri',
-    lat: 5.4840,
-    lng: 7.0351,
-    state: 'Imo',
-    city: 'Owerri',
-    sellerRole: 'dealer',
-    contact: { phone: '+234 806 789 0123' },
-    rating: 4.5,
-    reviews: 12,
-    isOpen: true,
-    hours: '8am – 6pm',
     verified: true
   }
 ];

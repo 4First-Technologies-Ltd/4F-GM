@@ -7,6 +7,7 @@ import { ErrorState, ForbiddenState, LoadingBlock } from '@/admin/primitives/sta
 import { usePermission } from '@/admin/permissions/use-permission';
 import { ROLE_GRANTS, ROLE_LABEL, type AdminRole } from '@/admin/permissions/permissions';
 import type { PlatformSettings } from '@/admin/modules/types';
+import { formatNaira } from '@/admin/primitives/format';
 
 /**
  * Settings — real, backed by the PlatformSettings singleton.
@@ -21,8 +22,17 @@ import type { PlatformSettings } from '@/admin/modules/types';
 
 type Draft = Pick<
   PlatformSettings,
-  'maintenanceMode' | 'allowVendorSignups' | 'supportEmail' | 'platformFeePercent'
+  | 'maintenanceMode'
+  | 'allowVendorSignups'
+  | 'supportEmail'
+  | 'platformFeePercent'
+  | 'monitorUnitPrice'
+  | 'monitorDeliveryFee'
+  | 'monitorMinQuantity'
 >;
+
+/** Mirrors MAX_ORDER_QUANTITY in gas-monitor-backend/src/lib/pricing.ts. */
+const MAX_ORDER_QUANTITY = 20;
 
 export default function SettingsPage() {
   const canRead = usePermission('settings.read');
@@ -44,7 +54,10 @@ export default function SettingsPage() {
           maintenanceMode: r.settings.maintenanceMode,
           allowVendorSignups: r.settings.allowVendorSignups,
           supportEmail: r.settings.supportEmail,
-          platformFeePercent: r.settings.platformFeePercent
+          platformFeePercent: r.settings.platformFeePercent,
+          monitorUnitPrice: r.settings.monitorUnitPrice,
+          monitorDeliveryFee: r.settings.monitorDeliveryFee,
+          monitorMinQuantity: r.settings.monitorMinQuantity
         });
       })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
@@ -90,6 +103,26 @@ export default function SettingsPage() {
       ? draft.platformFeePercent !== settings.platformFeePercent ||
         (draft.supportEmail ?? '') !== (settings.supportEmail ?? '')
       : false;
+
+  const dirtyMonitor =
+    draft && settings
+      ? draft.monitorUnitPrice !== settings.monitorUnitPrice ||
+        draft.monitorDeliveryFee !== settings.monitorDeliveryFee ||
+        draft.monitorMinQuantity !== settings.monitorMinQuantity
+      : false;
+
+  // Checked here so the button explains itself; the backend enforces the same rules.
+  const monitorError = !draft
+    ? null
+    : !Number.isInteger(draft.monitorUnitPrice) || draft.monitorUnitPrice <= 0
+      ? 'Unit price must be a whole naira amount above 0.'
+      : !Number.isInteger(draft.monitorDeliveryFee) || draft.monitorDeliveryFee < 0
+        ? 'Delivery fee must be a whole naira amount, 0 or more.'
+        : !Number.isInteger(draft.monitorMinQuantity) ||
+            draft.monitorMinQuantity < 1 ||
+            draft.monitorMinQuantity > MAX_ORDER_QUANTITY
+          ? `Minimum order must be between 1 and ${MAX_ORDER_QUANTITY} units.`
+          : null;
 
   return (
     <div className="adm-page">
@@ -225,6 +258,103 @@ export default function SettingsPage() {
                   }
                 >
                   {saving === 'commerce' ? 'Saving…' : 'Save commerce settings'}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="adm-card adm-card-pad">
+            <h2 className="adm-section-title">4FG Monitor</h2>
+            <p className="adm-field-help" style={{ marginTop: 'var(--space-2)' }}>
+              Sold direct by 4First Technologies Limited on the marketplace. Checkout charges exactly
+              these amounts — a change applies to the next order placed.
+            </p>
+
+            <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+              <label className="adm-field">
+                <span className="adm-field-label">Unit price (₦)</span>
+                <input
+                  type="number"
+                  className="adm-input"
+                  min={1}
+                  step={1}
+                  value={draft.monitorUnitPrice}
+                  disabled={!canEdit}
+                  onChange={(e) => setDraft({ ...draft, monitorUnitPrice: Number(e.target.value) })}
+                />
+                <span className="adm-field-help">
+                  Currently {formatNaira(settings.monitorUnitPrice)} per unit.
+                </span>
+              </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">Delivery fee (₦)</span>
+                <input
+                  type="number"
+                  className="adm-input"
+                  min={0}
+                  step={1}
+                  value={draft.monitorDeliveryFee}
+                  disabled={!canEdit}
+                  onChange={(e) => setDraft({ ...draft, monitorDeliveryFee: Number(e.target.value) })}
+                />
+                <span className="adm-field-help">
+                  Charged once per monitor order, whatever the quantity. Set 0 for free delivery.
+                </span>
+              </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">Minimum order (units)</span>
+                <input
+                  type="number"
+                  className="adm-input"
+                  min={1}
+                  max={MAX_ORDER_QUANTITY}
+                  step={1}
+                  value={draft.monitorMinQuantity}
+                  disabled={!canEdit}
+                  onChange={(e) => setDraft({ ...draft, monitorMinQuantity: Number(e.target.value) })}
+                />
+                <span className="adm-field-help">
+                  Between 1 and {MAX_ORDER_QUANTITY}, the most a single order can carry.
+                </span>
+              </label>
+
+              {draft.monitorUnitPrice > 0 && draft.monitorMinQuantity > 0 && (
+                <p className="adm-field-help">
+                  Smallest order total:{' '}
+                  <strong>
+                    {formatNaira(
+                      draft.monitorUnitPrice * draft.monitorMinQuantity + draft.monitorDeliveryFee
+                    )}
+                  </strong>{' '}
+                  ({draft.monitorMinQuantity} × {formatNaira(draft.monitorUnitPrice)} +{' '}
+                  {formatNaira(draft.monitorDeliveryFee)} delivery).
+                </p>
+              )}
+            </div>
+
+            {canEdit && (
+              <div className="adm-dialog-actions" style={{ marginTop: 'var(--space-4)' }}>
+                {dirtyMonitor && monitorError && (
+                  <span className="adm-field-help" role="alert">
+                    {monitorError}
+                  </span>
+                )}
+                {saved === 'monitor' && <span className="adm-badge adm-badge--success">Saved</span>}
+                <button
+                  type="button"
+                  className="adm-btn adm-btn--primary"
+                  disabled={!dirtyMonitor || Boolean(monitorError) || saving === 'monitor'}
+                  onClick={() =>
+                    save('monitor', {
+                      monitorUnitPrice: draft.monitorUnitPrice,
+                      monitorDeliveryFee: draft.monitorDeliveryFee,
+                      monitorMinQuantity: draft.monitorMinQuantity
+                    })
+                  }
+                >
+                  {saving === 'monitor' ? 'Saving…' : 'Save monitor pricing'}
                 </button>
               </div>
             )}

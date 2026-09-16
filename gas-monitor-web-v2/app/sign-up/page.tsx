@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/motion/checkbox';
 import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { PlanPicker } from '@/components/vendor/PlanPicker';
+import { StateCityFields } from '@/components/vendor/StateCityFields';
 import { isVendorPlan, PLAN_COOLDOWN_DAYS, type VendorPlan } from '@/lib/plans';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -30,6 +31,8 @@ function SignUpForm() {
   const [phone, setPhone] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
+  const [vendorState, setVendorState] = useState('');
+  const [vendorCity, setVendorCity] = useState('');
   // No default: the vendor has to pick the commission rate they sell under.
   // `?plan=GROWTH` preselects it when they arrived from a specific plan card.
   const [plan, setPlan] = useState<VendorPlan | null>(() => {
@@ -50,7 +53,7 @@ function SignUpForm() {
       return;
     }
 
-    if (role === 'VENDOR' && (!businessName.trim() || !businessAddress.trim() || !phone.trim())) {
+    if (role === 'VENDOR' && (!businessName.trim() || !businessAddress.trim() || !vendorState || !vendorCity.trim() || !phone.trim())) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -68,6 +71,8 @@ function SignUpForm() {
           JSON.stringify({
             businessName: businessName.trim(),
             businessAddress: businessAddress.trim(),
+            state: vendorState,
+            city: vendorCity.trim(),
             phone: phone.trim(),
             plan
           })
@@ -204,6 +209,15 @@ function SignUpForm() {
                   error={false}
                   placeholder="Street address"
                   classNames={{ root: 'w-full' }}
+                />
+
+                <StateCityFields
+                  state={vendorState}
+                  city={vendorCity}
+                  onStateChange={setVendorState}
+                  onCityChange={setVendorCity}
+                  required
+                  disabled={submitting}
                 />
 
                 <Input

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState, FormEvent } from 'react';
+import { Suspense, useEffect, useState, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -16,12 +16,14 @@ import {
   minQuantityFor,
   MANUFACTURER,
   MONITOR_LISTING_ID,
-  MONITOR_MOQ
+  DELIVERY_FEE,
+  MAX_QUANTITY,
+  type Listing
 } from '@/lib/catalog';
+import { findListing, priceFor } from '@/lib/marketplace';
+import { SellerMark } from '@/components/marketplace/SellerMark';
 
 const AREAS = ['Lagos', 'Abuja', 'Port Harcourt', 'Kano', 'Ibadan', 'Other'];
-const DELIVERY_FEE = 2000;
-const MAX_QUANTITY = 20;
 
 type CheckoutMode = 'guest' | 'signin' | 'signup';
 
@@ -29,10 +31,30 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const { user, loading, login, register, verifyOtp, resendOtp } = useAuth();
 
-  const item = useMemo(() => {
-    const id = searchParams.get('item');
-    return id ? getListing(id) : undefined;
-  }, [searchParams]);
+  const itemId = searchParams.get('item');
+  // Always resolved through the backend: vendor listings come from the public
+  // feed, and the 4FG Monitor's price, delivery fee and minimum are admin-set.
+  const [item, setItem] = useState<Listing | undefined>(() => (itemId ? getListing(itemId) : undefined));
+  const [itemLoading, setItemLoading] = useState(() => !!itemId);
+
+  useEffect(() => {
+    if (!itemId) return;
+    let cancelled = false;
+    setItemLoading(true);
+    findListing(itemId).then((found) => {
+      if (cancelled) return;
+      setItem(found);
+      if (found) {
+        setSize((current) => (found.sizes.includes(current) ? current : found.sizes[0] ?? ''));
+        // The admin may have raised or lowered the minimum since the link was made.
+        setQuantity((q) => Math.min(MAX_QUANTITY, Math.max(minQuantityFor(found), q)));
+      }
+      setItemLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [itemId]);
 
   const initialSize = searchParams.get('size') ?? item?.sizes[0] ?? '';
   // Trade-pack items (the 4FG Monitor) carry a minimum order quantity.
@@ -80,7 +102,7 @@ function CheckoutContent() {
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
 
-  if (loading) {
+  if (loading || itemLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -124,7 +146,7 @@ function CheckoutContent() {
           <p className="text-sm text-muted-foreground mb-4">
             {item.vendor} is an authorized dealer and sells the 4FG Monitor
             directly — contact them for stock and pricing. Online checkout is for
-            trade packs of {MONITOR_MOQ} units or more from {MANUFACTURER}.
+            trade packs from {MANUFACTURER}.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -145,8 +167,30 @@ function CheckoutContent() {
     );
   }
 
-  const subtotal = item.price! * quantity;
-  const total = subtotal + DELIVERY_FEE;
+  if (item.pricePerKg != null && !item.isOpen) {
+    return (
+      <div className="max-w-md mx-auto">
+        <div className="rounded-2xl bg-card border border-border p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-2">Out of stock</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {item.vendor} has marked this listing as out of stock. Try another vendor in the marketplace.
+          </p>
+          <Link
+            href="/marketplace"
+            className="inline-block px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            Browse the marketplace
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Vendor listings are priced per kg, so the unit price follows the chosen size.
+  const unitPrice = priceFor(item, size) ?? item.price!;
+  const subtotal = unitPrice * quantity;
+  const deliveryFee = item.deliveryFee ?? DELIVERY_FEE;
+  const total = subtotal + deliveryFee;
   const isGuest = !user;
 
   async function handleSignin(e: FormEvent) {
@@ -215,11 +259,14 @@ function CheckoutContent() {
       const composedAddress = `${address.trim()}, ${area}${phone.trim() ? ` · Tel: ${phone.trim()}` : ''}${
         notes.trim() ? ` · Note: ${notes.trim()}` : ''
       }`;
+      // The backend prices the order from what is being bought; the total shown
+      // here is a preview and the amount charged comes back in `result.amount`.
       const payload = {
-        supplierName: item!.vendor,
+        ...(item!.pricePerKg != null
+          ? { listingId: item!.id }
+          : { product: 'MONITOR' as const }),
         cylinderSize: size,
         quantity,
-        totalAmount: total,
         deliveryAddress: composedAddress
       };
       const result = isGuest
@@ -787,15 +834,11 @@ function CheckoutContent() {
 
           {/* Product Card */}
           <div className="pb-6 border-b border-border">
-            {/* The tile is painted with the vendor's own brand colour, so the
-                initials need a fixed light foreground, not a themed one. */}
-            <div className="w-16 h-16 rounded-lg flex items-center justify-center text-xs font-bold text-white mb-3" style={{ background: item.color }}>
-              {item.initials}
-            </div>
+            <SellerMark listing={item} size={64} className="mb-3 h-16 w-16 rounded-lg" textClassName="text-xs font-bold" />
             <p className="text-xs text-muted-foreground mb-1">GAS</p>
             <p className="font-semibold text-foreground mb-1">{item.title}</p>
             <p className="text-xs text-muted-foreground">
-              {item.vendor} · ★ {item.rating.toFixed(1)}
+              {item.vendor}{item.reviews > 0 ? ` · ★ ${item.rating.toFixed(1)}` : ''}
             </p>
             <Link
               href={`/marketplace/${item.id}`}
@@ -873,13 +916,13 @@ function CheckoutContent() {
           <dl className="py-6 space-y-3 border-b border-border">
             <div className="flex justify-between">
               <dt className="text-sm text-muted-foreground">
-                {formatNaira(item.price!)} × {quantity}
+                {formatNaira(unitPrice)} × {quantity}
               </dt>
               <dd className="text-sm font-medium text-foreground">{formatNaira(subtotal)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-sm text-muted-foreground">Delivery fee</dt>
-              <dd className="text-sm font-medium text-foreground">{formatNaira(DELIVERY_FEE)}</dd>
+              <dd className="text-sm font-medium text-foreground">{formatNaira(deliveryFee)}</dd>
             </div>
             <div className="flex justify-between pt-3 border-t border-border">
               <dt className="font-semibold text-foreground">Total</dt>

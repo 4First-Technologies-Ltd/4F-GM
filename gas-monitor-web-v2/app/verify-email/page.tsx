@@ -14,6 +14,8 @@ const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 type PendingVendor = {
   businessName: string;
   businessAddress: string;
+  state: string;
+  city: string;
   phone: string;
   plan: VendorPlan;
 };
@@ -32,6 +34,8 @@ function readPendingVendor(): PendingVendor | null {
     if (
       !parsed.businessName ||
       !parsed.businessAddress ||
+      !parsed.state ||
+      !parsed.city ||
       !parsed.phone ||
       !isVendorPlan(parsed.plan)
     ) {

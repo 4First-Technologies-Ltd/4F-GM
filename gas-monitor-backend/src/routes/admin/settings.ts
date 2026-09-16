@@ -4,16 +4,10 @@ import { requireAdmin, requireOperations } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { writeAuditLog } from '../../lib/audit';
+import { getOrCreateSettings } from '../../lib/settings';
+import { MAX_ORDER_QUANTITY } from '../../lib/pricing';
 
 const router = Router();
-
-async function getOrCreateSettings() {
-  return prisma.platformSettings.upsert({
-    where: { id: 'singleton' },
-    create: { id: 'singleton' },
-    update: {}
-  });
-}
 
 router.get(
   '/',
@@ -28,7 +22,26 @@ const patchSchema = z.object({
   maintenanceMode: z.boolean().optional(),
   allowVendorSignups: z.boolean().optional(),
   supportEmail: z.string().email().nullable().optional(),
-  platformFeePercent: z.number().min(0).max(100).optional()
+  platformFeePercent: z.number().min(0).max(100).optional(),
+  // 4FG Monitor commercial terms — orders are priced from these server-side.
+  monitorUnitPrice: z
+    .number()
+    .int('Monitor price must be whole naira')
+    .positive('Monitor price must be above 0')
+    .max(10_000_000)
+    .optional(),
+  monitorDeliveryFee: z
+    .number()
+    .int('Delivery fee must be whole naira')
+    .min(0, 'Delivery fee cannot be negative')
+    .max(1_000_000)
+    .optional(),
+  monitorMinQuantity: z
+    .number()
+    .int('Minimum order must be a whole number')
+    .min(1, 'Minimum order must be at least 1')
+    .max(MAX_ORDER_QUANTITY, `Minimum order cannot exceed the ${MAX_ORDER_QUANTITY}-unit order limit`)
+    .optional()
 });
 
 router.patch(
