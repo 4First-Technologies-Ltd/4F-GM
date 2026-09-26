@@ -8,9 +8,8 @@ import { Input } from '@/components/motion/input';
 import { Checkbox } from '@/components/motion/checkbox';
 import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
-import { PlanPicker } from '@/components/vendor/PlanPicker';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
-import { isVendorPlan, PLAN_COOLDOWN_DAYS, type VendorPlan } from '@/lib/plans';
+import { DEFAULT_VENDOR_PLAN, PLATFORM_COMMISSION_PERCENT } from '@/lib/plans';
 import { Eye, EyeOff } from 'lucide-react';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
@@ -33,12 +32,6 @@ function SignUpForm() {
   const [businessAddress, setBusinessAddress] = useState('');
   const [vendorState, setVendorState] = useState('');
   const [vendorCity, setVendorCity] = useState('');
-  // No default: the vendor has to pick the commission rate they sell under.
-  // `?plan=GROWTH` preselects it when they arrived from a specific plan card.
-  const [plan, setPlan] = useState<VendorPlan | null>(() => {
-    const fromUrl = searchParams.get('plan')?.toUpperCase();
-    return isVendorPlan(fromUrl) ? fromUrl : null;
-  });
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,11 +51,6 @@ function SignUpForm() {
       return;
     }
 
-    if (role === 'VENDOR' && !plan) {
-      setError('Choose the partner plan you want to sell on.');
-      return;
-    }
-
     setSubmitting(true);
     try {
       if (role === 'VENDOR') {
@@ -74,7 +62,7 @@ function SignUpForm() {
             state: vendorState,
             city: vendorCity.trim(),
             phone: phone.trim(),
-            plan
+            plan: DEFAULT_VENDOR_PLAN
           })
         );
       }
@@ -233,23 +221,30 @@ function SignUpForm() {
                   classNames={{ root: 'w-full' }}
                 />
 
-                <div>
-                  <span className="mb-1.5 block text-sm font-medium">
-                    Partner plan <span className="text-destructive">*</span>
+                <div className="rounded-xl border border-primary/40 bg-primary/[0.06] p-4">
+                  <span className="block text-sm font-medium text-foreground">
+                    Platform commission
                   </span>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    4FG earns a commission only on orders completed through the
-                    marketplace. You can change plan later, then you&apos;re
-                    held to it for {PLAN_COOLDOWN_DAYS} days.{' '}
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="font-mono text-3xl font-semibold text-primary">
+                      {PLATFORM_COMMISSION_PERCENT}%
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      per completed order
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    There is no fee for being listed — 4FG earns{' '}
+                    {PLATFORM_COMMISSION_PERCENT}% only on orders completed
+                    through the marketplace.{' '}
                     <Link
                       href="/pricing"
                       target="_blank"
                       className="text-primary hover:text-primary/80"
                     >
-                      Compare plans
+                      See what&apos;s included
                     </Link>
                   </p>
-                  <PlanPicker value={plan} onChange={setPlan} disabled={submitting} />
                 </div>
               </>
             )}

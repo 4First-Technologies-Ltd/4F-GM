@@ -44,7 +44,7 @@ export default function PartnerPage() {
       <div className="mt-8 flex flex-wrap gap-4">
         <VendorPathModal />
         <ButtonLink href="/pricing" variant="outline" size="lg">
-          See partner plans
+          See the partner plan
         </ButtonLink>
         <ButtonLink href="/contact" variant="outline" size="lg">
           Talk to us first

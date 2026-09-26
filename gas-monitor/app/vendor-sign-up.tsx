@@ -26,6 +26,13 @@ const C = {
   dim: '#AECAAE',
 };
 
+/**
+ * Platform commission every vendor sells under, disclosed before they submit.
+ * Mirrors `DEFAULT_PLAN` in `gas-monitor-backend/src/lib/plans.ts` — the server
+ * stamps the plan itself, the app only has to show the rate.
+ */
+const PLATFORM_COMMISSION_PERCENT = 7;
+
 type Step = 1 | 2 | 3;
 
 interface SelectedDoc {
@@ -423,6 +430,15 @@ export default function VendorSignUpScreen() {
                 </View>
               )}
 
+              <View style={s.commissionBox}>
+                <Text style={s.commissionLabel}>Platform commission</Text>
+                <Text style={s.commissionRate}>{PLATFORM_COMMISSION_PERCENT}%</Text>
+                <Text style={s.commissionBody}>
+                  There is no fee for being listed. 4FG earns {PLATFORM_COMMISSION_PERCENT}% only on
+                  orders completed through the marketplace.
+                </Text>
+              </View>
+
               {!!apiErr && (
                 <View style={s.apiErrBox}>
                   <Text style={s.apiErrText}>{apiErr}</Text>
@@ -653,6 +669,24 @@ const s = StyleSheet.create({
     gap: 10,
   },
   docName: { flex: 1, color: C.text, fontSize: 13, fontWeight: '500' },
+
+  commissionBox: {
+    backgroundColor: C.accentLight,
+    borderWidth: 1,
+    borderColor: C.accent + '55',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 2,
+  },
+  commissionLabel: { color: C.text, fontSize: 13, fontWeight: '700' },
+  commissionRate: {
+    color: C.accent,
+    fontSize: 26,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  commissionBody: { color: C.muted, fontSize: 12, lineHeight: 17 },
 
   apiErrBox: {
     backgroundColor: '#FFF0F0',

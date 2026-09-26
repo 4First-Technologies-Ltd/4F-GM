@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import { ButtonLink } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
-import { isVendorPlan, PLAN_COOLDOWN_DAYS, PLANS } from '@/lib/plans';
+import { isVendorPlan, PLANS } from '@/lib/plans';
 
 export default function VendorPendingPage() {
   return (
@@ -43,15 +43,16 @@ function VendorPendingContent() {
 
         {plan && (
           <div className="mt-6 rounded-xl border border-border/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Your plan</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Platform commission
+            </p>
             <p className="mt-1 text-sm font-medium">
-              {plan.name} —{' '}
-              <span className="font-mono text-primary">{plan.commissionPercent}%</span> commission
-              per completed order
+              <span className="font-mono text-primary">{plan.commissionPercent}%</span> per
+              completed order
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              You can switch plans from your dashboard. Each change holds for{' '}
-              {PLAN_COOLDOWN_DAYS} days.
+              There is no fee for being listed — 4FG earns only on orders completed through the
+              marketplace.
             </p>
           </div>
         )}

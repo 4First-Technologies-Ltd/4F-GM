@@ -14,7 +14,7 @@ const groups = [
     title: "Vendors",
     links: [
       { href: "/partner", label: "Become a vendor" },
-      { href: "/pricing", label: "Partner plans" },
+      { href: "/pricing", label: "Partner plan" },
       { href: "/sign-in", label: "Vendor sign in" },
     ],
   },

@@ -35,9 +35,20 @@ export const PLANS: Record<VendorPlan, PlanInfo> = {
   },
 };
 
-export const PLAN_ORDER: VendorPlan[] = ["BASIC", "GROWTH", "PRO"];
+/**
+ * The only plan on sale. BASIC and PRO stay in `PLANS` so vendors who signed
+ * up before the catalogue was cut back to one rate still render with a name
+ * and a commission — they are just not offered anywhere in the UI.
+ */
+export const DEFAULT_VENDOR_PLAN: VendorPlan = "GROWTH";
+
+export const PLAN_ORDER: VendorPlan[] = [DEFAULT_VENDOR_PLAN];
 
 export const PLAN_LIST: PlanInfo[] = PLAN_ORDER.map((k) => PLANS[k]);
+
+/** Platform commission every new vendor sells under. */
+export const PLATFORM_COMMISSION_PERCENT =
+  PLANS[DEFAULT_VENDOR_PLAN].commissionPercent;
 
 /** Matches the backend cooldown — shown to vendors before they commit. */
 export const PLAN_COOLDOWN_DAYS = 14;

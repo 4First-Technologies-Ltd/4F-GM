@@ -8,6 +8,7 @@ import { vendorApi, ApiRequestError, type VendorProfile } from '@/lib/api';
 import {
   daysRemaining,
   PLAN_COOLDOWN_DAYS,
+  PLAN_LIST,
   PLANS,
   type VendorPlan,
 } from '@/lib/plans';
@@ -41,6 +42,9 @@ export function PlanSection({
   const current = PLANS[profile.plan];
   const lockedDays = daysRemaining(profile.planLockedUntil);
   const locked = lockedDays > 0;
+  // One plan is on sale. A vendor already on it has nothing to switch to, so
+  // the change flow only shows for someone left on a retired plan.
+  const canSwitch = PLAN_LIST.some((p) => p.key !== profile.plan);
 
   async function handleSwitch() {
     if (!choice) return;
@@ -84,7 +88,7 @@ export function PlanSection({
         )}
       </div>
 
-      {locked && (
+      {locked && canSwitch && (
         <p className="mt-4 flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
           <Lock className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>
@@ -100,7 +104,7 @@ export function PlanSection({
         </p>
       )}
 
-      {!open && !locked && (
+      {!open && !locked && canSwitch && (
         <Button
           type="button"
           variant="outline"

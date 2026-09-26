@@ -16,6 +16,21 @@ export const PLANS: Record<
 };
 
 /**
+ * The only plan currently on sale. `PLANS` still carries BASIC and PRO because
+ * vendors signed up under them before the catalogue was cut back to one rate —
+ * their rows must keep resolving to a name and a commission. New sign-ups and
+ * self-service switches are limited to `OFFERED_PLANS`; admins can still move a
+ * vendor onto any plan from the admin panel.
+ */
+export const DEFAULT_PLAN: VendorPlan = 'GROWTH';
+
+export const OFFERED_PLANS: VendorPlan[] = [DEFAULT_PLAN];
+
+export function isOfferedPlan(plan: VendorPlan): boolean {
+  return OFFERED_PLANS.includes(plan);
+}
+
+/**
  * How long a vendor is held on a plan after switching to it. Changing this
  * only affects locks created from here on: existing `planLockedUntil` values
  * are already stamped on the row.

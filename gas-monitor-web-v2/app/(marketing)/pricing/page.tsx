@@ -19,9 +19,9 @@ import { planRate } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Partner plans",
+  title: "Partner plan",
   description:
-    "Gas business partner plans on the 4FG Digital Gas Platform. You don't pay 4FG for being listed — we earn when you earn through the marketplace.",
+    "The gas business partner plan on the 4FG Digital Gas Platform — one 7% commission per completed order. You don't pay 4FG for being listed — we earn when you earn through the marketplace.",
 };
 
 type Plan = {
@@ -34,87 +34,42 @@ type Plan = {
   featured?: boolean;
 };
 
+/**
+ * One plan, one rate. The feature list is the full marketplace offering —
+ * everything that used to be split across the Basic, Growth and Pro tiers.
+ */
 const plans: Plan[] = [
   {
-    name: "Basic Plan",
-    rate: planRate("BASIC"),
+    name: "Partner Plan",
+    rate: planRate("GROWTH"),
     tagline:
-      "Built for businesses that want to get online and become discoverable.",
+      "Everything your gas business needs to get online, reach more customers and grow its sales.",
     features: [
       "Business profile on the 4FG marketplace",
       "Business name, location, contact details and operating information",
       "Display available gas products and services",
       "Customers can discover your business through the platform",
-      "Receive customer refill/order requests",
-      "Basic order notifications",
-      "Access to the 4FG customer network",
-      "Basic sales/order history",
-      "Standard customer support",
-    ],
-    bestFor:
-      "Small and growing gas retailers, distributors and gas businesses looking to establish a digital presence.",
-  },
-  {
-    name: "Growth Plan",
-    rate: planRate("GROWTH"),
-    tagline:
-      "Built for businesses ready to reach more customers and grow their sales.",
-    inherits: "Everything in the 5% plan, plus:",
-    features: [
-      "Higher marketplace visibility",
       "Priority placement in relevant customer searches",
-      "Enhanced business profile",
       "Product and service catalogue",
       "Receive and manage customer orders through the platform",
+      "Order notifications",
       "Sales and order analytics",
       "Customer demand insights",
-      "Performance tracking",
+      "Business performance dashboard and reports",
       "Refill/order management tools",
       "Promotional opportunities on the 4FG platform",
       "Access to participating logistics providers",
-      "Priority customer support",
-      "Business performance reports",
-    ],
-    bestFor:
-      "Gas stations, retailers, distributors and growing gas businesses looking to increase customer reach and sales.",
-    featured: true,
-  },
-  {
-    name: "Pro / Premium Plan",
-    rate: planRate("PRO"),
-    tagline:
-      "Built for established gas businesses looking for maximum visibility, data and growth.",
-    inherits: "Everything in the 7% plan, plus:",
-    features: [
-      "Maximum marketplace visibility",
-      "Featured business placement",
-      "Priority positioning for relevant customer searches",
-      "Advanced business profile and branding",
-      "Advanced sales and order analytics",
-      "Customer demand and purchasing insights",
-      "Business performance dashboard",
-      "Advanced reporting",
-      "Promotional and campaign opportunities",
-      "Featured product/service listings",
-      "Priority access to new platform features",
-      "Dedicated business support",
-      "Priority onboarding for additional locations",
       "Multi-location and multi-branch management",
-      "Early access to selected 4FG business tools and features",
-      "API integration",
-      "Advanced demand forecasting",
-      "Automated inventory alerts",
+      "Access to the 4FG customer network",
+      "Priority customer support",
     ],
     bestFor:
-      "Established gas stations, gas plants, distributors, major retailers and businesses operating across multiple locations.",
+      "Gas stations, gas plants, retailers and distributors of every size — from a first digital storefront to businesses operating across multiple locations.",
+    featured: true,
   },
 ];
 
-const commissionExample = [
-  { plan: "5% Plan", commission: "₦5,000" },
-  { plan: "7% Plan", commission: "₦7,000" },
-  { plan: "10% Plan", commission: "₦10,000" },
-];
+const commissionExample = [{ plan: "7% Plan", commission: "₦7,000" }];
 
 const reasons = [
   {
@@ -154,7 +109,7 @@ const steps = [
     k: "01",
     icon: Store,
     title: "Register",
-    body: "Create your business profile and select your preferred partner plan.",
+    body: "Create your business profile and submit it for review.",
   },
   {
     k: "02",
@@ -206,7 +161,7 @@ export default function PricingPage() {
           </AnimatedBadge>
 
           <h1 className="mt-6 text-balance text-4xl font-semibold leading-[1.06] sm:text-6xl">
-            Gas business partner plans.
+            Gas business partner plan.
           </h1>
 
           <p className="mt-6 text-balance text-lg text-muted-foreground sm:text-xl">
@@ -234,29 +189,23 @@ export default function PricingPage() {
       <BeatSection beat={1} level={0.6} className="px-6 py-12">
         <div className="mx-auto w-full max-w-7xl">
           <p className="text-center font-mono text-xs uppercase tracking-[0.28em] text-primary">
-            Marketplace / partner plans
+            Marketplace / partner plan
           </p>
           <h2 className="mt-4 text-center text-3xl font-semibold sm:text-4xl">
-            Choose the plan that best fits your business.
+            One plan. One rate. Everything included.
           </h2>
 
-          <div className="mt-14 grid items-start gap-6 lg:grid-cols-3">
+          <div className="mx-auto mt-14 grid max-w-2xl items-start gap-6">
             {plans.map((plan) => (
               <div
                 key={plan.name}
                 className={cn(
                   "relative flex h-full flex-col rounded-2xl border bg-card/70 p-8 backdrop-blur-md",
                   plan.featured
-                    ? "border-primary/60 shadow-xl lg:-mt-6"
+                    ? "border-primary/60 shadow-xl"
                     : "border-border/70",
                 )}
               >
-                {plan.featured ? (
-                  <span className="absolute -top-3 left-8 rounded-full bg-primary px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground">
-                    Most popular
-                  </span>
-                ) : null}
-
                 <h3 className="text-lg font-semibold">{plan.name}</h3>
 
                 <div className="mt-4 flex items-baseline gap-2">
@@ -276,7 +225,7 @@ export default function PricingPage() {
                   <p className="font-mono text-xs uppercase tracking-[0.24em] text-primary">
                     {plan.inherits ?? "Platform benefits"}
                   </p>
-                  <ul className="mt-4 space-y-2.5">
+                  <ul className="mt-4 grid gap-2.5 sm:grid-cols-2">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-2.5">
                         <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />

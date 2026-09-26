@@ -24,7 +24,10 @@ export function PlanPicker({
     <div
       role="radiogroup"
       aria-label="Partner plan"
-      className="grid gap-3 sm:grid-cols-3"
+      className={cn(
+        'grid gap-3',
+        PLAN_LIST.length > 1 && 'sm:grid-cols-3',
+      )}
     >
       {PLAN_LIST.map((plan) => {
         const selected = value === plan.key;

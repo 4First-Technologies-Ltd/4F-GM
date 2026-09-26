@@ -154,11 +154,11 @@ function VerifyEmailContent() {
 
         {role === 'VENDOR' && pendingPlan && (
           <p className="mb-6 rounded-xl bg-primary/[0.06] px-4 py-3 text-sm text-muted-foreground">
-            Your application will be submitted on the{' '}
+            Your application will be submitted with a{' '}
             <span className="font-medium text-foreground">
-              {PLANS[pendingPlan].name} plan ({PLANS[pendingPlan].commissionPercent}%)
-            </span>
-            .
+              {PLANS[pendingPlan].commissionPercent}% platform commission
+            </span>{' '}
+            per completed order.
           </p>
         )}
 

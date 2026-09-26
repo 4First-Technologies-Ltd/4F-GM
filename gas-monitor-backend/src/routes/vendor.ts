@@ -5,7 +5,14 @@ import { requireAuth } from '../middleware/requireAuth';
 import { VendorPlan } from '@prisma/client';
 import { listingSchema } from '../lib/vendorSchemas';
 import { asyncHandler } from '../lib/asyncHandler';
-import { cooldownExpiry, daysRemaining, isLocked, PLANS } from '../lib/plans';
+import {
+  cooldownExpiry,
+  daysRemaining,
+  DEFAULT_PLAN,
+  isLocked,
+  isOfferedPlan,
+  PLANS
+} from '../lib/plans';
 
 const router = Router();
 
@@ -37,11 +44,13 @@ const profileSchema = z.object({
   state: z.string().trim().min(2).max(80).optional(),
   city: z.string().trim().min(2).max(80).optional(),
   phone: z.string().min(1, 'Phone number is required'),
-  // Vendors choose their partner plan at sign-up — there is no default here on
-  // purpose, the commission rate is a commitment they have to make explicitly.
-  plan: z.nativeEnum(VendorPlan, {
-    errorMap: () => ({ message: 'Choose a partner plan' })
-  }),
+  // One plan is on sale, so sign-up no longer asks: the rate is disclosed in
+  // the form and the server stamps it. Still accepted from clients that send
+  // it, as long as it is a plan currently offered.
+  plan: z
+    .nativeEnum(VendorPlan)
+    .refine(isOfferedPlan, { message: 'That partner plan is not available' })
+    .optional(),
   lat: z.number().optional(),
   lng: z.number().optional()
 });
@@ -59,7 +68,7 @@ router.post(
 
     const profile = await prisma.vendorProfile.upsert({
       where: { userId: req.user!.sub },
-      create: { userId: req.user!.sub, plan, ...details },
+      create: { userId: req.user!.sub, plan: plan ?? DEFAULT_PLAN, ...details },
       // Re-posting the profile must not become a back door around the plan
       // cooldown — switching plans goes through PATCH /plan only.
       update: details
@@ -107,14 +116,18 @@ router.patch(
 );
 
 const planSchema = z.object({
-  plan: z.nativeEnum(VendorPlan, {
-    errorMap: () => ({ message: 'Choose a partner plan' })
-  })
+  plan: z
+    .nativeEnum(VendorPlan, {
+      errorMap: () => ({ message: 'Choose a partner plan' })
+    })
+    .refine(isOfferedPlan, { message: 'That partner plan is not available' })
 });
 
 /**
  * Switch partner plan. The new plan applies immediately and locks the vendor
- * out of switching again for the cooldown window — see `lib/plans.ts`.
+ * out of switching again for the cooldown window — see `lib/plans.ts`. Only
+ * plans still on sale can be chosen here: a vendor left on a retired plan can
+ * move off it, but not back onto one.
  */
 router.patch(
   '/plan',
