@@ -27,7 +27,7 @@ export function AdminSidebar({
   pathname: string;
   open: boolean;
   onClose: () => void;
-  badges: Partial<Record<'pendingVendors' | 'pendingOrders', number>>;
+  badges: Partial<Record<'pendingVendors' | 'pendingOrders' | 'pendingRiders', number>>;
 }) {
   const isMobile = useIsMobile();
   const asideRef = useRef<HTMLElement>(null);

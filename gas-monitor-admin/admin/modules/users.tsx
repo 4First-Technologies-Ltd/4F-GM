@@ -62,6 +62,14 @@ export const usersModule: ResourceConfig<UserRow> = {
           <span className="adm-muted">—</span>
         )
     },
+    {
+      key: 'riderStatus',
+      header: 'Rider',
+      accessor: (u) => u.riderProfile?.status ?? null,
+      priority: 3,
+      render: (u) =>
+        u.riderProfile ? <StatusBadge value={u.riderProfile.status} /> : <span className="adm-muted">—</span>
+    },
     { key: 'phone', header: 'Phone', accessor: (u) => u.phone, priority: 3 },
     { key: 'orders', header: 'Orders', accessor: (u) => u._count.orders, type: 'number', priority: 2 },
     {
@@ -82,7 +90,8 @@ export const usersModule: ResourceConfig<UserRow> = {
       type: 'segmented',
       options: [
         { value: 'CONSUMER', label: 'Consumers' },
-        { value: 'VENDOR', label: 'Vendors' }
+        { value: 'VENDOR', label: 'Vendors' },
+        { value: 'RIDER', label: 'Riders' }
       ]
     },
     {

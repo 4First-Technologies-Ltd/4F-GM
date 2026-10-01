@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 
 import authRoutes from './routes/auth';
 import vendorRoutes from './routes/vendor';
+import riderRoutes from './routes/rider';
 import ordersRoutes from './routes/orders';
 import cylindersRoutes from './routes/cylinders';
 import addressesRoutes from './routes/addresses';
@@ -22,6 +23,7 @@ import adminAuditRoutes from './routes/admin/audit';
 import adminCustomersRoutes from './routes/admin/customers';
 import adminListingsRoutes from './routes/admin/listings';
 import adminOrdersRoutes from './routes/admin/orders';
+import adminRidersRoutes from './routes/admin/riders';
 import adminSettingsRoutes from './routes/admin/settings';
 import adminStatsRoutes from './routes/admin/stats';
 import adminUsersRoutes from './routes/admin/users';
@@ -58,6 +60,7 @@ export function createApp() {
   // mobile app only needs to repoint API_BASE_URL.
   app.use('/api/auth', authRoutes);
   app.use('/api/vendor', vendorRoutes);
+  app.use('/api/rider', riderRoutes);
   app.use('/api/orders', ordersRoutes);
   app.use('/api/cylinders', cylindersRoutes);
   app.use('/api/addresses', addressesRoutes);
@@ -75,6 +78,7 @@ export function createApp() {
   app.use('/api/admin/customers', adminCustomersRoutes);
   app.use('/api/admin/listings', adminListingsRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);
+  app.use('/api/admin/riders', adminRidersRoutes);
   app.use('/api/admin/settings', adminSettingsRoutes);
   app.use('/api/admin/stats', adminStatsRoutes);
   app.use('/api/admin/users', adminUsersRoutes);

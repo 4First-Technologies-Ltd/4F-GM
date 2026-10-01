@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { homeRouteFor } from '@/lib/home-route';
 import Sidebar from '@/components/dashboard/Sidebar';
 import Topbar from '@/components/dashboard/Topbar';
 
@@ -16,12 +17,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace('/sign-in');
       return;
     }
-    if (user?.role === 'VENDOR' && user.vendorStatus !== 'APPROVED') {
-      router.replace('/vendor-pending');
+    if (user && homeRouteFor(user) !== '/dashboard') {
+      router.replace(homeRouteFor(user));
     }
   }, [loading, user, router]);
 
-  if (loading || !user || (user.role === 'VENDOR' && user.vendorStatus !== 'APPROVED')) {
+  if (loading || !user || homeRouteFor(user) !== '/dashboard') {
     return (
       <main className="flex items-center justify-center min-h-dvh bg-background">
         <div className="text-center">

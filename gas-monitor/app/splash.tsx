@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { getAccessToken, getSavedUser } from '@/lib/storage';
 import type { ApiUser } from '@/lib/api';
+import { homeRouteFor } from '@/lib/homeRoute';
 
 const C = {
   bg: '#EDF7ED',
@@ -48,11 +49,7 @@ export default function SplashScreen() {
         return;
       }
       const user = await getSavedUser<ApiUser>();
-      if (user?.role === 'VENDOR') {
-        router.replace(user.vendorStatus === 'APPROVED' ? '/(vendor)' : '/vendor-pending');
-      } else {
-        router.replace('/(tabs)');
-      }
+      router.replace(homeRouteFor(user));
     }, 2200);
 
     return () => clearTimeout(timer);

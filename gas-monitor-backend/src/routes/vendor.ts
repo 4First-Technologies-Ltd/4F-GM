@@ -323,7 +323,8 @@ router.get(
       where: { vendorId: profile.id },
       include: {
         consumer: { select: { id: true, name: true, email: true } },
-        listing: true
+        listing: true,
+        rider: { select: { id: true, phone: true, user: { select: { name: true } } } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -333,7 +334,7 @@ router.get(
 );
 
 const orderStatusSchema = z.object({
-  status: z.enum(['CONFIRMED', 'DELIVERED', 'CANCELLED'])
+  status: z.enum(['CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'])
 });
 
 router.patch(
@@ -359,6 +360,70 @@ router.patch(
 
     const order = await prisma.order.update({ where: { id }, data: { status: result.data.status } });
     return res.json({ order });
+  })
+);
+
+const assignRiderSchema = z.object({
+  // null unassigns — a vendor pulling a rider off an order without picking a
+  // replacement yet.
+  riderId: z.string().min(1).nullable()
+});
+
+router.patch(
+  '/orders/:id/rider',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const result = assignRiderSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.errors[0].message });
+    }
+
+    const { id } = req.params;
+    const { riderId } = result.data;
+
+    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
+    if (!profile) {
+      return res.status(404).json({ error: 'Vendor profile not found' });
+    }
+
+    const order = await prisma.order.findFirst({ where: { id, vendorId: profile.id } });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (riderId) {
+      const rider = await prisma.riderProfile.findUnique({ where: { id: riderId } });
+      if (!rider || rider.status !== 'APPROVED') {
+        return res.status(400).json({ error: 'Rider not found or not approved' });
+      }
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: { riderId, assignedAt: riderId ? new Date() : null }
+    });
+
+    return res.json({ order: updated });
+  })
+);
+
+/** Approved riders available to assign — every vendor draws from the same pool. */
+router.get(
+  '/riders',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
+    if (!profile) {
+      return res.status(404).json({ error: 'Vendor profile not found' });
+    }
+
+    const riders = await prisma.riderProfile.findMany({
+      where: { status: 'APPROVED' },
+      select: { id: true, phone: true, vehicleType: true, user: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.json({ riders });
   })
 );
 

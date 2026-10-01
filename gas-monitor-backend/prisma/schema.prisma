@@ -11,9 +11,18 @@ datasource db {
 enum Role {
   CONSUMER
   VENDOR
+  RIDER
 }
 
 enum VendorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Riders are approved independently of vendors — a rider isn't owned by any
+/// one vendor, so this can't just reuse VendorStatus.
+enum RiderStatus {
   PENDING
   APPROVED
   REJECTED
@@ -38,6 +47,7 @@ enum GasType {
 enum OrderStatus {
   PENDING
   CONFIRMED
+  OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED
 }
@@ -81,6 +91,7 @@ model User {
   updatedAt         DateTime          @updatedAt
   refreshTokens     RefreshToken[]
   vendorProfile     VendorProfile?
+  riderProfile      RiderProfile?
   orders            Order[]           @relation("ConsumerOrders")
   cylinderProfiles  CylinderProfile[]
   addresses         Address[]
@@ -186,6 +197,26 @@ model VendorDocument {
   @@map("vendor_documents")
 }
 
+/// Delivery agents for marketplace orders. Not owned by a vendor — a rider
+/// can be assigned to any vendor's order, so this sits alongside
+/// VendorProfile rather than under it.
+model RiderProfile {
+  id          String      @id @default(uuid())
+  userId      String      @unique
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone       String
+  vehicleType String?
+  plateNumber String?
+  lat         Float?
+  lng         Float?
+  status      RiderStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orders      Order[]     @relation("RiderOrders")
+
+  @@map("rider_profiles")
+}
+
 model GasListing {
   id            String        @id @default(uuid())
   vendorId      String
@@ -226,6 +257,11 @@ model Order {
   vendor          VendorProfile? @relation("VendorOrders", fields: [vendorId], references: [id])
   listingId       String?
   listing         GasListing?    @relation(fields: [listingId], references: [id])
+  riderId         String?
+  rider           RiderProfile?  @relation("RiderOrders", fields: [riderId], references: [id])
+  /// Set when a rider is assigned, cleared if unassigned. Distinct from
+  /// createdAt/updatedAt so "how long has this sat unassigned" is answerable.
+  assignedAt      DateTime?
   supplierName    String?
   cylinderSize    String
   quantity        Int
@@ -273,6 +309,11 @@ enum AuditAction {
   VENDOR_APPROVED
   VENDOR_REJECTED
   VENDOR_STATUS_RESET
+  RIDER_APPROVED
+  RIDER_REJECTED
+  RIDER_STATUS_RESET
+  ORDER_RIDER_ASSIGNED
+  ORDER_RIDER_UNASSIGNED
   LISTING_STOCK_UPDATED
   USER_CREATED
   USER_UPDATED

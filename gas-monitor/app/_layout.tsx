@@ -37,9 +37,13 @@ function RootLayout() {
         <Stack.Screen name="vendor-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="verify-email" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="rider-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="vendor-pending" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="rider-pending" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(vendor)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="(rider)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="rider-order/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="order" options={{ headerShown: false, animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>

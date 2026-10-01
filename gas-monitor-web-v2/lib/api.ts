@@ -14,9 +14,10 @@ export function apiUrl(path: string): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'CONSUMER' | 'VENDOR';
+export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
+export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 
 export type UnitPreference = 'KG' | 'LBS';
@@ -29,6 +30,7 @@ export interface ApiUser {
   avatarUrl?: string | null;
   role: UserRole;
   vendorStatus?: VendorStatus;
+  riderStatus?: RiderStatus;
   pushEnabled: boolean;
   emailNotifEnabled: boolean;
   smsAlertsEnabled: boolean;
@@ -352,9 +354,19 @@ export interface UpdateVendorProfilePayload {
   lng?: number;
 }
 
+/** An approved rider a vendor can assign. The pool is platform-wide, not vendor-owned. */
+export interface AssignableRider {
+  id: string;
+  phone: string;
+  vehicleType?: string | null;
+  user: { name: string };
+}
+
 export interface VendorOrder extends Order {
   consumer: { id: string; name: string; email: string };
   listing?: GasListing;
+  assignedAt?: string | null;
+  rider?: { id: string; phone: string; user: { name: string } } | null;
 }
 
 export interface CreateVendorProfilePayload {
@@ -454,6 +466,20 @@ export const vendorApi = {
     return data.orders;
   },
 
+  async getRiders(): Promise<AssignableRider[]> {
+    const data = await request<{ riders: AssignableRider[] }>('/api/vendor/riders', { auth: true });
+    return data.riders;
+  },
+
+  /** Assign a rider to one of this vendor's orders; `null` unassigns. Never touches status. */
+  async assignRider(orderId: string, riderId: string | null): Promise<void> {
+    await request(`/api/vendor/orders/${orderId}/rider`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ riderId })
+    });
+  },
+
   async updateOrderStatus(id: string, status: 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'): Promise<VendorOrder> {
     const data = await request<{ order: VendorOrder }>(`/api/vendor/orders/${id}`, {
       method: 'PATCH',
@@ -461,6 +487,68 @@ export const vendorApi = {
       body: JSON.stringify({ status })
     });
     return data.order;
+  }
+};
+
+// ── Rider API ─────────────────────────────────────────────────────────────────
+
+export interface RiderProfile {
+  id: string;
+  phone: string;
+  vehicleType?: string | null;
+  plateNumber?: string | null;
+  status: RiderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRiderProfilePayload {
+  phone: string;
+  vehicleType?: string;
+  plateNumber?: string;
+}
+
+export interface RiderOrder extends Order {
+  assignedAt?: string | null;
+  consumer: { id: string; name: string; email: string; phone?: string | null };
+  vendor?: { id: string; businessName: string; businessAddress?: string | null; phone: string } | null;
+}
+
+export const riderApi = {
+  async createProfile(payload: CreateRiderProfilePayload): Promise<RiderProfile> {
+    const data = await request<{ profile: RiderProfile }>('/api/rider/profile', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.profile;
+  },
+
+  async getProfile(): Promise<RiderProfile> {
+    const data = await request<{ profile: RiderProfile }>('/api/rider/me', { auth: true });
+    return data.profile;
+  },
+
+  async updateProfile(payload: Partial<CreateRiderProfilePayload>): Promise<RiderProfile> {
+    const data = await request<{ profile: RiderProfile }>('/api/rider/profile', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.profile;
+  },
+
+  async getOrders(): Promise<RiderOrder[]> {
+    const data = await request<{ orders: RiderOrder[] }>('/api/rider/orders', { auth: true });
+    return data.orders;
+  },
+
+  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED'): Promise<void> {
+    await request(`/api/rider/orders/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ status })
+    });
   }
 };
 

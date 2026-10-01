@@ -6,6 +6,7 @@ import { vendorApi, VendorProfile, ApiRequestError } from '@/lib/api';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
 import { PlanSection } from '@/components/vendor/PlanSection';
+import { RiderDetailsSection } from '@/components/rider/RiderDetailsSection';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
 import { AlertCircle, Check } from 'lucide-react';
 
@@ -202,7 +203,7 @@ export default function ProfilePage() {
             <div className="flex justify-between items-start">
               <dt className="text-sm font-medium text-muted-foreground">Account type</dt>
               <dd className="text-sm font-medium text-foreground">
-                {user.role === 'VENDOR' ? 'Vendor' : 'Consumer'}
+                {user.role === 'VENDOR' ? 'Vendor' : user.role === 'RIDER' ? 'Rider' : 'Consumer'}
               </dd>
             </div>
             <div className="flex justify-between items-start">
@@ -356,6 +357,9 @@ export default function ProfilePage() {
           </form>
         </div>
       )}
+
+      {/* Rider details (Riders only) */}
+      {user.role === 'RIDER' && <RiderDetailsSection />}
 
       {/* Partner plan (Vendors only, once the profile exists) */}
       {user.role === 'VENDOR' && vendorProfile && (

@@ -1,4 +1,5 @@
 import {
+  IconBike,
   IconBug,
   IconChartBar,
   IconGrid,
@@ -31,7 +32,7 @@ export interface NavItem {
   /** Match the route exactly rather than by prefix (needed for the index route). */
   exact?: boolean;
   /** Key into the counts resolved once by the shell. */
-  badge?: { key: 'pendingVendors' | 'pendingOrders'; tone?: 'warning' | 'error' };
+  badge?: { key: 'pendingVendors' | 'pendingOrders' | 'pendingRiders'; tone?: 'warning' | 'error' };
 }
 
 export interface NavSection {
@@ -52,6 +53,13 @@ export const NAVIGATION: NavSection[] = [
         icon: IconStore,
         permission: 'vendors.read',
         badge: { key: 'pendingVendors', tone: 'warning' }
+      },
+      {
+        label: 'Riders',
+        route: '/dashboard/riders',
+        icon: IconBike,
+        permission: 'riders.read',
+        badge: { key: 'pendingRiders', tone: 'warning' }
       },
       { label: 'Customers', route: '/dashboard/customers', icon: IconUserCircle, permission: 'customers.read' },
       { label: 'All users', route: '/dashboard/users', icon: IconUsers, permission: 'users.read' }

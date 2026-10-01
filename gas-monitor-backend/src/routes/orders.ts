@@ -27,7 +27,8 @@ router.get(
       where: { consumerId: req.user!.sub },
       orderBy: { createdAt: 'desc' },
       include: {
-        vendor: { select: { businessName: true, businessAddress: true } }
+        vendor: { select: { businessName: true, businessAddress: true } },
+        rider: { select: { phone: true, user: { select: { name: true } } } }
       }
     });
     return res.json({ orders });
@@ -43,7 +44,8 @@ router.get(
     const order = await prisma.order.findFirst({
       where: { id, consumerId: req.user!.sub },
       include: {
-        vendor: { select: { businessName: true, businessAddress: true } }
+        vendor: { select: { businessName: true, businessAddress: true } },
+        rider: { select: { phone: true, user: { select: { name: true } } } }
       }
     });
     if (!order) {

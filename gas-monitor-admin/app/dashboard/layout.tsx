@@ -21,6 +21,7 @@ import { getJson } from '@/admin/data/source';
 interface Counts {
   pendingVendors: number;
   pendingOrders: number;
+  pendingRiders: number;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -58,11 +59,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // `limit=1` keeps this cheap: only pagination.total is used.
     Promise.allSettled([
       getJson<{ pagination: { total: number } }>('/vendors?status=PENDING&limit=1'),
-      getJson<{ pagination: { total: number } }>('/orders?status=PENDING&limit=1')
-    ]).then(([v, o]) => {
+      getJson<{ pagination: { total: number } }>('/orders?status=PENDING&limit=1'),
+      getJson<{ pagination: { total: number } }>('/riders?status=PENDING&limit=1')
+    ]).then(([v, o, r]) => {
       setBadges({
         pendingVendors: v.status === 'fulfilled' ? v.value.pagination.total : 0,
-        pendingOrders: o.status === 'fulfilled' ? o.value.pagination.total : 0
+        pendingOrders: o.status === 'fulfilled' ? o.value.pagination.total : 0,
+        pendingRiders: r.status === 'fulfilled' ? r.value.pagination.total : 0
       });
     });
     // A failed badge count must never break the shell — hence allSettled and

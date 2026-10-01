@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi, ApiUser, ApiRequestError } from '@/lib/api';
+import { authApi, ApiUser, ApiRequestError, UserRole } from '@/lib/api';
 import { getSavedUser, clearSession } from '@/lib/storage';
+import { homeRouteFor } from '@/lib/homeRoute';
 import { NetworkStatusDot } from '@/components/network-status-dot';
 
 const C = {
@@ -94,8 +95,8 @@ function RoleTabs({
   role,
   onChange,
 }: {
-  role: 'CONSUMER' | 'VENDOR';
-  onChange: (r: 'CONSUMER' | 'VENDOR') => void;
+  role: UserRole;
+  onChange: (r: UserRole) => void;
 }) {
   return (
     <View style={rt.wrap}>
@@ -113,12 +114,19 @@ function RoleTabs({
       >
         <Text style={[rt.tabText, role === 'VENDOR' && rt.tabTextActive]}>Vendor</Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        style={[rt.tab, role === 'RIDER' && rt.tabActive]}
+        onPress={() => onChange('RIDER')}
+        activeOpacity={0.8}
+      >
+        <Text style={[rt.tabText, role === 'RIDER' && rt.tabTextActive]}>Rider</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 export default function SignInScreen() {
-  const [role, setRole] = useState<'CONSUMER' | 'VENDOR'>('CONSUMER');
+  const [role, setRole] = useState<UserRole>('CONSUMER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -147,18 +155,11 @@ export default function SignInScreen() {
       const user = await getSavedUser<ApiUser>();
       if (user?.role !== role) {
         await clearSession();
-        setApiErr(
-          user?.role === 'VENDOR'
-            ? 'This account is registered as a Vendor. Switch to the Vendor tab to sign in.'
-            : 'This account is registered as a Consumer. Switch to the Consumer tab to sign in.'
-        );
+        const actual = user?.role === 'VENDOR' ? 'Vendor' : user?.role === 'RIDER' ? 'Rider' : 'Consumer';
+        setApiErr(`This account is registered as a ${actual}. Switch to the ${actual} tab to sign in.`);
         return;
       }
-      if (user.role === 'VENDOR') {
-        router.replace(user.vendorStatus === 'APPROVED' ? '/(vendor)' : '/vendor-pending');
-      } else {
-        router.replace('/(tabs)');
-      }
+      router.replace(homeRouteFor(user));
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === 'EMAIL_NOT_VERIFIED') {
         router.replace({ pathname: '/verify-email', params: { email: email.trim() } });

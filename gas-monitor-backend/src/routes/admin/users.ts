@@ -22,6 +22,7 @@ const LIST_SELECT = {
   isSuspended: true,
   createdAt: true,
   vendorProfile: { select: { id: true, status: true, businessName: true } },
+  riderProfile: { select: { id: true, status: true } },
   _count: { select: { orders: true } }
 } as const;
 
@@ -71,7 +72,7 @@ const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['CONSUMER', 'VENDOR']),
+  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER']),
   phone: z.string().min(1).nullable().optional()
 });
 
@@ -146,6 +147,16 @@ router.get(
             status: true,
             bio: true,
             _count: { select: { listings: true, orders: true, documents: true } }
+          }
+        },
+        riderProfile: {
+          select: {
+            id: true,
+            phone: true,
+            vehicleType: true,
+            plateNumber: true,
+            status: true,
+            _count: { select: { orders: true } }
           }
         },
         addresses: { select: { id: true, label: true, fullAddress: true, isDefault: true } },

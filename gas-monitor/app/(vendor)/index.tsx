@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  RefreshControl, Platform,
+  RefreshControl, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { vendorApi, VendorOrder, OrderStatus } from '@/lib/api';
+import { AssignRiderSheet } from '@/components/assign-rider-sheet';
 import { useDrawer } from './_layout';
 
 const C = {
@@ -32,6 +33,7 @@ const FILTERS: { id: OrderStatus | 'ALL'; label: string }[] = [
   { id: 'ALL', label: 'All' },
   { id: 'PENDING', label: 'Pending' },
   { id: 'CONFIRMED', label: 'Confirmed' },
+  { id: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
   { id: 'DELIVERED', label: 'Delivered' },
   { id: 'CANCELLED', label: 'Cancelled' },
 ];
@@ -39,6 +41,7 @@ const FILTERS: { id: OrderStatus | 'ALL'; label: string }[] = [
 const STATUS_META: Record<OrderStatus, { color: string; bg: string; label: string }> = {
   PENDING:   { color: '#B45309', bg: '#FFFBEB', label: 'Pending'   },
   CONFIRMED: { color: '#2D7450', bg: '#EDF7ED', label: 'Confirmed' },
+  OUT_FOR_DELIVERY: { color: '#E65100', bg: '#FFF3E0', label: 'Out for delivery' },
   DELIVERED: { color: '#1565C0', bg: '#E3F2FD', label: 'Delivered' },
   CANCELLED: { color: '#D32F2F', bg: '#FFF5F5', label: 'Cancelled' },
 };
@@ -55,6 +58,11 @@ function fmtPrice(n: number) {
   return '₦' + n.toLocaleString();
 }
 
+/** A rider only makes sense while the order is paid and not yet finished. */
+function canAssignRider(order: VendorOrder) {
+  return order.status === 'CONFIRMED' || order.status === 'OUT_FOR_DELIVERY';
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -66,11 +74,13 @@ function OrderCard({
   onConfirm,
   onDeliver,
   onCancel,
+  onAssignRider,
 }: {
   order: VendorOrder;
   onConfirm: () => void;
   onDeliver: () => void;
   onCancel: () => void;
+  onAssignRider: () => void;
 }) {
   const meta = STATUS_META[order.status];
   const gasLabel = order.listing.customName ?? GAS_LABELS[order.listing.gasType] ?? order.listing.gasType;
@@ -108,6 +118,39 @@ function OrderCard({
         <Text style={oc.rowText} numberOfLines={1}>{order.deliveryAddress}</Text>
       </View>
 
+      {/* Rider */}
+      {order.rider ? (
+        <View style={oc.riderBox}>
+          <View style={oc.riderIcon}>
+            <IconSymbol name="bicycle" size={16} color={C.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={oc.riderName}>{order.rider.user.name}</Text>
+            <Text style={oc.riderPhone}>{order.rider.phone}</Text>
+          </View>
+          <TouchableOpacity
+            style={oc.riderIconBtn}
+            onPress={() => Linking.openURL(`tel:${order.rider!.phone}`).catch(() => {})}
+            activeOpacity={0.8}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <IconSymbol name="phone.fill" size={16} color={C.accent} />
+          </TouchableOpacity>
+          {canAssignRider(order) && (
+            <TouchableOpacity onPress={onAssignRider} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={oc.riderChange}>Change</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        canAssignRider(order) && (
+          <TouchableOpacity style={oc.assignBtn} onPress={onAssignRider} activeOpacity={0.8}>
+            <IconSymbol name="bicycle" size={16} color={C.accent} />
+            <Text style={oc.assignBtnText}>Assign rider</Text>
+          </TouchableOpacity>
+        )
+      )}
+
       {/* Total */}
       <View style={[oc.row, oc.totalRow]}>
         <Text style={oc.totalLabel}>Total</Text>
@@ -143,6 +186,7 @@ export default function VendorOrdersScreen() {
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
+  const [assigning, setAssigning] = useState<VendorOrder | null>(null);
 
   async function loadOrders() {
     try {
@@ -164,7 +208,7 @@ export default function VendorOrdersScreen() {
   async function updateStatus(id: string, status: 'CONFIRMED' | 'DELIVERED' | 'CANCELLED') {
     try {
       const updated = await vendorApi.updateOrderStatus(id, status);
-      setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updated } : o)));
     } catch {
       // no-op
     }
@@ -172,6 +216,7 @@ export default function VendorOrdersScreen() {
 
   const filtered = filter === 'ALL' ? orders : orders.filter((o) => o.status === filter);
   const pendingCount = orders.filter((o) => o.status === 'PENDING').length;
+  const needsRiderCount = orders.filter((o) => canAssignRider(o) && !o.rider).length;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
@@ -185,7 +230,11 @@ export default function VendorOrdersScreen() {
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Incoming Orders</Text>
           <Text style={s.headerSub}>
-            {pendingCount > 0 ? `${pendingCount} awaiting action` : 'All caught up'}
+            {pendingCount > 0
+              ? `${pendingCount} awaiting action`
+              : needsRiderCount > 0
+                ? `${needsRiderCount} need${needsRiderCount === 1 ? 's' : ''} a rider`
+                : 'All caught up'}
           </Text>
         </View>
         {pendingCount > 0 && (
@@ -242,11 +291,18 @@ export default function VendorOrdersScreen() {
               onConfirm={() => updateStatus(order.id, 'CONFIRMED')}
               onDeliver={() => updateStatus(order.id, 'DELIVERED')}
               onCancel={() => updateStatus(order.id, 'CANCELLED')}
+              onAssignRider={() => setAssigning(order)}
             />
           ))
         )}
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <AssignRiderSheet
+        order={assigning}
+        onClose={() => setAssigning(null)}
+        onAssigned={loadOrders}
+      />
     </SafeAreaView>
   );
 }
@@ -273,6 +329,44 @@ const oc = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowText: { color: C.muted, fontSize: 13, flex: 1 },
+
+  riderBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: C.accentLight,
+  },
+  riderIcon: {
+    width: 32, height: 32,
+    borderRadius: 10,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderName: { color: C.text, fontSize: 13.5, fontWeight: '700' },
+  riderPhone: { color: C.muted, fontSize: 12, marginTop: 1 },
+  riderIconBtn: {
+    width: 32, height: 32,
+    borderRadius: 16,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderChange: { color: C.accent, fontSize: 13, fontWeight: '700' },
+  assignBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: C.accent,
+    backgroundColor: C.accentLight,
+  },
+  assignBtnText: { color: C.accent, fontSize: 13, fontWeight: '700' },
 
   totalRow: {
     borderTopWidth: 1,

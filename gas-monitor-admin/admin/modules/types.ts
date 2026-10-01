@@ -7,9 +7,10 @@
 
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type VendorPlan = 'BASIC' | 'GROWTH' | 'PRO';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
+export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
-export type UserRole = 'CONSUMER' | 'VENDOR';
+export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER';
 export type AdminRoleValue = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
 
 export interface VendorRow {
@@ -56,6 +57,28 @@ export interface OrderRow {
   createdAt: string;
   consumer: { id: string; name: string; email: string };
   vendor: { id: string; businessName: string } | null;
+  rider: { id: string; phone: string; user: { name: string } } | null;
+}
+
+export interface RiderRow {
+  id: string;
+  phone: string;
+  vehicleType: string | null;
+  plateNumber: string | null;
+  lat: number | null;
+  lng: number | null;
+  status: RiderStatus;
+  createdAt: string;
+  user: { id: string; name: string; email: string; createdAt: string };
+  /** Present on detail reads only. */
+  orders?: {
+    id: string;
+    status: OrderStatus;
+    deliveryAddress: string;
+    assignedAt: string | null;
+    createdAt: string;
+  }[];
+  _count: { orders: number };
 }
 
 export interface ListingRow {
@@ -81,6 +104,7 @@ export interface UserRow {
   isSuspended: boolean;
   createdAt: string;
   vendorProfile: { id: string; status: VendorStatus; businessName: string } | null;
+  riderProfile: { id: string; status: RiderStatus } | null;
   _count: { orders: number };
 }
 

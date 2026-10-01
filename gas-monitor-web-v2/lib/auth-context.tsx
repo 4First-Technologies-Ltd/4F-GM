@@ -13,6 +13,8 @@ interface AuthContextValue {
   resendOtp: (email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET') => Promise<OtpSentResult>;
   logout: () => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<ApiUser>;
+  /** Re-fetches the user and persists it, so role-status changes (e.g. rider approval) take effect. */
+  refreshUser: () => Promise<ApiUser>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -73,8 +75,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return updated;
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const fresh = await authApi.me();
+    setUser(fresh);
+    const refreshToken = getRefreshToken();
+    const accessToken = getAccessToken();
+    if (refreshToken && accessToken) saveSession(accessToken, refreshToken, fresh);
+    return fresh;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyOtp, resendOtp, logout, updateProfile }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, verifyOtp, resendOtp, logout, updateProfile, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

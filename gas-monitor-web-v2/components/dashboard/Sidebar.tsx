@@ -15,7 +15,9 @@ import {
   MapPin,
   Smartphone,
   User,
-  FileText
+  FileText,
+  Bike,
+  Clock
 } from 'lucide-react';
 
 const CONSUMER_NAV_ITEMS = [
@@ -38,6 +40,12 @@ const VENDOR_NAV_ITEMS = [
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, exact: false }
 ];
 
+const RIDER_NAV_ITEMS = [
+  { href: '/dashboard', label: 'Deliveries', icon: Bike, exact: true },
+  { href: '/dashboard/history', label: 'History', icon: Clock, exact: false },
+  { href: '/dashboard/profile', label: 'Profile', icon: User, exact: false }
+];
+
 function initials(name: string) {
   return name
     .split(' ')
@@ -51,7 +59,8 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  const NAV_ITEMS = user?.role === 'VENDOR' ? VENDOR_NAV_ITEMS : CONSUMER_NAV_ITEMS;
+  const NAV_ITEMS =
+    user?.role === 'VENDOR' ? VENDOR_NAV_ITEMS : user?.role === 'RIDER' ? RIDER_NAV_ITEMS : CONSUMER_NAV_ITEMS;
 
   const handleLogout = async () => {
     await logout();

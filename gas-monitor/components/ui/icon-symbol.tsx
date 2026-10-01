@@ -52,6 +52,8 @@ const MAPPING = {
   'tray.fill': 'inbox',
   'chevron.down': 'expand-more',
   'trash.fill': 'delete',
+  'arrow.triangle.turn.up.right.diamond.fill': 'directions',
+  'bicycle': 'two-wheeler',
 } as const satisfies Record<string, ComponentProps<typeof MaterialIcons>['name']>;
 
 export function IconSymbol({

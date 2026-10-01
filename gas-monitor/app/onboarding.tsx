@@ -297,6 +297,15 @@ export default function OnboardingScreen() {
                         <Text style={s.roleCardTitle}>Vendor</Text>
                         <Text style={s.roleCardSub}>Sell gas cylinders</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity
+                        style={s.roleCard}
+                        activeOpacity={0.85}
+                        onPress={() => router.push('/rider-sign-up')}
+                      >
+                        <IconSymbol name="bicycle" size={26} color={C.greenBright} />
+                        <Text style={s.roleCardTitle}>Rider</Text>
+                        <Text style={s.roleCardSub}>Deliver orders</Text>
+                      </TouchableOpacity>
                     </View>
                     <TouchableOpacity
                       activeOpacity={0.7}

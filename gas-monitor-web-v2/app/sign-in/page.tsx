@@ -4,16 +4,19 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { ApiRequestError } from '@/lib/api';
+import { ApiRequestError, UserRole } from '@/lib/api';
+import { homeRouteFor } from '@/lib/home-route';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { Eye, EyeOff } from 'lucide-react';
 
+const ROLE_LABEL: Record<UserRole, string> = { CONSUMER: 'Consumer', VENDOR: 'Vendor', RIDER: 'Rider' };
+
 export default function SignInPage() {
   const { login, logout } = useAuth();
   const router = useRouter();
-  const [role, setRole] = useState<'CONSUMER' | 'VENDOR'>('CONSUMER');
+  const [role, setRole] = useState<UserRole>('CONSUMER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -28,18 +31,11 @@ export default function SignInPage() {
       const user = await login(email, password);
       if (user.role !== role) {
         await logout();
-        setError(
-          user.role === 'VENDOR'
-            ? 'This account is registered as a Vendor. Switch to the Vendor tab to sign in.'
-            : 'This account is registered as a Consumer. Switch to the Consumer tab to sign in.'
-        );
+        const actual = ROLE_LABEL[user.role];
+        setError(`This account is registered as a ${actual}. Switch to the ${actual} tab to sign in.`);
         return;
       }
-      if (user.role === 'VENDOR' && user.vendorStatus !== 'APPROVED') {
-        router.push('/vendor-pending');
-      } else {
-        router.push('/dashboard');
-      }
+      router.push(homeRouteFor(user));
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === 'EMAIL_NOT_VERIFIED') {
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
@@ -66,7 +62,7 @@ export default function SignInPage() {
 
           {/* Role Tabs */}
           <div className="flex gap-2 mb-6" role="group" aria-label="Sign in as">
-            {(['CONSUMER', 'VENDOR'] as const).map((r) => (
+            {(['CONSUMER', 'VENDOR', 'RIDER'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -77,7 +73,7 @@ export default function SignInPage() {
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {r === 'CONSUMER' ? 'Consumer' : 'Vendor'}
+                {ROLE_LABEL[r]}
               </button>
             ))}
           </div>

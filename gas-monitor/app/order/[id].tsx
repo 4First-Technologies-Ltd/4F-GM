@@ -259,6 +259,21 @@ export default function OrderDetailScreen() {
           </Section>
         )}
 
+        {/* Rider */}
+        {order.riderName && (
+          <Section title="Delivery Agent" icon="person.fill">
+            <View style={s.supplierRow}>
+              <View style={[s.supplierAvatar, { backgroundColor: C.accent + '1A', borderColor: C.accent + '40' }]}>
+                <IconSymbol name="person.fill" size={18} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.supplierName}>{order.riderName}</Text>
+                {order.riderPhone ? <Text style={s.supplierAddr}>{order.riderPhone}</Text> : null}
+              </View>
+            </View>
+          </Section>
+        )}
+
         {/* Order items */}
         <Section title="Order Items" icon="shippingbox.fill">
           <View style={s.itemRow}>

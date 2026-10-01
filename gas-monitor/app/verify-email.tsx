@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi, vendorApi } from '@/lib/api';
+import { authApi, vendorApi, riderApi } from '@/lib/api';
 import { takePendingVendorProfile } from '@/lib/pendingVendorProfile';
+import { takePendingRiderProfile } from '@/lib/pendingRiderProfile';
 
 const C = {
   bg: '#FFFFFF',
@@ -53,6 +54,13 @@ export default function VerifyEmailScreen() {
           }
         }
         router.replace('/vendor-pending');
+        return;
+      }
+
+      if (role === 'RIDER') {
+        const pending = takePendingRiderProfile();
+        if (pending) await riderApi.createProfile(pending);
+        router.replace('/rider-pending');
         return;
       }
 

@@ -9,11 +9,12 @@ import { formatNaira, STATUS_LABEL } from '@/lib/format';
 import { TiltCard } from '@/components/motion/tilt-card';
 import { Package, Bell, Wallet, AlertCircle, ArrowRight } from 'lucide-react';
 
-const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
+const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 const STATUS_COLORS: Record<Order['status'], string> = {
   PENDING: 'bg-amber-100/50 h-1',
   CONFIRMED: 'bg-blue-100/50 h-1',
+  OUT_FOR_DELIVERY: 'bg-orange-100/50 h-1',
   DELIVERED: 'bg-green-100/50 h-1',
   CANCELLED: 'bg-red-100/50 h-1'
 };

@@ -16,12 +16,14 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
 
   // OrderStatus
   CONFIRMED: { tone: 'info', label: 'Confirmed' },
+  OUT_FOR_DELIVERY: { tone: 'warning', label: 'Out for delivery' },
   DELIVERED: { tone: 'success', label: 'Delivered' },
   CANCELLED: { tone: 'error', label: 'Cancelled' },
 
   // Role
   CONSUMER: { tone: 'neutral', label: 'Consumer' },
   VENDOR: { tone: 'info', label: 'Vendor' },
+  RIDER: { tone: 'info', label: 'Rider' },
 
   // AdminRole
   SUPER_ADMIN: { tone: 'error', label: 'Super admin' },

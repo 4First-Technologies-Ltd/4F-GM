@@ -1,9 +1,12 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { RiderDeliveries } from '@/components/rider/RiderDeliveries';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+
+  if (user?.role === 'RIDER') return <RiderDeliveries />;
 
   if (user?.role === 'VENDOR') {
     return (

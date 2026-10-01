@@ -26,6 +26,9 @@ export interface HistoryOrder {
   time: string;
   status: OrderStatus;
   timeline: TimelineStep[];
+  /** Delivery agent assigned to this order — absent until a rider is assigned. */
+  riderName?: string;
+  riderPhone?: string;
 }
 
 export const STATUS_META: Record<OrderStatus, { label: string; color: string; bg: string; border: string }> = {
@@ -165,8 +168,10 @@ export const MOCK_ORDERS: HistoryOrder[] = [
     timeline: [
       { label: 'Order placed',      time: '11:20 AM', done: true  },
       { label: 'Confirmed',         time: '11:23 AM', done: true  },
-      { label: 'Out for delivery',  time: '',         done: false },
+      { label: 'Out for delivery',  time: '11:45 AM', done: true  },
       { label: 'Delivered',         time: '',         done: false },
     ],
+    riderName: 'Tunde Bakare',
+    riderPhone: '0803 555 0192',
   },
 ];

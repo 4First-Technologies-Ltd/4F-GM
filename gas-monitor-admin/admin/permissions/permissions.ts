@@ -36,6 +36,8 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
   OPERATIONS: [
     '*.read',
     'vendors.approve',
+    'riders.approve',
+    'orders.assignRider',
     'listings.update',
     'users.create',
     'users.update',

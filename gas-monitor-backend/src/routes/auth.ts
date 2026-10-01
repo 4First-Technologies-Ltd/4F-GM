@@ -14,7 +14,7 @@ const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['CONSUMER', 'VENDOR']).optional().default('CONSUMER')
+  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER']).optional().default('CONSUMER')
 });
 
 router.post(
@@ -64,7 +64,10 @@ router.post(
     const { email, otp } = result.data;
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { vendorProfile: { select: { status: true } } }
+      include: {
+        vendorProfile: { select: { status: true } },
+        riderProfile: { select: { status: true } }
+      }
     });
 
     if (!user || user.otpPurpose !== 'SIGNUP_VERIFICATION' || !user.otpExpiresAt) {
@@ -95,6 +98,7 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
+        riderStatus: user.riderProfile?.status ?? undefined,
         createdAt: user.createdAt
       },
       ...tokens
@@ -277,7 +281,10 @@ router.post(
 
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { vendorProfile: { select: { status: true } } }
+      include: {
+        vendorProfile: { select: { status: true } },
+        riderProfile: { select: { status: true } }
+      }
     });
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -305,6 +312,7 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
+        riderStatus: user.riderProfile?.status ?? undefined,
         createdAt: user.createdAt
       },
       ...tokens
@@ -325,12 +333,19 @@ const SELECT = {
   unitPreference: true,
   createdAt: true,
   updatedAt: true,
-  vendorProfile: { select: { status: true } }
+  vendorProfile: { select: { status: true } },
+  riderProfile: { select: { status: true } }
 } as const;
 
-function serialize<T extends { vendorProfile: { status: string } | null }>(user: T) {
-  const { vendorProfile, ...userData } = user;
-  return { ...userData, vendorStatus: vendorProfile?.status ?? undefined };
+function serialize<T extends { vendorProfile: { status: string } | null; riderProfile: { status: string } | null }>(
+  user: T
+) {
+  const { vendorProfile, riderProfile, ...userData } = user;
+  return {
+    ...userData,
+    vendorStatus: vendorProfile?.status ?? undefined,
+    riderStatus: riderProfile?.status ?? undefined
+  };
 }
 
 router.get(

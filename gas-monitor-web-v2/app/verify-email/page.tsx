@@ -4,10 +4,11 @@ import { Suspense, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { vendorApi, ApiRequestError } from '@/lib/api';
+import { vendorApi, riderApi, ApiRequestError } from '@/lib/api';
 import { Button, ButtonLink } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { isVendorPlan, PLANS, type VendorPlan } from '@/lib/plans';
+import { PENDING_RIDER_KEY, readPendingRider } from '@/lib/rider';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 
@@ -87,6 +88,18 @@ function VerifyEmailContent() {
         // Verified, but the business details were lost (new tab, cleared
         // storage). The account exists — finish the profile from the dashboard.
         router.push('/dashboard/profile');
+        return;
+      }
+
+      if (role === 'RIDER') {
+        const pending = readPendingRider();
+        if (pending) {
+          window.sessionStorage.removeItem(PENDING_RIDER_KEY);
+          await riderApi.createProfile(pending);
+        }
+        // Without stashed details (new tab, cleared storage) the pending page
+        // detects the missing profile and asks for them.
+        router.push('/rider-pending');
         return;
       }
 

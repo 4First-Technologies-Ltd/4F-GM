@@ -41,8 +41,13 @@ The app supports two distinct user roles set at registration:
 |---|---|---|
 | Consumer | `CONSUMER` | Monitors gas level, browses suppliers, places orders via Paystack |
 | Vendor | `VENDOR` | Lists gas products, receives and manages orders |
+| Rider | `RIDER` | Delivery agent; assigned to orders by a vendor or admin, updates delivery status |
 
 Role is stored on `User.role` in the database and in SecureStore as part of the saved user object. All role-based routing reads `getSavedUser<ApiUser>()` after login — never hardcode `/(tabs)` as the post-login destination.
+
+Riders have their own sign-up (`/rider-sign-up`), approval holding screen (`/rider-pending`) and bottom-tab app (`app/(rider)/`) — see "Rider app" below. The consumer order detail screen shows the assigned rider's name and phone once one exists on the order.
+
+Post-login destination is decided in one place: `lib/homeRoute.ts` → `homeRouteFor(user)` (used by `splash.tsx` and `sign-in.tsx`).
 
 ---
 
@@ -61,10 +66,15 @@ splash.tsx
   │                 └── VENDOR → creates vendor profile → /vendor-pending
   └── token exists → check role
         ├── CONSUMER → /(tabs)
-        └── VENDOR
-              ├── APPROVED → /(vendor)
-              └── PENDING/REJECTED → /vendor-pending
+        ├── VENDOR
+        │     ├── APPROVED → /(vendor)
+        │     └── PENDING/REJECTED → /vendor-pending
+        └── RIDER
+              ├── APPROVED → /(rider)
+              └── PENDING/REJECTED/no profile → /rider-pending
 ```
+
+Onboarding slide 3 and the sign-up/sign-in role tabs all have a Rider option → `/rider-sign-up`.
 
 `authApi.register()` no longer returns a session — email verification is mandatory. It creates an unverified account, emails a 6-digit OTP via Resend, and returns `{ message, email }`. The client must call `authApi.verifyOtp(email, otp)` to get tokens. `sign-in.tsx` applies the same role check as above after `authApi.login()` resolves; if the account isn't verified yet, login fails with `code: 'EMAIL_NOT_VERIFIED'` and the screen redirects to `/verify-email` instead of showing a generic error.
 
@@ -202,6 +212,24 @@ Every vendor screen has a hamburger button (`line.3.horizontal` icon) that calls
 
 Drawer items: Incoming Orders → My Listings → Earnings → Settings | Sign Out (pinned to bottom).
 
+## Rider app
+
+Riders are delivery agents, approved in `gas-monitor-admin` and assigned to orders by a vendor or admin.
+
+**Sign-up** (`app/rider-sign-up.tsx`): 2 steps — account (name/email/password) then vehicle (phone, vehicle type, optional plate). Rider details are held in `lib/pendingRiderProfile.ts` until OTP verification (a profile needs a session), then `verify-email.tsx` (`role=RIDER`) calls `riderApi.createProfile()` and routes to `/rider-pending`. `/rider-sign-up?resume=1` is the recovery path for a verified account with no profile (sign-up interrupted) — it shows only the vehicle step and calls `createProfile` directly.
+
+**`/rider-pending`**: shows PENDING / REJECTED / "no profile" states. "Check status" calls `authApi.refreshUser()` (re-fetch `/api/auth/me` + persist) and jumps into `/(rider)` once `riderStatus === 'APPROVED'`.
+
+| File | Route | Notes |
+|---|---|---|
+| `app/(rider)/_layout.tsx` | — | Bottom `<Tabs>`: Deliveries / History / Profile (same styling as consumer tabs) |
+| `app/(rider)/index.tsx` | `/(rider)/` | Active deliveries (`CONFIRMED` + `OUT_FOR_DELIVERY`); polls every 30s while focused + pull-to-refresh; card buttons Start Delivery / Mark as Delivered |
+| `app/(rider)/history.tsx` | `/(rider)/history` | `DELIVERED` + `CANCELLED`, newest first |
+| `app/(rider)/profile.tsx` | `/(rider)/profile` | Edit name/phone/vehicle/plate, sign-out |
+| `app/rider-order/[id].tsx` | `/rider-order/:id` | Pickup (vendor) + dropoff (customer) with tap-to-call and open-in-Maps, order summary, next-step button |
+
+Shared code: `hooks/use-rider-orders.ts` (`useRiderOrders({ poll })`, `advanceOrder(order)` — confirm dialog then `PATCH`), `lib/riderOrders.ts` (status meta, `nextRiderAction`, call/maps helpers), `components/rider-order-card.tsx`. The detail screen finds its order in `GET /api/rider/orders` — there is no single-order rider endpoint. Orders are prepaid via Paystack, so the UI says there is no cash to collect.
+
 ### Vendor approval
 
 Vendors start with `status = PENDING`. Listings can only be created once `status = APPROVED`. To approve manually during development:
@@ -253,8 +281,22 @@ API_BASE_URL:
 | `createListing(data)` | POST `/api/vendor/listings` | Requires APPROVED status |
 | `updateListing(id, data)` | PATCH `/api/vendor/listings/:id` | Partial update |
 | `deleteListing(id)` | DELETE `/api/vendor/listings/:id` | — |
-| `getOrders()` | GET `/api/vendor/orders` | Includes consumer + listing data |
-| `updateOrderStatus(id, status)` | PATCH `/api/vendor/orders/:id` | `CONFIRMED \| DELIVERED \| CANCELLED` |
+| `getOrders()` | GET `/api/vendor/orders` | Includes consumer + listing + assigned rider |
+| `updateOrderStatus(id, status)` | PATCH `/api/vendor/orders/:id` | `CONFIRMED \| OUT_FOR_DELIVERY \| DELIVERED \| CANCELLED` |
+| `getRiders()` | GET `/api/vendor/riders` | Approved riders available to assign (platform-wide pool, not vendor-owned) |
+| `assignRider(orderId, riderId \| null)` | PATCH `/api/vendor/orders/:id/rider` | `null` unassigns. Assigns a rider on the vendor's own order; only touches `riderId`/`assignedAt` |
+
+**Rider assignment UI:** on the vendor Incoming Orders screen (`app/(vendor)/index.tsx`), `CONFIRMED` / `OUT_FOR_DELIVERY` orders show an **Assign rider** button (or the assigned rider with call + **Change**), opening `components/assign-rider-sheet.tsx` — a bottom sheet listing approved riders with an Unassign option. The orders list refetches after assigning.
+
+### `riderApi` methods
+
+| Method | Endpoint | Notes |
+|---|---|---|
+| `createProfile(data)` | POST `/api/rider/profile` | Upserts rider profile: `{ phone, vehicleType?, plateNumber? }` |
+| `getProfile()` | GET `/api/rider/me` | Own rider profile (404 if none yet) |
+| `updateProfile(data)` | PATCH `/api/rider/profile` | Partial update |
+| `getOrders()` | GET `/api/rider/orders` | Orders assigned to this rider, with consumer + vendor (incl. `businessAddress`). `403 RIDER_NOT_APPROVED` until an admin approves the rider |
+| `updateOrderStatus(id, status)` | PATCH `/api/rider/orders/:id` | `OUT_FOR_DELIVERY \| DELIVERED` — strictly `CONFIRMED → OUT_FOR_DELIVERY → DELIVERED`, applied atomically; any other transition (unpaid, cancelled, skipped or repeated step) is `409 INVALID_STATUS_TRANSITION`. Also `403 RIDER_NOT_APPROVED` for unapproved riders |
 
 ### `ordersApi` methods
 
@@ -271,8 +313,9 @@ interface ApiUser {
   id: string;
   name: string;
   email: string;
-  role: 'CONSUMER' | 'VENDOR';
+  role: 'CONSUMER' | 'VENDOR' | 'RIDER';
   vendorStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  riderStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: string;
 }
 ```
@@ -415,6 +458,7 @@ gas-monitor-backend/
     routes/
       auth.ts            # /api/auth/* endpoints
       vendor.ts          # /api/vendor/* endpoints (all require Bearer auth)
+      rider.ts            # /api/rider/* endpoints (all require Bearer auth)
       cylinders.ts       # /api/cylinders/* endpoints
       orders.ts          # /api/orders/* endpoints (consumer orders + Paystack integration)
   .env                   # DATABASE_URL, JWT secrets, PAYSTACK_SECRET_KEY, RESEND_API_KEY, EMAIL_FROM, PORT
@@ -423,19 +467,20 @@ gas-monitor-backend/
 
 ### Prisma models & enums
 
-**Enums:** `Role` (CONSUMER, VENDOR), `VendorStatus` (PENDING, APPROVED, REJECTED), `GasType` (COOKING, MEDICAL, INDUSTRIAL, BULK, OTHER), `OrderStatus` (PENDING, CONFIRMED, DELIVERED, CANCELLED), `OtpPurpose` (SIGNUP_VERIFICATION, PASSWORD_RESET)
+**Enums:** `Role` (CONSUMER, VENDOR, RIDER), `VendorStatus` (PENDING, APPROVED, REJECTED), `RiderStatus` (PENDING, APPROVED, REJECTED), `GasType` (COOKING, MEDICAL, INDUSTRIAL, BULK, OTHER), `OrderStatus` (PENDING, CONFIRMED, OUT_FOR_DELIVERY, DELIVERED, CANCELLED), `OtpPurpose` (SIGNUP_VERIFICATION, PASSWORD_RESET)
 
 | Model | Key fields |
 |---|---|
-| `User` | id, email (unique), name, password, **role**, **emailVerified**, otpCodeHash?, otpPurpose?, otpExpiresAt?, otpAttempts, refreshTokens, vendorProfile?, orders, cylinderProfiles |
+| `User` | id, email (unique), name, password, **role**, **emailVerified**, otpCodeHash?, otpPurpose?, otpExpiresAt?, otpAttempts, refreshTokens, vendorProfile?, riderProfile?, orders, cylinderProfiles |
 | `RefreshToken` | id, token (unique), userId (FK cascade), expiresAt |
 | `VendorProfile` | id, userId (unique FK), businessName, businessAddress, lat?, lng?, phone, **status** |
 | `VendorDocument` | id, vendorId (FK), url, fileName |
+| `RiderProfile` | id, userId (unique FK), phone, vehicleType?, plateNumber?, lat?, lng?, **status** — not owned by a vendor; assignable to any order |
 | `GasListing` | id, vendorId (FK), gasType, customName?, pricePerKg, cylinderSizes[], otherSizes?, inStock |
 | `CylinderProfile` | id, userId (FK), name, sizeKg, customSizeLabel?, imageKey, isActive |
-| `Order` | id, consumerId (FK), vendorId? (FK), listingId? (FK), supplierName?, cylinderSize, quantity, totalAmount, deliveryAddress, status, paystackRef? (unique), paystackStatus? |
+| `Order` | id, consumerId (FK), vendorId? (FK), listingId? (FK), riderId? (FK), assignedAt?, supplierName?, cylinderSize, quantity, totalAmount, deliveryAddress, status, paystackRef? (unique), paystackStatus? |
 
-`vendorId` and `listingId` are nullable on `Order` — orders created through the consumer app before vendor/listing DB integration is complete will have these as null and use `supplierName` instead.
+`vendorId` and `listingId` are nullable on `Order` — orders created through the consumer app before vendor/listing DB integration is complete will have these as null and use `supplierName` instead. `riderId`/`assignedAt` are nullable until a rider is assigned, and are cleared together on unassignment.
 
 ### API endpoints
 
@@ -446,10 +491,10 @@ gas-monitor-backend/
 | POST | `/register` | — | Body: `{ name, email, password, role? }`. Role defaults to CONSUMER. Creates an **unverified** user, emails a 6-digit OTP (10 min TTL), returns `{ message, email }` — no tokens |
 | POST | `/verify-otp` | — | Body: `{ email, otp }`. Marks `emailVerified`, returns `{ user, accessToken, refreshToken }` like `/register` used to |
 | POST | `/resend-otp` | — | Body: `{ email, purpose: 'SIGNUP_VERIFICATION' \| 'PASSWORD_RESET' }`. Always responds generically |
-| POST | `/login` | — | Returns user with `role` + `vendorStatus`. `403 { code: 'EMAIL_NOT_VERIFIED' }` if not yet verified |
+| POST | `/login` | — | Returns user with `role` + `vendorStatus` + `riderStatus`. `403 { code: 'EMAIL_NOT_VERIFIED' }` if not yet verified |
 | POST | `/refresh` | — | Rotates token pair |
 | POST | `/logout` | — | Deletes refresh token |
-| GET | `/me` | Bearer | Returns user with `role` + `vendorStatus` |
+| GET | `/me` | Bearer | Returns user with `role` + `vendorStatus` + `riderStatus` |
 | POST | `/forgot-password` | — | Body: `{ email }`. Always responds the same message regardless of whether the account exists (no enumeration); emails an OTP if it does |
 | POST | `/reset-password` | — | Body: `{ email, otp, password }`. Verifies the OTP, updates the password, revokes all refresh tokens |
 
@@ -466,8 +511,20 @@ OTP codes are 6-digit, sha256-hashed at rest (`otpCodeHash`), expire after 10 mi
 | POST | `/listings` | Requires APPROVED status |
 | PATCH | `/listings/:id` | Partial update, ownership checked |
 | DELETE | `/listings/:id` | Ownership checked |
-| GET | `/orders` | Incoming orders with consumer + listing data |
-| PATCH | `/orders/:id` | Body: `{ status: CONFIRMED \| DELIVERED \| CANCELLED }` |
+| GET | `/orders` | Incoming orders with consumer + listing + assigned rider |
+| PATCH | `/orders/:id` | Body: `{ status: CONFIRMED \| OUT_FOR_DELIVERY \| DELIVERED \| CANCELLED }` |
+| GET | `/riders` | Approved riders available to assign — platform-wide pool, not vendor-owned |
+| PATCH | `/orders/:id/rider` | Body: `{ riderId: string \| null }`. Assign/unassign a rider on the vendor's own order; only touches `riderId`/`assignedAt` |
+
+**`/api/rider/`** — all require Bearer token
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/profile` | Create/update rider profile (upsert): `{ phone, vehicleType?, plateNumber?, lat?, lng? }` |
+| GET | `/me` | Get own rider profile |
+| PATCH | `/profile` | Partial update |
+| GET | `/orders` | Orders assigned to this rider (approved riders only, else 403) |
+| PATCH | `/orders/:id` | Body: `{ status: OUT_FOR_DELIVERY \| DELIVERED }` — only `CONFIRMED → OUT_FOR_DELIVERY → DELIVERED` (else 409); approved riders only (else 403) |
 
 **`/api/orders/`** — all require Bearer token except webhook
 

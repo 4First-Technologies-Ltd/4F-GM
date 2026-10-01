@@ -53,6 +53,17 @@ export function IconPackage({ className }: IconProps) {
   );
 }
 
+export function IconBike({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <circle cx="5.5" cy="17.5" r="3.5" />
+      <circle cx="18.5" cy="17.5" r="3.5" />
+      <path d="M5.5 17.5 10 8h4l-2 4h5l3 5.5" />
+      <path d="M10 8h4" />
+    </svg>
+  );
+}
+
 export function IconWallet({ className }: IconProps) {
   return (
     <svg {...base} className={className} aria-hidden="true">

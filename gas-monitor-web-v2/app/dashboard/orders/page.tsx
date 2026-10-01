@@ -6,28 +6,23 @@ import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order } from '@/lib/api';
 import { STATUS_LABEL, formatNaira } from '@/lib/format';
 import { AlertCircle } from 'lucide-react';
+import { VendorOrders } from '@/components/vendor/VendorOrders';
 
 type StatusFilter = 'ALL' | Order['status'];
 
-const FILTERS: StatusFilter[] = ['ALL', 'PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
+const FILTERS: StatusFilter[] = ['ALL', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 const STATUS_BADGE_COLORS: Record<Order['status'], string> = {
   PENDING: 'bg-amber-100/50 text-amber-700',
   CONFIRMED: 'bg-blue-100/50 text-blue-700',
+  OUT_FOR_DELIVERY: 'bg-orange-100/50 text-orange-700',
   DELIVERED: 'bg-green-100/50 text-green-700',
   CANCELLED: 'bg-red-100/50 text-red-700'
 };
 
 export default function OrdersPage() {
   const { user } = useAuth();
-  if (user?.role === 'VENDOR') {
-    // TODO: Create VendorOrders component
-    return (
-      <div className="rounded-2xl bg-card border border-border p-6">
-        <p className="text-muted-foreground">Vendor orders view coming soon.</p>
-      </div>
-    );
-  }
+  if (user?.role === 'VENDOR') return <VendorOrders />;
   return <OrdersPageContent />;
 }
 

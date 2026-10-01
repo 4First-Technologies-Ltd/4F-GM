@@ -46,7 +46,8 @@ consumer or vendor API surface was touched.
 | Module | Entity | Mode | Route |
 |---|---|---|---|
 | vendors | `VendorProfile` | reduced | `/dashboard/vendors` |
-| orders | `Order` | reduced (read-only) | `/dashboard/orders` |
+| riders | `RiderProfile` **(new)** | reduced | `/dashboard/riders` |
+| orders | `Order` | reduced (read-only, except rider assignment) | `/dashboard/orders` |
 | listings | `GasListing` | reduced | `/dashboard/listings` |
 | users | `User` | full | `/dashboard/users` |
 | customers | `User role=CONSUMER` | reduced (read-only) | `/dashboard/customers` |
@@ -73,7 +74,6 @@ consumer or vendor API surface was touched.
 | Module | Reason |
 |---|---|
 | payments, transactions, payouts | no `Payment`/`Transaction`/`Payout` entity. Paystack state lives on `Order` and is shown in the order detail drawer. |
-| agents | no courier/rider entity |
 | organizations | not multi-tenant |
 | media | `VendorDocument` is a related list on the vendor, not a media library |
 | content, moderation, notifications, reports | no corresponding entities |

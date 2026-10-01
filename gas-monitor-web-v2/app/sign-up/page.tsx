@@ -9,21 +9,26 @@ import { Checkbox } from '@/components/motion/checkbox';
 import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
+import { RiderDetailsFields } from '@/components/rider/RiderDetailsFields';
+import { PENDING_RIDER_KEY } from '@/lib/rider';
 import { DEFAULT_VENDOR_PLAN, PLATFORM_COMMISSION_PERCENT } from '@/lib/plans';
 import { Eye, EyeOff } from 'lucide-react';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 
-type Role = 'CONSUMER' | 'VENDOR';
+type Role = 'CONSUMER' | 'VENDOR' | 'RIDER';
+
+const ROLE_LABEL: Record<Role, string> = { CONSUMER: 'Consumer', VENDOR: 'Vendor', RIDER: 'Rider' };
 
 function SignUpForm() {
   const { register } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // `/sign-up?role=vendor` lands straight on the vendor application.
-  const [role, setRole] = useState<Role>(
-    searchParams.get('role')?.toLowerCase() === 'vendor' ? 'VENDOR' : 'CONSUMER'
-  );
+  // `/sign-up?role=vendor|rider` lands straight on that application.
+  const [role, setRole] = useState<Role>(() => {
+    const param = searchParams.get('role')?.toLowerCase();
+    return param === 'vendor' ? 'VENDOR' : param === 'rider' ? 'RIDER' : 'CONSUMER';
+  });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,6 +37,8 @@ function SignUpForm() {
   const [businessAddress, setBusinessAddress] = useState('');
   const [vendorState, setVendorState] = useState('');
   const [vendorCity, setVendorCity] = useState('');
+  const [vehicleType, setVehicleType] = useState('');
+  const [plateNumber, setPlateNumber] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +58,23 @@ function SignUpForm() {
       return;
     }
 
+    if (role === 'RIDER' && (!phone.trim() || !vehicleType)) {
+      setError('Add your phone number and choose a vehicle type.');
+      return;
+    }
+
     setSubmitting(true);
     try {
+      if (role === 'RIDER') {
+        window.sessionStorage.setItem(
+          PENDING_RIDER_KEY,
+          JSON.stringify({
+            phone: phone.trim(),
+            vehicleType,
+            plateNumber: plateNumber.trim() || undefined
+          })
+        );
+      }
       if (role === 'VENDOR') {
         window.sessionStorage.setItem(
           PENDING_VENDOR_KEY,
@@ -70,11 +92,14 @@ function SignUpForm() {
       const result = await register(name.trim(), email.trim(), password, role);
       const params = new URLSearchParams();
       params.set('email', result.email);
-      if (role === 'VENDOR') params.set('role', 'VENDOR');
+      if (role !== 'CONSUMER') params.set('role', role);
       router.push(`/verify-email?${params.toString()}`);
     } catch (err) {
       if (role === 'VENDOR') {
         window.sessionStorage.removeItem(PENDING_VENDOR_KEY);
+      }
+      if (role === 'RIDER') {
+        window.sessionStorage.removeItem(PENDING_RIDER_KEY);
       }
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
@@ -96,12 +121,14 @@ function SignUpForm() {
           <p className="text-sm text-muted-foreground mb-6">
             {role === 'CONSUMER'
               ? 'Monitor cylinders and order refills from trusted vendors.'
-              : 'List gas products and manage incoming orders. Your account is reviewed before it goes live.'}
+              : role === 'VENDOR'
+                ? 'List gas products and manage incoming orders. Your account is reviewed before it goes live.'
+                : 'Deliver gas cylinders for vendors on the marketplace. Your application is reviewed before you can take deliveries.'}
           </p>
 
           {/* Role Tabs */}
           <div className="flex gap-2 mb-6" role="group" aria-label="Account type">
-            {(['CONSUMER', 'VENDOR'] as const).map((r) => (
+            {(['CONSUMER', 'VENDOR', 'RIDER'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -112,7 +139,7 @@ function SignUpForm() {
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {r === 'CONSUMER' ? 'Consumer' : 'Vendor'}
+                {ROLE_LABEL[r]}
               </button>
             ))}
           </div>
@@ -249,6 +276,18 @@ function SignUpForm() {
               </>
             )}
 
+            {role === 'RIDER' && (
+              <RiderDetailsFields
+                phone={phone}
+                vehicleType={vehicleType}
+                plateNumber={plateNumber}
+                onPhoneChange={setPhone}
+                onVehicleTypeChange={setVehicleType}
+                onPlateNumberChange={setPlateNumber}
+                disabled={submitting}
+              />
+            )}
+
             <div className="flex items-start gap-3 py-2">
               <Checkbox
                 id="terms"
@@ -288,12 +327,12 @@ function SignUpForm() {
               {submitting ? (
                 <span className="flex items-center gap-2">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  {role === 'VENDOR' ? 'Submitting application…' : 'Creating account…'}
+                  {role === 'CONSUMER' ? 'Creating account…' : 'Submitting application…'}
                 </span>
-              ) : role === 'VENDOR' ? (
-                'Submit application'
-              ) : (
+              ) : role === 'CONSUMER' ? (
                 'Create account'
+              ) : (
+                'Submit application'
               )}
             </Button>
           </form>

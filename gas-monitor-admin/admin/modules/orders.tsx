@@ -1,16 +1,25 @@
+import { useEffect, useState } from 'react';
 import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
+import { adminFetch } from '@/lib/api';
 import { formatDateTime, formatNaira, formatRelative, shortId } from '@/admin/primitives/format';
 import { StatusBadge } from '@/admin/primitives/status-badge';
-import type { OrderRow } from './types';
+import { can } from '@/admin/permissions/can';
+import { useAdminSession } from '@/lib/admin-session-context';
+import type { OrderRow, RiderRow } from './types';
 
 /**
- * Orders — READ-ONLY.
+ * Orders — READ-ONLY, with one exception.
  *
  * No status-transition endpoint exists: order state is driven by the consumer
- * and vendor flows and by the Paystack webhook. The previous admin displayed no
- * write affordance either; this makes the constraint explicit via `readOnly`
- * rather than leaving it implied.
+ * and vendor flows and by the Paystack webhook, so `readOnly: true` suppresses
+ * the generic row actions (which would go through `data.update`, i.e. PATCH
+ * /orders/:id and touch `status`).
+ *
+ * Rider assignment is different: it's a dedicated endpoint
+ * (PATCH /orders/:id/rider) that only ever writes `riderId`/`assignedAt`,
+ * never `status` or payment fields, so it's wired up separately below via
+ * `detail.extra` rather than through the generic data source.
  *
  * Payment state is surfaced here because there is no Payment entity — Paystack
  * fields live on Order.
@@ -60,6 +69,13 @@ export const ordersModule: ResourceConfig<OrderRow> = {
       type: 'currency',
       sortable: true,
       priority: 1
+    },
+    {
+      key: 'rider',
+      header: 'Rider',
+      accessor: (o) => o.rider?.user.name ?? null,
+      priority: 2,
+      render: (o) => (o.rider ? o.rider.user.name : <span className="adm-muted">Unassigned</span>)
     },
     {
       key: 'payment',
@@ -141,10 +157,11 @@ export const ordersModule: ResourceConfig<OrderRow> = {
           }
         ]
       }
-    ]
+    ],
+    extra: (o) => <OrderRiderAssign order={o} />
   },
 
-  permissions: { read: 'orders.read' },
+  permissions: { read: 'orders.read', assignRider: 'orders.assignRider' },
 
   data,
 
@@ -153,3 +170,107 @@ export const ordersModule: ResourceConfig<OrderRow> = {
     description: 'Orders appear here as customers place them in the consumer app.'
   }
 };
+
+/**
+ * Rider assignment widget for the order detail drawer. Keeps its own copy of
+ * the assignment so the drawer reflects a change immediately — the generic
+ * engine has no refresh hook available to `detail.extra`.
+ */
+function OrderRiderAssign({ order }: { order: OrderRow }) {
+  const session = useAdminSession();
+  const canAssign = can(session.role, 'orders.assignRider');
+
+  const [riders, setRiders] = useState<RiderRow[] | null>(null);
+  const [current, setCurrent] = useState(order.rider);
+  const [selected, setSelected] = useState(order.rider?.id ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canAssign) return;
+    let cancelled = false;
+    adminFetch('/riders?status=APPROVED&limit=100')
+      .then((res) => res.json())
+      .then((body: { data?: RiderRow[] }) => {
+        if (!cancelled) setRiders(body.data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRiders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canAssign]);
+
+  async function assign(riderId: string | null) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await adminFetch(`/orders/${order.id}/rider`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderId })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+      setCurrent(body.order?.rider ?? null);
+      setSelected(riderId ?? '');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update rider');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="adm-detail-section">
+      <h3 className="adm-micro-label">Delivery</h3>
+      {current ? (
+        <p>
+          Assigned to <strong>{current.user.name}</strong>
+          <span className="adm-td-sub">{current.phone}</span>
+        </p>
+      ) : (
+        <p className="adm-muted">No rider assigned yet.</p>
+      )}
+
+      {canAssign && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <select
+            className="adm-input"
+            style={{ width: 'auto' }}
+            value={selected}
+            disabled={saving || riders === null}
+            onChange={(e) => setSelected(e.target.value)}
+            aria-label="Choose a rider"
+          >
+            <option value="">Select a rider…</option>
+            {(riders ?? []).map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.user.name} · {r.phone}
+              </option>
+            ))}
+          </select>
+          <button
+            className="adm-btn adm-btn--sm adm-btn--primary"
+            disabled={saving || !selected || selected === current?.id}
+            onClick={() => assign(selected)}
+          >
+            {current ? 'Reassign' : 'Assign'}
+          </button>
+          {current && (
+            <button className="adm-btn adm-btn--sm" disabled={saving} onClick={() => assign(null)}>
+              Unassign
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" style={{ color: 'var(--error)', marginTop: 4 }}>
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}

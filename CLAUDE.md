@@ -41,7 +41,7 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 
 ## User roles
 
-Two roles shared across mobile, web, and backend: `CONSUMER` and `VENDOR` (Prisma `Role` enum). Vendors have a `VendorProfile` with `VendorStatus`: `PENDING` / `APPROVED` / `REJECTED` — new vendor signups require manual approval via `gas-monitor-admin`. Admin panel auth is separate from these two roles entirely — see below.
+Three roles shared across mobile, web, and backend: `CONSUMER`, `VENDOR`, and `RIDER` (Prisma `Role` enum). Vendors have a `VendorProfile` with `VendorStatus`: `PENDING` / `APPROVED` / `REJECTED` — new vendor signups require manual approval via `gas-monitor-admin`. Riders (delivery agents) work the same way via `RiderProfile` and its own `RiderStatus` enum — not owned by any one vendor, so an approved rider can be assigned to any vendor's order. `Order.riderId`/`assignedAt` track that assignment, and `OrderStatus` has an `OUT_FOR_DELIVERY` step between `CONFIRMED` and `DELIVERED` for it. Vendors assign riders to their own orders (`PATCH /api/vendor/orders/:id/rider`); admins can reassign platform-wide (`PATCH /api/admin/orders/:id/rider`) — both endpoints only ever touch `riderId`/`assignedAt`, never `status` or payment fields, per the read-only stance on order mutations below. Admin panel auth is separate from all three of these roles — see below.
 
 ## Admin panel auth
 
