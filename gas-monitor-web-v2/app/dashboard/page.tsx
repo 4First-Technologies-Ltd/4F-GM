@@ -1,10 +1,19 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { RiderDeliveries } from '@/components/rider/RiderDeliveries';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  // Consumers have no view at /dashboard itself — their home is the overview page.
+  const isConsumer = user?.role === 'CONSUMER';
+  useEffect(() => {
+    if (isConsumer) router.replace('/dashboard/overview');
+  }, [isConsumer, router]);
 
   if (user?.role === 'RIDER') return <RiderDeliveries />;
 
