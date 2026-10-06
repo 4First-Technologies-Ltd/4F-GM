@@ -21,7 +21,7 @@ This Next.js 15 application is configured for Netlify deployment with `output: s
    - In Netlify Dashboard → Site Settings → Build & Deploy → Environment
    - Add the following variables:
      ```
-     NEXT_PUBLIC_API_URL=https://gas-monitor-backend-production.up.railway.app
+     NEXT_PUBLIC_API_URL=https://ugo.4fgmonitor.com
      NEXT_PUBLIC_SENTRY_DSN=[optional]
      NODE_VERSION=20
      NPM_VERSION=10

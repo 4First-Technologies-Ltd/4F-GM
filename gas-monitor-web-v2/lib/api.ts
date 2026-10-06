@@ -1,5 +1,6 @@
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
 import type { VendorPlan } from './plans';
+import { LEGAL_VERSION } from './legal';
 
 export type { VendorPlan };
 
@@ -158,7 +159,8 @@ export const authApi = {
   async register(name: string, email: string, password: string, role: UserRole = 'CONSUMER'): Promise<RegisterResult> {
     return request<RegisterResult>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, role })
+      // Callers must have collected explicit consent (sign-up gates on LegalConsent).
+      body: JSON.stringify({ name, email, password, role, acceptedTerms: true, legalVersion: LEGAL_VERSION })
     });
   },
 
@@ -688,5 +690,70 @@ export type Analytics = ConsumerAnalytics | VendorAnalytics;
 export const analyticsApi = {
   async get(): Promise<Analytics> {
     return request<Analytics>('/api/analytics', { auth: true });
+  }
+};
+
+// ── Device API ────────────────────────────────────────────────────────────────
+// Commands are relayed to the sensor as USSD over SMS (Termii). Each one is a
+// billable message, and the backend throttles per device (429 when too soon).
+
+export interface SensorReading {
+  weight: number;
+  temperature?: number;
+  pressure?: number;
+  timestamp: string;
+  status: 'success' | 'timeout' | 'error';
+  /** 'mock' until the backend has a Termii key — the numbers are not from a real sensor. */
+  mode?: string;
+}
+
+export interface DeviceCommandResult {
+  success: boolean;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+export interface DeviceConfig {
+  phoneNumber?: string;
+  location?: string;
+  minimumLevel?: number;
+}
+
+export const deviceApi = {
+  async getReading(): Promise<SensorReading> {
+    return request<SensorReading>('/api/device/sensor/reading', { auth: true });
+  },
+
+  async getConfig(): Promise<DeviceConfig> {
+    return request<DeviceConfig>('/api/device/config', { auth: true });
+  },
+
+  async tare(): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/sensor/tare', { method: 'POST', auth: true });
+  },
+
+  /** Critical level in whole kg, 1–9. */
+  async setMinimumLevel(level: number): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/sensor/minimum-level', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ level })
+    });
+  },
+
+  async setPhoneNumber(phoneNumber: string): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/config/phone', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ phoneNumber })
+    });
+  },
+
+  async setLocation(locationName: string): Promise<DeviceCommandResult> {
+    return request<DeviceCommandResult>('/api/device/config/location', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ locationName })
+    });
   }
 };

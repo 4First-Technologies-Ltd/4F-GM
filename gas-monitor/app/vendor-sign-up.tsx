@@ -12,6 +12,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
 import { setPendingVendorProfile } from '@/lib/pendingVendorProfile';
 import { NetworkStatusDot } from '@/components/network-status-dot';
+import { LegalConsent } from '@/components/legal-consent';
+import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
   bg: '#FFFFFF',
@@ -157,6 +159,8 @@ function StepIndicator({ step }: { step: Step }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function VendorSignUpScreen() {
+  const consent = useLegalConsent();
+  const [consentInvalid, setConsentInvalid] = useState(false);
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
@@ -256,6 +260,7 @@ export default function VendorSignUpScreen() {
   }
 
   async function handleSubmit() {
+    if (!consent.all) { setConsentInvalid(true); setApiErr('Please read and accept the Terms and Conditions and the Privacy Policy to continue.'); return; }
     setLoading(true);
     setApiErr('');
     try {
@@ -448,6 +453,8 @@ export default function VendorSignUpScreen() {
                   orders completed through the marketplace.
                 </Text>
               </View>
+
+              <LegalConsent invalid={consentInvalid} />
 
               {!!apiErr && (
                 <View style={s.apiErrBox}>

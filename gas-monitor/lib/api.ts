@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
+import { LEGAL_VERSION } from './legal';
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
 // The API lives in the standalone gas-monitor-backend service (Express + Prisma),
@@ -10,7 +11,7 @@ export const API_BASE_URL = __DEV__
   ? Platform.OS === 'android'
     ? 'http://10.0.2.2:9000'
     : 'http://localhost:9000'
-  : 'https://gas-monitor-backend-production.up.railway.app';
+  : 'https://ugo.4fgmonitor.com';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -197,7 +198,7 @@ export const authApi = {
   async register(name: string, email: string, password: string, role: UserRole = 'CONSUMER'): Promise<RegisterResult> {
     return request<RegisterResult>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, role }),
+      body: JSON.stringify({ name, email, password, role, acceptedTerms: true, legalVersion: LEGAL_VERSION }),
     });
   },
 

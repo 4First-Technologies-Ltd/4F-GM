@@ -7,6 +7,7 @@ import { hashOtp, OTP_MAX_ATTEMPTS } from '../lib/otp';
 import { verifyRefreshToken } from '../lib/jwt';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
+import { LEGAL_VERSION } from '../lib/legal';
 
 const router = Router();
 
@@ -14,7 +15,11 @@ const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER']).optional().default('CONSUMER')
+  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER']).optional().default('CONSUMER'),
+  acceptedTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the Terms and Privacy Policy' }) }),
+  legalVersion: z.string().refine((v) => v === LEGAL_VERSION, {
+    message: 'The Terms have been updated. Please reload and review them again.'
+  })
 });
 
 router.post(
@@ -37,6 +42,17 @@ router.post(
     const user = existing
       ? await prisma.user.update({ where: { id: existing.id }, data: { name, password: hashedPassword, role } })
       : await prisma.user.create({ data: { name, email, password: hashedPassword, role } });
+
+    await prisma.legalAcceptance.createMany({
+      data: (['TERMS', 'PRIVACY'] as const).map((document) => ({
+        userId: user.id,
+        document,
+        version: LEGAL_VERSION,
+        ipAddress: req.ip ?? null,
+        userAgent: req.get('user-agent')?.slice(0, 255) ?? null
+      })),
+      skipDuplicates: true
+    });
 
     const otp = await issueOtp(user.id, user.email, 'SIGNUP_VERIFICATION');
 

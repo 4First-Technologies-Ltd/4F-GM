@@ -7,7 +7,7 @@ This is the root of the 4FG Smart Gas Monitor monorepo. It provides guidance to 
 ```
 4FG-MONITOR/
 ├── gas-monitor/              # Expo React Native app (consumer + vendor mobile client)
-├── gas-monitor-backend/      # Express + Prisma + PostgreSQL API — the real backend, deployed on Railway
+├── gas-monitor-backend/      # Express + Prisma + PostgreSQL API — the real backend, deployed on Render
 ├── gas-monitor-web/          # Next.js 15 consumer/vendor web dashboard
 ├── gas-monitor-admin/        # Next.js 15 internal admin panel (separate project, shares the DB)
 ├── landing/                  # Static marketing site + waitlist admin (plain HTML/JS)
@@ -19,7 +19,7 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 
 ## Which backend is real
 
-**`gas-monitor-backend/` is the live, deployed API** — Express + Prisma + PostgreSQL on Railway at `https://gas-monitor-backend-production.up.railway.app`, port `9000` locally. Routes live in `src/routes/{auth,vendor,orders,ordersWebhook,cylinders,addresses,analytics,contact}.ts` and `src/routes/admin/{adminUsers,analytics,auth,customers,listings,orders,settings,stats,users,vendors}.ts`. It has a `GET /health` endpoint and CORS gated by the `CORS_ORIGINS` env var.
+**`gas-monitor-backend/` is the live, deployed API** — Express + Prisma + PostgreSQL on Render at `https://ugo.4fgmonitor.com`, port `9000` locally. Routes live in `src/routes/{auth,vendor,orders,ordersWebhook,cylinders,addresses,analytics,contact}.ts` and `src/routes/admin/{adminUsers,analytics,auth,customers,listings,orders,settings,stats,users,vendors}.ts`. It has a `GET /health` endpoint and CORS gated by the `CORS_ORIGINS` env var.
 
 `gas-monitor-web` and `gas-monitor-admin` both call this backend via `NEXT_PUBLIC_API_URL`.
 
@@ -32,7 +32,7 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 | Project | Stack | Local port | Production |
 |---|---|---|---|
 | `gas-monitor` | Expo SDK 54, expo-router, React 19 | Metro (`npm start`) | EAS Build (see below) |
-| `gas-monitor-backend` | Express, Prisma, PostgreSQL | `9000` | Railway — `gas-monitor-backend-production.up.railway.app` |
+| `gas-monitor-backend` | Express, Prisma, PostgreSQL | `9000` | Render — `ugo.4fgmonitor.com` |
 | `gas-monitor-web` | Next.js 15 App Router | `3000`* | `4fgmonitor.com` |
 | `gas-monitor-admin` | Next.js 15 App Router (no Prisma) | `3010` | `4fgmpanel.4fgmonitor.com` |
 | `landing` | Static HTML + Supabase Edge Functions | — | — |

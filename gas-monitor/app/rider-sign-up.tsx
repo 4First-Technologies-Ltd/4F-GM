@@ -10,6 +10,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, riderApi } from '@/lib/api';
 import { setPendingRiderProfile } from '@/lib/pendingRiderProfile';
 import { NetworkStatusDot } from '@/components/network-status-dot';
+import { LegalConsent } from '@/components/legal-consent';
+import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
   bg: '#FFFFFF',
@@ -103,6 +105,8 @@ function RoleTabs() {
 }
 
 export default function RiderSignUpScreen() {
+  const consent = useLegalConsent();
+  const [consentInvalid, setConsentInvalid] = useState(false);
   // `resume` = signed in already, verified, but the rider profile was never saved.
   const { resume } = useLocalSearchParams<{ resume?: string }>();
   const resuming = resume === '1';
@@ -147,6 +151,7 @@ export default function RiderSignUpScreen() {
   async function handleSubmit() {
     setApiErr('');
     if (!validateVehicle()) return;
+    if (!resuming && !consent.all) { setConsentInvalid(true); setApiErr('Please read and accept the Terms and Conditions and the Privacy Policy to continue.'); return; }
 
     const details = {
       phone: phone.trim(),
@@ -245,6 +250,8 @@ export default function RiderSignUpScreen() {
               />
             </View>
           )}
+
+          {step === 2 && !resuming && <LegalConsent invalid={consentInvalid} />}
 
           {!!apiErr && (
             <View style={s.apiErrBox}>

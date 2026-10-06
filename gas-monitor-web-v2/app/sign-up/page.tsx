@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Input } from '@/components/motion/input';
-import { Checkbox } from '@/components/motion/checkbox';
+import { LegalConsent } from '@/components/legal/LegalConsent';
 import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
@@ -40,6 +40,8 @@ function SignUpForm() {
   const [vehicleType, setVehicleType] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [consentInvalid, setConsentInvalid] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -48,8 +50,9 @@ function SignUpForm() {
     e.preventDefault();
     setError(null);
 
-    if (!termsAccepted) {
-      setError('Please accept the terms and conditions to continue.');
+    if (!termsAccepted || !privacyAccepted) {
+      setConsentInvalid(true);
+      setError('Please read and accept the Terms and Conditions and the Privacy Policy to continue.');
       return;
     }
 
@@ -288,24 +291,20 @@ function SignUpForm() {
               />
             )}
 
-            <div className="flex items-start gap-3 py-2">
-              <Checkbox
-                id="terms"
-                checked={termsAccepted}
-                onCheckedChange={setTermsAccepted}
-                className="mt-1"
-              />
-              <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
-                I agree to the{' '}
-                <Link href="/terms" className="text-primary hover:text-primary/80 font-medium">
-                  terms and conditions
-                </Link>{' '}
-                and{' '}
-                <Link href="/privacy" className="text-primary hover:text-primary/80 font-medium">
-                  privacy policy
-                </Link>
-              </label>
-            </div>
+            <LegalConsent
+              termsAccepted={termsAccepted}
+              privacyAccepted={privacyAccepted}
+              onTermsChange={(v) => {
+                setTermsAccepted(v);
+                setError(null);
+              }}
+              onPrivacyChange={(v) => {
+                setPrivacyAccepted(v);
+                setError(null);
+              }}
+              invalid={consentInvalid && !(termsAccepted && privacyAccepted)}
+              disabled={submitting}
+            />
 
             {error && (
               <div

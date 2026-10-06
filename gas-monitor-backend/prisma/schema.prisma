@@ -95,6 +95,7 @@ model User {
   orders            Order[]           @relation("ConsumerOrders")
   cylinderProfiles  CylinderProfile[]
   addresses         Address[]
+  legalAcceptances  LegalAcceptance[]
 
   @@map("users")
 }
@@ -350,4 +351,25 @@ model AuditLog {
   @@index([actorId])
   @@index([resource, resourceId])
   @@map("audit_logs")
+}
+
+enum LegalDocument {
+  TERMS
+  PRIVACY
+}
+
+/// Append-only record that a user accepted a version of a legal document.
+model LegalAcceptance {
+  id         String        @id @default(uuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   LegalDocument
+  version    String
+  ipAddress  String?
+  userAgent  String?
+  acceptedAt DateTime      @default(now())
+
+  @@unique([userId, document, version])
+  @@index([userId])
+  @@map("legal_acceptances")
 }

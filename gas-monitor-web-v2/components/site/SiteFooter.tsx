@@ -22,6 +22,8 @@ const groups = [
     title: "Company",
     links: [
       { href: "/contact", label: "Contact" },
+      { href: "/terms", label: "Terms and Conditions" },
+      { href: "/privacy", label: "Privacy Policy" },
     ],
   },
 ];

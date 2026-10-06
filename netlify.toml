@@ -4,7 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  NEXT_PUBLIC_API_URL = "https://gas-monitor-backend-production.up.railway.app"
+  NEXT_PUBLIC_API_URL = "https://ugo.4fgmonitor.com"
 
 [[redirects]]
   from = "/*"

@@ -9,6 +9,8 @@ import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
 import { NetworkStatusDot } from '@/components/network-status-dot';
+import { LegalConsent } from '@/components/legal-consent';
+import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
   bg: '#FFFFFF',
@@ -126,6 +128,8 @@ function RoleTabs({
 }
 
 export default function SignUpScreen() {
+  const consent = useLegalConsent();
+  const [consentInvalid, setConsentInvalid] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -150,6 +154,8 @@ export default function SignUpScreen() {
     if (!password) { setPwdErr('Password is required'); valid = false; }
     else if (password.length < 6) { setPwdErr('At least 6 characters'); valid = false; }
     else setPwdErr('');
+
+    if (!consent.all) { setConsentInvalid(true); setApiErr('Please read and accept the Terms and Conditions and the Privacy Policy to continue.'); valid = false; }
 
     if (!valid) return;
 
@@ -229,13 +235,7 @@ export default function SignUpScreen() {
             />
           </View>
 
-          {/* Terms note */}
-          <Text style={s.terms}>
-            By creating an account you agree to our{' '}
-            <Text style={{ color: C.accent, fontWeight: '600' }}>Terms of Service</Text>
-            {' '}and{' '}
-            <Text style={{ color: C.accent, fontWeight: '600' }}>Privacy Policy</Text>
-          </Text>
+          <LegalConsent invalid={consentInvalid} />
 
           {/* API error */}
           {!!apiErr && (
