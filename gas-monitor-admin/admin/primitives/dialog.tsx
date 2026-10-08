@@ -11,6 +11,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
  */
 function useDialogBehaviour(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  // Held in a ref so a caller passing a fresh `onClose` each render does not
+  // re-run the effect below, which would steal focus back to the first control
+  // on every keystroke.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     returnFocusRef.current = document.activeElement as HTMLElement | null;
@@ -22,7 +27,7 @@ function useDialogBehaviour(ref: React.RefObject<HTMLElement | null>, onClose: (
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !ref.current) return;
@@ -49,7 +54,7 @@ function useDialogBehaviour(ref: React.RefObject<HTMLElement | null>, onClose: (
       document.body.style.overflow = previousOverflow;
       returnFocusRef.current?.focus?.();
     };
-  }, [ref, onClose]);
+  }, [ref]);
 }
 
 /* --------------------------------------------------------------- confirm --- */
