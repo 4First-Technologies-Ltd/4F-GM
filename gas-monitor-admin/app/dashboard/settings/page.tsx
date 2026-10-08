@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getJson, patchJson } from '@/admin/data/source';
 import { ErrorState, ForbiddenState, LoadingBlock } from '@/admin/primitives/states';
-import { usePermission } from '@/admin/permissions/use-permission';
+import { Can, usePermission } from '@/admin/permissions/use-permission';
 import { ROLE_GRANTS, ROLE_LABEL, type AdminRole } from '@/admin/permissions/permissions';
 import type { PlatformSettings } from '@/admin/modules/types';
 import { formatNaira } from '@/admin/primitives/format';
@@ -365,9 +365,14 @@ export default function SettingsPage() {
             <p className="adm-field-help" style={{ marginTop: 'var(--space-2)' }}>
               Roles are defined in the database schema, not here, so they cannot be edited from the
               console. Manage who holds each role under{' '}
-              <Link className="adm-link" href="/dashboard/admin-users" style={{ fontWeight: 600 }}>
-                Admin users
-              </Link>
+              <Can
+                permission="admins.read"
+                fallback={<span style={{ fontWeight: 600 }}>Admin users</span>}
+              >
+                <Link className="adm-link" href="/dashboard/admin-users" style={{ fontWeight: 600 }}>
+                  Admin users
+                </Link>
+              </Can>
               .
             </p>
             <div className="adm-table-scroll" style={{ marginTop: 'var(--space-4)' }}>

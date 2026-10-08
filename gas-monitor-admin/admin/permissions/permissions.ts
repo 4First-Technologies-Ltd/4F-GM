@@ -31,6 +31,17 @@ export const ROLE_LABEL: Record<AdminRole, string> = {
  * SUPPORT is deliberately read-only: mutating platform data is an OPERATIONS
  * decision, and the backend now enforces that with `requireOperations`.
  */
+/**
+ * Reads that the `*.read` wildcard must NOT cover. They are reachable only by a
+ * role that names them explicitly (SUPER_ADMIN's `*` always does), so a new
+ * role or a wildcard can never silently expose them.
+ *
+ *   audit.read    - who did what; super admin only
+ *   security.read - IP blocklist; super admin only
+ *   admins.read   - the admin list; granted to OPERATIONS by name below
+ */
+export const EXPLICIT_ONLY_READS: readonly string[] = ['audit.read', 'security.read', 'admins.read'];
+
 export const ROLE_GRANTS: Record<AdminRole, string[]> = {
   SUPPORT: ['*.read'],
   OPERATIONS: [
@@ -44,7 +55,9 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
     'users.suspend',
     'users.delete',
     'errors.resolve',
-    'settings.update'
+    'settings.update',
+    // Read-only view of the admin list; managing admins stays SUPER_ADMIN.
+    'admins.read'
     // security.block / security.unblock deliberately excluded: a bad block can
     // take the whole platform offline, so it stays with SUPER_ADMIN.
   ],

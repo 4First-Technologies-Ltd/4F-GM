@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { requireSuperAdmin } from '../../middleware/requireAdmin';
+import { requireOperations, requireSuperAdmin } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
@@ -14,9 +14,10 @@ const SORTABLE = ['createdAt', 'name', 'email', 'role'] as const;
 
 const SELECT = { id: true, name: true, email: true, role: true, isActive: true, createdAt: true } as const;
 
+// Operations may view the list; every write below stays super admin only.
 router.get(
   '/',
-  requireSuperAdmin,
+  requireOperations,
   asyncHandler(async (req, res) => {
     const query = parseListQuery(req);
     const role = req.query.role;

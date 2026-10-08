@@ -1,12 +1,14 @@
 'use client';
 
 import { Suspense } from 'react';
+import { RequirePermission } from '@/admin/permissions/require-permission';
 import { ResourceList } from '@/admin/resource/resource-list';
 import { securityModule } from '@/admin/modules/security';
 import { LoadingState } from '@/admin/primitives/states';
 
 export default function SecurityPage() {
   return (
+    <RequirePermission permission="security.read">
     <Suspense fallback={<LoadingState />}>
       <ResourceList
         config={securityModule}
@@ -24,5 +26,6 @@ export default function SecurityPage() {
         )}
       />
     </Suspense>
+    </RequirePermission>
   );
 }

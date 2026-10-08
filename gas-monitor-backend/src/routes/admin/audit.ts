@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { AuditAction, Prisma } from '@prisma/client';
-import { requireAdmin } from '../../middleware/requireAdmin';
+import { requireSuperAdmin } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { paginated, parseListQuery } from '../../lib/listQuery';
@@ -15,7 +15,7 @@ const router = Router();
 
 router.get(
   '/',
-  requireAdmin,
+  requireSuperAdmin,
   asyncHandler(async (req, res) => {
     const query = parseListQuery(req);
     const action = req.query.action;
@@ -66,7 +66,7 @@ router.get(
 /** Distinct actors, for the audit filter dropdown. */
 router.get(
   '/actors',
-  requireAdmin,
+  requireSuperAdmin,
   asyncHandler(async (_req, res) => {
     const actors = await prisma.auditLog.groupBy({
       by: ['actorId', 'actorName', 'actorEmail'],

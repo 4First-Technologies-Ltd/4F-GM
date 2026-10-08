@@ -51,11 +51,11 @@ Role scoping is **rank-based** and lives in `gas-monitor-backend/src/middleware/
 
 | Guard | Minimum role | Applied to |
 |---|---|---|
-| `requireAdmin` | SUPPORT | all admin reads |
-| `requireOperations` | OPERATIONS | vendor approval, listing stock, user create/update/delete, settings |
-| `requireSuperAdmin` | SUPER_ADMIN | `/api/admin/admin-users*` |
+| `requireAdmin` | SUPPORT | admin reads, except the admin list and audit log |
+| `requireOperations` | OPERATIONS | vendor approval, listing stock, user create/update/delete, settings, and read-only `GET /api/admin/admin-users` |
+| `requireSuperAdmin` | SUPER_ADMIN | admin-user writes (create/update/delete), `/api/admin/audit*`; the Security page is also super-admin-only in the UI |
 
-Every mutating admin route writes to `audit_logs` via `src/lib/audit.ts`. The audit trail is append-only and surfaced at `/dashboard/audit`.
+Every mutating admin route writes to `audit_logs` via `src/lib/audit.ts`. The audit trail is append-only and surfaced at `/dashboard/audit`, visible to super admins only.
 
 ## Mobile app builds (EAS)
 
