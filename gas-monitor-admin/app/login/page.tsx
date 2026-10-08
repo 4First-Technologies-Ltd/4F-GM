@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminFetch } from '@/lib/api';
-import { IconDiamond } from '@/components/icons';
+import { BrandMark } from '@/components/BrandMark';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,7 +40,7 @@ export default function LoginPage() {
     <main className="adm-login">
       <div className="adm-login-card">
         <div className="adm-login-brand">
-          <IconDiamond className="adm-login-logo" />
+          <BrandMark className="adm-login-logo" />
           <div>
             <h1 className="adm-page-title">4FG Admin</h1>
             <p className="adm-page-meta">Sign in to manage the gas monitor platform.</p>

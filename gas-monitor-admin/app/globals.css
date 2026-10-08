@@ -180,8 +180,8 @@ textarea {
   border-bottom: 1px solid var(--sidebar-border);
 }
 .adm-sidebar-logo {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   color: var(--accent);
   flex-shrink: 0;
 }
@@ -1302,8 +1302,8 @@ select.adm-input {
   gap: var(--space-3);
 }
 .adm-login-logo {
-  width: 26px;
-  height: 26px;
+  width: 40px;
+  height: 40px;
   color: var(--accent);
 }
 

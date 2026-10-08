@@ -9,7 +9,8 @@ import { useIsMobile } from '@/admin/primitives/use-is-mobile';
 import { useAdminSession } from '@/lib/admin-session-context';
 import { ROLE_LABEL } from '@/admin/permissions/permissions';
 import { adminFetch } from '@/lib/api';
-import { IconDiamond, IconLogout, IconMoon, IconSun } from '@/components/icons';
+import { IconLogout, IconMoon, IconSun } from '@/components/icons';
+import { BrandMark } from '@/components/BrandMark';
 import { useTheme } from './theme';
 
 /**
@@ -78,7 +79,7 @@ export function AdminSidebar({
         aria-hidden={isMobile && !open ? true : undefined}
       >
         <div className="adm-sidebar-brand">
-          <IconDiamond className="adm-sidebar-logo" />
+          <BrandMark className="adm-sidebar-logo" />
           <div className="adm-sidebar-brand-text">
             <span className="adm-sidebar-brand-name">4FG Admin</span>
             <span className="adm-sidebar-brand-sub">Operations console</span>
