@@ -327,6 +327,8 @@ enum AuditAction {
   ADMIN_DELETED
   SETTINGS_UPDATED
   VENDOR_PLAN_CHANGED
+  ADMIN_LOGIN
+  ADMIN_LOGIN_FAILED
 }
 
 // Append-only record of every mutating admin action.

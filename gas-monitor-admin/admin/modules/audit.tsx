@@ -30,7 +30,9 @@ const ACTION_OPTIONS = [
   'ADMIN_UPDATED',
   'ADMIN_DEACTIVATED',
   'ADMIN_DELETED',
-  'SETTINGS_UPDATED'
+  'SETTINGS_UPDATED',
+  'ADMIN_LOGIN',
+  'ADMIN_LOGIN_FAILED'
 ].map((value) => ({ value, label: humaniseEnum(value) }));
 
 export const auditModule: ResourceConfig<AuditRow> = {

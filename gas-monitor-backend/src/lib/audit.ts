@@ -1,4 +1,4 @@
-import type { AuditAction, Prisma } from '@prisma/client';
+import type { AdminRole, AuditAction, Prisma } from '@prisma/client';
 import type { Request } from 'express';
 import { prisma } from './prisma';
 
@@ -47,5 +47,34 @@ export async function writeAuditLog(
       resourceId: entry.resourceId,
       err
     });
+  }
+}
+
+/**
+ * Record a sign-in attempt. Takes the actor explicitly because no session
+ * exists yet (successful login) or ever will (failed login, where the actor is
+ * only the username that was tried).
+ */
+export async function writeAuthAudit(
+  req: Request,
+  entry: {
+    action: 'ADMIN_LOGIN' | 'ADMIN_LOGIN_FAILED';
+    actorId: string;
+    actorName: string;
+    actorEmail: string;
+    actorRole: AdminRole;
+    summary: string;
+  }
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        ...entry,
+        resource: 'auth',
+        metadata: { ip: req.ip, userAgent: req.get('user-agent') ?? null }
+      }
+    });
+  } catch (err) {
+    console.error('[audit] failed to write auth audit log', { action: entry.action, err });
   }
 }
