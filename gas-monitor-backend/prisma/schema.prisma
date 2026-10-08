@@ -284,6 +284,10 @@ model AdminUser {
   passwordHash String
   role         AdminRole @default(SUPPORT)
   isActive     Boolean   @default(true)
+  // Bumped on every password change/reset; sessions carry the value they were
+  // issued with, so bumping it signs out every other session immediately.
+  tokenVersion       Int     @default(0)
+  mustChangePassword Boolean @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -329,6 +333,7 @@ enum AuditAction {
   VENDOR_PLAN_CHANGED
   ADMIN_LOGIN
   ADMIN_LOGIN_FAILED
+  ADMIN_PASSWORD_CHANGED
 }
 
 // Append-only record of every mutating admin action.

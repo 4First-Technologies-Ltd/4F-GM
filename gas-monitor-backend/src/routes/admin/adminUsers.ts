@@ -75,7 +75,7 @@ router.post(
 
     const passwordHash = await bcrypt.hash(result.data.password, 10);
     const adminUser = await prisma.adminUser.create({
-      data: { name: result.data.name, email, passwordHash, role: result.data.role },
+      data: { name: result.data.name, email, passwordHash, role: result.data.role, mustChangePassword: true },
       select: SELECT
     });
 
@@ -93,7 +93,8 @@ router.post(
 
 const patchSchema = z.object({
   isActive: z.boolean().optional(),
-  password: z.string().min(8).optional()
+  password: z.string().min(8).optional(),
+  role: z.enum(['SUPER_ADMIN', 'OPERATIONS', 'SUPPORT']).optional()
 });
 
 router.patch(
@@ -116,6 +117,23 @@ router.patch(
       return res.status(409).json({ error: 'You cannot deactivate your own admin account' });
     }
 
+    const roleChanging = result.data.role !== undefined && result.data.role !== existing.role;
+
+    // Self-demotion is how a sole super admin locks everyone out of admin
+    // management; a different super admin has to do it.
+    if (roleChanging && req.admin?.adminId === id) {
+      return res.status(409).json({ error: 'You cannot change your own role' });
+    }
+
+    if (roleChanging && existing.role === 'SUPER_ADMIN') {
+      const remaining = await prisma.adminUser.count({
+        where: { role: 'SUPER_ADMIN', isActive: true, id: { not: id } }
+      });
+      if (remaining === 0) {
+        return res.status(409).json({ error: 'Cannot demote the last active super admin' });
+      }
+    }
+
     if (existing.role === 'SUPER_ADMIN' && result.data.isActive === false) {
       const remaining = await prisma.adminUser.count({
         where: { role: 'SUPER_ADMIN', isActive: true, id: { not: id } }
@@ -125,9 +143,22 @@ router.patch(
       }
     }
 
-    const data: { isActive?: boolean; passwordHash?: string } = {};
+    const data: {
+      isActive?: boolean;
+      role?: 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
+      passwordHash?: string;
+      mustChangePassword?: boolean;
+      tokenVersion?: { increment: number };
+    } = {};
     if (result.data.isActive !== undefined) data.isActive = result.data.isActive;
-    if (result.data.password) data.passwordHash = await bcrypt.hash(result.data.password, 10);
+    if (roleChanging) data.role = result.data.role;
+    if (result.data.password) {
+      data.passwordHash = await bcrypt.hash(result.data.password, 10);
+      // A reset password is known to the resetter: force the owner to replace it,
+      // and sign out whoever may still hold a session under the old one.
+      data.mustChangePassword = true;
+      data.tokenVersion = { increment: 1 };
+    }
 
     const adminUser = await prisma.adminUser.update({ where: { id }, data, select: SELECT });
 
@@ -138,6 +169,15 @@ router.patch(
         resourceId: id,
         summary: `${existing.name} (${existing.email}) ${result.data.isActive ? 'reactivated' : 'deactivated'}`,
         metadata: { email: existing.email, isActive: result.data.isActive }
+      });
+    }
+    if (roleChanging) {
+      await writeAuditLog(req, {
+        action: 'ADMIN_UPDATED',
+        resource: 'admin',
+        resourceId: id,
+        summary: `Role changed for ${existing.name} (${existing.email}): ${existing.role} → ${result.data.role}`,
+        metadata: { email: existing.email, fields: ['role'], from: existing.role, to: result.data.role }
       });
     }
     if (result.data.password) {

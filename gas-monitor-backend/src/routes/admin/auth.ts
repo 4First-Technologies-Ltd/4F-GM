@@ -3,9 +3,9 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { signAdminSession, ADMIN_SESSION_COOKIE } from '../../lib/adminJwt';
 import { prisma } from '../../lib/prisma';
-import { getAdminSession } from '../../middleware/requireAdmin';
+import { resolveAdminSession } from '../../middleware/requireAdmin';
 import { asyncHandler } from '../../lib/asyncHandler';
-import { writeAuthAudit } from '../../lib/audit';
+import { writeAuditLog, writeAuthAudit } from '../../lib/audit';
 import type { AdminRole } from '@prisma/client';
 
 const router = Router();
@@ -62,7 +62,8 @@ router.post(
         adminId: admin.id,
         username: admin.email,
         name: admin.name,
-        role: admin.role
+        role: admin.role,
+        tv: admin.tokenVersion
       });
       actor = { id: admin.id, name: admin.name, email: admin.email, role: admin.role };
     }
@@ -92,12 +93,99 @@ router.post('/logout', (_req, res) => {
   return res.json({ ok: true });
 });
 
-router.get('/me', (req, res) => {
-  const session = getAdminSession(req);
-  if (!session) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-  return res.json({ ok: true, name: session.name, role: session.role });
+router.get(
+  '/me',
+  asyncHandler(async (req, res) => {
+    const resolved = await resolveAdminSession(req);
+    if (!resolved) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const { session, mustChangePassword } = resolved;
+    return res.json({
+      ok: true,
+      name: session.name,
+      role: session.role,
+      mustChangePassword,
+      // The env root account has no row, hence no password to change here.
+      canChangePassword: session.adminId !== 'root'
+    });
+  })
+);
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Enter your current password'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters')
 });
+
+// Deliberately not behind requireAdmin: an admin flagged mustChangePassword is
+// blocked by that guard everywhere else, and this is the one route they need.
+router.post(
+  '/change-password',
+  asyncHandler(async (req, res) => {
+    const resolved = await resolveAdminSession(req);
+    if (!resolved) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const { session } = resolved;
+    if (session.adminId === 'root') {
+      return res
+        .status(400)
+        .json({ error: 'The shared env login has no stored password. Change ADMIN_PASSWORD in the environment.' });
+    }
+
+    const result = changePasswordSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.errors[0].message });
+    }
+    const { currentPassword, newPassword } = result.data;
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'New password must be different from the current one' });
+    }
+
+    const admin = await prisma.adminUser.findUnique({ where: { id: session.adminId } });
+    if (!admin || !(await bcrypt.compare(currentPassword, admin.passwordHash))) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    const updated = await prisma.adminUser.update({
+      where: { id: admin.id },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+        mustChangePassword: false,
+        tokenVersion: { increment: 1 }
+      }
+    });
+
+    req.admin = session;
+    await writeAuditLog(req, {
+      action: 'ADMIN_PASSWORD_CHANGED',
+      resource: 'admin',
+      resourceId: admin.id,
+      // Records THAT it changed, never any form of the value.
+      summary: `${admin.name} (${admin.email}) changed their own password`,
+      metadata: { email: admin.email }
+    });
+
+    // Every other session just became invalid; keep this one alive.
+    res.cookie(
+      ADMIN_SESSION_COOKIE,
+      signAdminSession({
+        adminId: admin.id,
+        username: admin.email,
+        name: admin.name,
+        role: admin.role,
+        tv: updated.tokenVersion
+      }),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 12 * 1000
+      }
+    );
+    return res.json({ ok: true });
+  })
+);
 
 export default router;

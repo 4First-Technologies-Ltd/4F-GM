@@ -13,6 +13,8 @@ export interface AdminSessionPayload {
   username: string;
   name: string;
   role: AdminRole;
+  /** AdminUser.tokenVersion at issue time. Absent for the env root account. */
+  tv?: number;
 }
 
 export function signAdminSession(payload: Omit<AdminSessionPayload, 'admin'>): string {

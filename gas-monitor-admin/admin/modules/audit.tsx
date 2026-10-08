@@ -32,7 +32,8 @@ const ACTION_OPTIONS = [
   'ADMIN_DELETED',
   'SETTINGS_UPDATED',
   'ADMIN_LOGIN',
-  'ADMIN_LOGIN_FAILED'
+  'ADMIN_LOGIN_FAILED',
+  'ADMIN_PASSWORD_CHANGED'
 ].map((value) => ({ value, label: humaniseEnum(value) }));
 
 export const auditModule: ResourceConfig<AuditRow> = {

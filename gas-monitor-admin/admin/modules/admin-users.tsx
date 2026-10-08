@@ -90,6 +90,54 @@ export const adminUsersModule: ResourceConfig<AdminUserRow> = {
 
   rowActions: [
     {
+      key: 'role-super',
+      label: 'Make super admin',
+      permission: 'admins.update',
+      visible: (a) => a.role !== 'SUPER_ADMIN',
+      confirm: {
+        title: 'Make super admin?',
+        body: "They will be able to manage admins and everything else. Takes effect on their next request and is recorded in the audit log.",
+        confirmLabel: 'Make super admin'
+      },
+      run: async (admin, h) => {
+        await data.update!(admin.id, { role: 'SUPER_ADMIN' });
+        h.toast(`${admin.name} is now super admin`);
+        h.refresh();
+      }
+    },
+    {
+      key: 'role-operations',
+      label: 'Make operations',
+      permission: 'admins.update',
+      visible: (a) => a.role !== 'OPERATIONS',
+      confirm: {
+        title: 'Make operations?',
+        body: "They can change platform data (vendors, listings, users, settings) but not manage admins. Takes effect on their next request and is recorded in the audit log.",
+        confirmLabel: 'Make operations'
+      },
+      run: async (admin, h) => {
+        await data.update!(admin.id, { role: 'OPERATIONS' });
+        h.toast(`${admin.name} is now operations`);
+        h.refresh();
+      }
+    },
+    {
+      key: 'role-support',
+      label: 'Make support (read-only)',
+      permission: 'admins.update',
+      visible: (a) => a.role !== 'SUPPORT',
+      confirm: {
+        title: 'Make support (read-only)?',
+        body: "They will only be able to view data. Takes effect on their next request and is recorded in the audit log.",
+        confirmLabel: 'Make support (read-only)'
+      },
+      run: async (admin, h) => {
+        await data.update!(admin.id, { role: 'SUPPORT' });
+        h.toast(`${admin.name} is now support`);
+        h.refresh();
+      }
+    },
+    {
       key: 'deactivate',
       label: 'Deactivate',
       variant: 'danger',

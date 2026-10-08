@@ -7,6 +7,10 @@ export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
 export interface AdminSession {
   name: string;
   role: AdminRole;
+  /** Named admins can set their own password; the shared env login cannot. */
+  canChangePassword: boolean;
+  /** Set by whoever created/reset the account; blocks everything but /dashboard/account. */
+  mustChangePassword: boolean;
 }
 
 const AdminSessionContext = createContext<AdminSession | null>(null);

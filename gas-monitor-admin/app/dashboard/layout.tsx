@@ -39,7 +39,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
-          setSession({ name: data.name, role: data.role });
+          setSession({
+            name: data.name,
+            role: data.role,
+            canChangePassword: !!data.canChangePassword,
+            mustChangePassword: !!data.mustChangePassword
+          });
+          if (data.mustChangePassword && !window.location.pathname.startsWith('/dashboard/account')) {
+            router.replace('/dashboard/account');
+          }
         } else {
           router.replace('/login');
         }
@@ -73,7 +81,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
-    if (session) loadBadges();
+    // Every data route is refused while a password change is pending.
+    if (session && !session.mustChangePassword) loadBadges();
   }, [session, pathname, loadBadges]);
 
   if (!session) {
@@ -107,7 +116,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               drawerOpen={drawerOpen}
             />
             <main id="adm-main" className="adm-main">
-              {children}
+              {session.mustChangePassword && !pathname.startsWith('/dashboard/account') ? null : children}
             </main>
           </div>
         </div>

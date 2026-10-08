@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { breadcrumbsFor } from './navigation.config';
 import { useIsMobile } from '@/admin/primitives/use-is-mobile';
 import { useAdminSession } from '@/lib/admin-session-context';
@@ -27,7 +28,7 @@ export function AdminHeader({
   drawerOpen: boolean;
 }) {
   const isMobile = useIsMobile();
-  const { name, role } = useAdminSession();
+  const { name, role, canChangePassword } = useAdminSession();
   const trail = breadcrumbsFor(pathname);
 
   return (
@@ -62,7 +63,12 @@ export function AdminHeader({
       </div>
 
       <div className="adm-header-right">
-        <div className="adm-user-chip">
+        <Link
+          href="/dashboard/account"
+          className="adm-user-chip"
+          aria-label={canChangePassword ? `${name} — account and password` : `${name} — account`}
+          style={{ textDecoration: 'none', color: 'inherit' }}
+        >
           <span className="adm-avatar" aria-hidden="true">
             {name
               .split(/\s+/)
@@ -77,7 +83,7 @@ export function AdminHeader({
               <span className="adm-micro-label">{ROLE_LABEL[role] ?? role}</span>
             </span>
           )}
-        </div>
+        </Link>
       </div>
     </header>
   );

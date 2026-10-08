@@ -49,7 +49,7 @@ export function AddAdminButton({ onCreated }: { onCreated: () => void }) {
       </button>
       {open && (
         <Modal title="Add admin" onClose={close}>
-          <form onSubmit={submit}>
+          <form onSubmit={submit} style={{ display: 'grid', gap: 'var(--space-4)' }}>
             <label className="adm-field">
               <span className="adm-field-label">Full name</span>
               <input className="adm-input" required value={form.name}
