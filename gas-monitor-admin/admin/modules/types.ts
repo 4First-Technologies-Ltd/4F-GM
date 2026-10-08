@@ -108,6 +108,84 @@ export interface UserRow {
   _count: { orders: number };
 }
 
+/** `GET /api/admin/users/:id` — everything we hold on one account. */
+export interface UserDetail {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  devicePhone: string | null;
+  avatarUrl: string | null;
+  role: UserRole;
+  emailVerified: boolean;
+  isSuspended: boolean;
+  pushEnabled: boolean;
+  emailNotifEnabled: boolean;
+  smsAlertsEnabled: boolean;
+  unitPreference: string;
+  createdAt: string;
+  updatedAt: string;
+  totalSpend: number;
+  vendorProfile: {
+    id: string;
+    businessName: string;
+    businessAddress: string;
+    state: string | null;
+    city: string | null;
+    phone: string;
+    status: VendorStatus;
+    bio: string | null;
+    logoUrl: string | null;
+    lat: number | null;
+    lng: number | null;
+    plan: VendorPlan;
+    planChangedAt: string | null;
+    planLockedUntil: string | null;
+    createdAt: string;
+    documents: { id: string; url: string; fileName: string; createdAt: string }[];
+    planChanges: VendorPlanChangeRow[];
+    _count: { listings: number; orders: number; documents: number };
+  } | null;
+  riderProfile: {
+    id: string;
+    phone: string;
+    vehicleType: string | null;
+    plateNumber: string | null;
+    lat: number | null;
+    lng: number | null;
+    status: RiderStatus;
+    createdAt: string;
+    orders: {
+      id: string;
+      status: OrderStatus;
+      deliveryAddress: string;
+      assignedAt: string | null;
+      createdAt: string;
+    }[];
+    _count: { orders: number };
+  } | null;
+  addresses: { id: string; label: string; fullAddress: string; isDefault: boolean }[];
+  cylinderProfiles: { id: string; name: string; sizeKg: number; isActive: boolean }[];
+  legalAcceptances: {
+    id: string;
+    document: string;
+    version: string;
+    ipAddress: string | null;
+    acceptedAt: string;
+  }[];
+  orders: {
+    id: string;
+    cylinderSize: string;
+    quantity: number;
+    totalAmount: number;
+    status: OrderStatus;
+    supplierName: string | null;
+    deliveryAddress: string;
+    createdAt: string;
+  }[];
+  _count: { orders: number };
+}
+
 export interface CustomerRow {
   id: string;
   name: string;

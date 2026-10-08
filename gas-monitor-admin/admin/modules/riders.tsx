@@ -23,6 +23,7 @@ export const ridersModule: ResourceConfig<RiderRow> = {
 
   primaryKey: 'id',
   displayField: 'id',
+  userIdOf: (r) => r.user.id,
 
   columns: [
     {

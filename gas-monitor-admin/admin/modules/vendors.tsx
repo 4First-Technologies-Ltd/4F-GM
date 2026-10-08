@@ -57,6 +57,7 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
 
   primaryKey: 'id',
   displayField: 'businessName',
+  userIdOf: (v) => v.user.id,
 
   columns: [
     {

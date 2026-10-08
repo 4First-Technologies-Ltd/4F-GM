@@ -9,6 +9,7 @@ import { Pagination } from '@/admin/primitives/pagination';
 import { EmptyState, ErrorState, ForbiddenState, LoadingState } from '@/admin/primitives/states';
 import { ConfirmDialog, Drawer } from '@/admin/primitives/dialog';
 import { StatusBadge } from '@/admin/primitives/status-badge';
+import { UserDetailModal } from '@/admin/primitives/user-detail-modal';
 import { formatCell } from '@/admin/primitives/format';
 import { usePermission } from '@/admin/permissions/use-permission';
 
@@ -150,7 +151,7 @@ export function ResourceList<T>({
               onSort={r.toggleSort}
               rowActions={rowActions}
               onAction={invoke}
-              onRowClick={config.detail ? (row) => setDetailRow(row) : undefined}
+              onRowClick={config.detail || config.userIdOf ? (row) => setDetailRow(row) : undefined}
               rowNoun={config.labelSingular.toLowerCase()}
             />
             <Pagination
@@ -180,7 +181,25 @@ export function ResourceList<T>({
         />
       )}
 
-      {detailRow && config.detail && (
+      {detailRow && config.userIdOf && (
+        <UserDetailModal
+          userId={config.userIdOf(detailRow)}
+          onClose={() => setDetailRow(null)}
+          footer={rowActions.map((a) => (
+            <DetailAction
+              key={a.key}
+              action={a}
+              row={detailRow as T}
+              onRun={(action) => {
+                setDetailRow(null);
+                invoke(action, detailRow as T);
+              }}
+            />
+          ))}
+        />
+      )}
+
+      {detailRow && config.detail && !config.userIdOf && (
         <DetailDrawer<T>
           detail={config.detail}
           row={detailRow}

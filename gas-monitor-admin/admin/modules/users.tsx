@@ -27,6 +27,7 @@ export const usersModule: ResourceConfig<UserRow> = {
 
   primaryKey: 'id',
   displayField: 'name',
+  userIdOf: (u) => u.id,
 
   columns: [
     {

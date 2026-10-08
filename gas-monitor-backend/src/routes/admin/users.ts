@@ -128,6 +128,7 @@ router.get(
         name: true,
         email: true,
         phone: true,
+        devicePhone: true,
         avatarUrl: true,
         role: true,
         emailVerified: true,
@@ -143,9 +144,33 @@ router.get(
             id: true,
             businessName: true,
             businessAddress: true,
+            state: true,
+            city: true,
             phone: true,
             status: true,
             bio: true,
+            logoUrl: true,
+            lat: true,
+            lng: true,
+            plan: true,
+            planChangedAt: true,
+            planLockedUntil: true,
+            createdAt: true,
+            documents: { select: { id: true, url: true, fileName: true, createdAt: true } },
+            planChanges: {
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+              select: {
+                id: true,
+                fromPlan: true,
+                toPlan: true,
+                actor: true,
+                actorName: true,
+                actorEmail: true,
+                bypassedCooldown: true,
+                createdAt: true
+              }
+            },
             _count: { select: { listings: true, orders: true, documents: true } }
           }
         },
@@ -155,14 +180,35 @@ router.get(
             phone: true,
             vehicleType: true,
             plateNumber: true,
+            lat: true,
+            lng: true,
             status: true,
+            createdAt: true,
+            orders: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+              select: { id: true, status: true, deliveryAddress: true, assignedAt: true, createdAt: true }
+            },
             _count: { select: { orders: true } }
           }
         },
         addresses: { select: { id: true, label: true, fullAddress: true, isDefault: true } },
         cylinderProfiles: { select: { id: true, name: true, sizeKg: true, isActive: true } },
+        legalAcceptances: {
+          orderBy: { acceptedAt: 'desc' },
+          select: { id: true, document: true, version: true, ipAddress: true, acceptedAt: true }
+        },
         orders: {
-          select: { id: true, cylinderSize: true, quantity: true, totalAmount: true, status: true, createdAt: true },
+          select: {
+            id: true,
+            cylinderSize: true,
+            quantity: true,
+            totalAmount: true,
+            status: true,
+            supplierName: true,
+            deliveryAddress: true,
+            createdAt: true
+          },
           orderBy: { createdAt: 'desc' },
           take: 10
         },
@@ -174,7 +220,13 @@ router.get(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    return res.json({ user });
+    // Only money that actually landed counts as spend (matches /customers).
+    const spend = await prisma.order.aggregate({
+      where: { consumerId: id, status: { in: ['CONFIRMED', 'DELIVERED'] } },
+      _sum: { totalAmount: true }
+    });
+
+    return res.json({ user: { ...user, totalSpend: spend._sum.totalAmount ?? 0 } });
   })
 );
 

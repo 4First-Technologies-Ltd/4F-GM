@@ -155,6 +155,13 @@ export interface ResourceConfig<T> {
 
   detail?: DetailConfig<T>;
 
+  /**
+   * For account-backed resources (users, customers, vendors, riders): maps a row
+   * to its User id. When set, clicking a row opens the full user-detail modal
+   * instead of the `detail` drawer.
+   */
+  userIdOf?: (row: T) => string;
+
   permissions: {
     read: string;
     create?: string;
