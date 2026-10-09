@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { useAppFonts } from '@/hooks/use-app-fonts';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Sentry } from '@/lib/sentry';
+import { track, trackScreen } from '@/lib/analytics';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -18,6 +19,16 @@ export const unstable_settings = {
 function RootLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded] = useAppFonts();
+  // Route PATTERN (e.g. "rider-order/[id]"), never the URL, so no ids are recorded.
+  const segments = useSegments().join('/');
+
+  useEffect(() => {
+    track('app_opened');
+  }, []);
+
+  useEffect(() => {
+    if (segments) trackScreen(segments);
+  }, [segments]);
 
   useEffect(() => {
     if (fontsLoaded) {

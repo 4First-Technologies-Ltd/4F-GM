@@ -1368,3 +1368,63 @@ select.adm-input {
     font-size: 16px;
   }
 }
+
+/* ---- Pipeline board ---------------------------------------------------- */
+.adm-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  align-items: start;
+}
+.adm-board-col {
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  min-width: 0;
+}
+.adm-board-col-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.adm-board-col-body {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.adm-board-empty {
+  margin: 0;
+  padding: var(--space-3);
+  text-align: center;
+}
+.adm-board-card {
+  display: grid;
+  gap: var(--space-1);
+  text-align: left;
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.adm-board-card:hover {
+  border-color: var(--accent, currentColor);
+}
+.adm-board-card-top,
+.adm-board-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8125rem;
+}

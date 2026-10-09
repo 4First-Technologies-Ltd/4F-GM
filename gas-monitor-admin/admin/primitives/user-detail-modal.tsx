@@ -14,6 +14,7 @@ import {
   humaniseEnum,
   shortId
 } from '@/admin/primitives/format';
+import { CrmPanel } from '@/admin/primitives/crm-panel';
 import type { UserDetail } from '@/admin/modules/types';
 
 const PLAN_NAMES = { BASIC: 'Basic (5%)', GROWTH: 'Growth (7%)', PRO: 'Pro / Premium (10%)' } as const;
@@ -293,6 +294,10 @@ export function UserDetailModal({
                 ))}
               </ul>
             )}
+          </Section>
+
+          <Section title="CRM">
+            <CrmPanel userId={user.id} />
           </Section>
 
           <Section title={`Legal acceptances (${user.legalAcceptances.length})`}>

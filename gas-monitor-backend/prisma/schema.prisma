@@ -96,6 +96,10 @@ model User {
   cylinderProfiles  CylinderProfile[]
   addresses         Address[]
   legalAcceptances  LegalAcceptance[]
+  tickets           Ticket[]          @relation("TicketRequester")
+  crmNotes          CrmNote[]
+  crmTags           CrmUserTag[]
+  crmTasks          CrmTask[]
 
   @@map("users")
 }
@@ -125,9 +129,9 @@ model RefreshToken {
 }
 
 model VendorProfile {
-  id              String           @id @default(uuid())
-  userId          String           @unique
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String             @id @default(uuid())
+  userId          String             @unique
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   businessName    String
   businessAddress String
   /// Nigerian state and city the vendor trades from. Nullable only because
@@ -139,22 +143,25 @@ model VendorProfile {
   lat             Float?
   lng             Float?
   phone           String
-  status          VendorStatus     @default(PENDING)
+  status          VendorStatus       @default(PENDING)
   /// Partner plan the vendor sells under. New vendors pick one at sign-up;
   /// BASIC is the default only so pre-existing rows backfill sensibly.
-  plan            VendorPlan       @default(BASIC)
+  plan            VendorPlan         @default(BASIC)
   /// When the plan last changed. Null for vendors who never switched.
   planChangedAt   DateTime?
   /// Cooldown expiry: the vendor cannot switch again until this passes.
   /// Stored rather than derived so changing the cooldown length later does
   /// not retroactively move locks vendors were already promised.
   planLockedUntil DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
   documents       VendorDocument[]
   listings        GasListing[]
   orders          Order[]            @relation("VendorOrders")
   planChanges     VendorPlanChange[]
+  bankAccount     VendorBankAccount?
+  earnings        Earning[]
+  payouts         Payout[]
 
   @@map("vendor_profiles")
 }
@@ -170,18 +177,18 @@ enum PlanChangeActor {
 /// actions across the platform; this is the per-vendor commercial history,
 /// including the switches vendors make themselves.
 model VendorPlanChange {
-  id         String          @id @default(uuid())
-  vendorId   String
-  vendor     VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  fromPlan   VendorPlan
-  toPlan     VendorPlan
-  actor      PlanChangeActor
+  id               String          @id @default(uuid())
+  vendorId         String
+  vendor           VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  fromPlan         VendorPlan
+  toPlan           VendorPlan
+  actor            PlanChangeActor
   /// Operator name for ADMIN changes, null when the vendor did it themselves.
-  actorName  String?
-  actorEmail String?
+  actorName        String?
+  actorEmail       String?
   /// True when an operator overrode a cooldown that was still running.
-  bypassedCooldown Boolean   @default(false)
-  createdAt  DateTime        @default(now())
+  bypassedCooldown Boolean         @default(false)
+  createdAt        DateTime        @default(now())
 
   @@index([vendorId, createdAt])
   @@map("vendor_plan_changes")
@@ -263,6 +270,8 @@ model Order {
   /// Set when a rider is assigned, cleared if unassigned. Distinct from
   /// createdAt/updatedAt so "how long has this sat unassigned" is answerable.
   assignedAt      DateTime?
+  earning         Earning?
+  tickets         Ticket[]
   supplierName    String?
   cylinderSize    String
   quantity        Int
@@ -278,18 +287,18 @@ model Order {
 }
 
 model AdminUser {
-  id           String    @id @default(uuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         AdminRole @default(SUPPORT)
-  isActive     Boolean   @default(true)
+  id                 String    @id @default(uuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  role               AdminRole @default(SUPPORT)
+  isActive           Boolean   @default(true)
   // Bumped on every password change/reset; sessions carry the value they were
   // issued with, so bumping it signs out every other session immediately.
-  tokenVersion       Int     @default(0)
-  mustChangePassword Boolean @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  tokenVersion       Int       @default(0)
+  mustChangePassword Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@map("admin_users")
 }
@@ -334,6 +343,29 @@ enum AuditAction {
   ADMIN_LOGIN
   ADMIN_LOGIN_FAILED
   ADMIN_PASSWORD_CHANGED
+  EARNINGS_SYNCED
+  PAYOUT_INITIATED
+  PAYOUT_RETRIED
+  PAYOUT_CANCELLED
+  PAYOUT_MARKED_PAID
+  PAYOUT_ACCOUNT_SET
+  TICKET_CREATED
+  TICKET_UPDATED
+  TICKET_REPLIED
+  CANNED_REPLY_CHANGED
+  LEAD_CREATED
+  LEAD_UPDATED
+  LEAD_DELETED
+  CRM_NOTE_ADDED
+  CRM_TAG_CHANGED
+  TASK_CHANGED
+  SEGMENT_CHANGED
+  CAMPAIGN_CREATED
+  CAMPAIGN_UPDATED
+  CAMPAIGN_SENT
+  CAMPAIGN_CANCELLED
+  SUPPRESSION_CHANGED
+  BRIEFING_GENERATED
 }
 
 // Append-only record of every mutating admin action.
@@ -379,4 +411,469 @@ model LegalAcceptance {
   @@unique([userId, document, version])
   @@index([userId])
   @@map("legal_acceptances")
+}
+
+// ─── Payouts ────────────────────────────────────────────────────────────────
+// Money columns are naira (fractional), matching Order.totalAmount. They are
+// converted to kobo only at the Paystack boundary.
+
+/// Where a vendor's payouts are sent. One account per vendor; the Paystack
+/// transfer recipient is created lazily the first time a payout is initiated.
+model VendorBankAccount {
+  id                    String        @id @default(uuid())
+  vendorId              String        @unique
+  vendor                VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  bankCode              String
+  bankName              String
+  accountNumber         String
+  accountName           String
+  paystackRecipientCode String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@map("vendor_bank_accounts")
+}
+
+enum EarningStatus {
+  /// Delivered and not yet part of any payout.
+  AVAILABLE
+  /// Locked into a payout that is pending or in flight.
+  IN_PAYOUT
+  PAID
+}
+
+/// One row per delivered marketplace order: what the vendor earned after the
+/// platform's commission. The rate is frozen on the row so a later plan change
+/// never rewrites history.
+model Earning {
+  id                String        @id @default(uuid())
+  orderId           String        @unique
+  order             Order         @relation(fields: [orderId], references: [id])
+  vendorId          String
+  vendor            VendorProfile @relation(fields: [vendorId], references: [id])
+  grossAmount       Float
+  commissionPercent Float
+  commissionAmount  Float
+  netAmount         Float
+  status            EarningStatus @default(AVAILABLE)
+  payoutId          String?
+  payout            Payout?       @relation(fields: [payoutId], references: [id])
+  createdAt         DateTime      @default(now())
+
+  @@index([vendorId, status])
+  @@map("earnings")
+}
+
+enum PayoutStatus {
+  /// Created, transfer not yet accepted by Paystack (or awaiting retry).
+  PENDING
+  /// Paystack accepted the transfer; waiting for the transfer.success webhook.
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+model Payout {
+  id                   String        @id @default(uuid())
+  vendorId             String
+  vendor               VendorProfile @relation(fields: [vendorId], references: [id])
+  amount               Float
+  status               PayoutStatus  @default(PENDING)
+  /// Our idempotency key, also sent to Paystack as the transfer reference.
+  reference            String        @unique
+  paystackTransferCode String?
+  failureReason        String?
+  /// Account snapshot, so the record survives the vendor changing their bank.
+  bankName             String
+  accountNumber        String
+  accountName          String
+  initiatedById        String
+  initiatedByName      String
+  paidAt               DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  earnings             Earning[]
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("payouts")
+}
+
+// ─── Support inbox ──────────────────────────────────────────────────────────
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  ORDER
+  PAYMENT
+  DELIVERY
+  ACCOUNT
+  VENDOR
+  DEVICE
+  OTHER
+}
+
+enum TicketChannel {
+  WEB_FORM
+  EMAIL
+  ADMIN
+}
+
+enum TicketAuthor {
+  REQUESTER
+  ADMIN
+  SYSTEM
+}
+
+model Ticket {
+  id              String          @id @default(uuid())
+  number          Int             @unique @default(autoincrement())
+  subject         String
+  category        TicketCategory  @default(OTHER)
+  priority        TicketPriority  @default(NORMAL)
+  status          TicketStatus    @default(OPEN)
+  channel         TicketChannel   @default(WEB_FORM)
+  requesterName   String
+  requesterEmail  String
+  /// Set when the requester matched a registered account.
+  requesterId     String?
+  requester       User?           @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  orderId         String?
+  order           Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Admin snapshot, not a relation: the env root admin has no row.
+  assigneeId      String?
+  assigneeName    String?
+  firstResponseAt DateTime?
+  /// First response is due by this time; breached when firstResponseAt is null
+  /// and now is past it.
+  slaDueAt        DateTime
+  resolvedAt      DateTime?
+  lastMessageAt   DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  messages        TicketMessage[]
+
+  @@index([status, lastMessageAt])
+  @@index([assigneeId])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id         String       @id @default(uuid())
+  ticketId   String
+  ticket     Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author     TicketAuthor
+  authorName String
+  authorId   String?
+  body       String
+  /// Internal notes are never emailed to the requester.
+  internal   Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+model CannedReply {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("canned_replies")
+}
+
+// ─── CRM & acquisition pipeline ─────────────────────────────────────────────
+
+/// A private note on any account (consumer, vendor or rider). Author is a
+/// snapshot: the env root admin has no admin_users row.
+model CrmNote {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body       String
+  authorId   String
+  authorName String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("crm_notes")
+}
+
+model CrmTag {
+  id        String       @id @default(uuid())
+  name      String       @unique
+  createdAt DateTime     @default(now())
+  users     CrmUserTag[]
+
+  @@map("crm_tags")
+}
+
+model CrmUserTag {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    CrmTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tagId])
+  @@map("crm_user_tags")
+}
+
+enum LeadType {
+  VENDOR
+  RIDER
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  ONBOARDING
+  WON
+  LOST
+}
+
+enum LeadSource {
+  REFERRAL
+  OUTREACH
+  WEBSITE
+  SOCIAL
+  EVENT
+  OTHER
+}
+
+enum LeadActivityType {
+  NOTE
+  CALL
+  MESSAGE
+  MEETING
+  STAGE_CHANGE
+}
+
+/// A prospective vendor or rider being recruited. WON leads can be linked to
+/// the account they became.
+model Lead {
+  id              String         @id @default(uuid())
+  name            String
+  type            LeadType       @default(VENDOR)
+  stage           LeadStage      @default(NEW)
+  source          LeadSource     @default(OUTREACH)
+  contactName     String?
+  phone           String?
+  email           String?
+  state           String?
+  city            String?
+  lostReason      String?
+  ownerId         String?
+  ownerName       String?
+  nextFollowUpAt  DateTime?
+  /// The account this lead became, once they sign up.
+  convertedUserId String?
+  stageChangedAt  DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  activities      LeadActivity[]
+  tasks           CrmTask[]
+
+  @@index([stage])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id         String           @id @default(uuid())
+  leadId     String
+  lead       Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type       LeadActivityType
+  body       String
+  authorName String
+  createdAt  DateTime         @default(now())
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+}
+
+/// A follow-up, optionally tied to a lead or an account.
+model CrmTask {
+  id            String     @id @default(uuid())
+  title         String
+  status        TaskStatus @default(OPEN)
+  dueAt         DateTime?
+  assigneeId    String?
+  assigneeName  String?
+  leadId        String?
+  lead          Lead?      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completedAt   DateTime?
+  createdByName String
+  createdAt     DateTime   @default(now())
+
+  @@index([status, dueAt])
+  @@map("crm_tasks")
+}
+
+// ─── Marketing ──────────────────────────────────────────────────────────────
+
+/// Addresses that must never receive marketing email. Keyed by lowercase email
+/// (not user id) so it also covers leads and anyone who deletes their account.
+model MarketingSuppression {
+  email     String   @id
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@map("marketing_suppressions")
+}
+
+/// A saved audience. `filter` is validated by `segmentFilterSchema` in
+/// src/lib/marketing.ts and turned into a Prisma query at send time, so a
+/// segment always reflects who matches *now*.
+model Segment {
+  id            String     @id @default(uuid())
+  name          String
+  description   String?
+  filter        Json
+  createdByName String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  campaigns     Campaign[]
+
+  @@map("segments")
+}
+
+enum CampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  CANCELLED
+}
+
+model Campaign {
+  id            String              @id @default(uuid())
+  name          String
+  subject       String
+  /// Plain text; blank lines separate paragraphs. {{name}} becomes the first name.
+  body          String
+  segmentId     String?
+  segment       Segment?            @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  status        CampaignStatus      @default(DRAFT)
+  audienceSize  Int                 @default(0)
+  sentCount     Int                 @default(0)
+  failedCount   Int                 @default(0)
+  createdByName String
+  startedAt     DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  recipients    CampaignRecipient[]
+
+  @@index([status])
+  @@map("campaigns")
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// The audience frozen at send time, one row per address.
+model CampaignRecipient {
+  id         String          @id @default(uuid())
+  campaignId String
+  campaign   Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String?
+  email      String
+  name       String
+  status     RecipientStatus @default(PENDING)
+  error      String?
+  sentAt     DateTime?
+
+  @@unique([campaignId, email])
+  @@index([campaignId, status])
+  @@map("campaign_recipients")
+}
+
+// ─── Server logs, app usage, ops briefing ───────────────────────────────────
+
+enum ServerLogLevel {
+  WARN
+  ERROR
+}
+
+/// Warnings and errors from the API process, kept in the database because the
+/// host's disk is ephemeral. Pruned by `pruneServerLogs` (14 days).
+model ServerLog {
+  id         String         @id @default(uuid())
+  level      ServerLogLevel
+  /// 'console' for captured console.warn/error, 'http' for a failed request.
+  source     String
+  message    String
+  stack      String?
+  path       String?
+  method     String?
+  statusCode Int?
+  createdAt  DateTime       @default(now())
+
+  @@index([createdAt])
+  @@index([level, createdAt])
+  @@map("server_logs")
+}
+
+/// A product-usage event from the mobile app (or web). `userId` is derived from
+/// the access token server-side and never trusted from the client.
+model AppEvent {
+  id          String   @id @default(uuid())
+  name        String
+  userId      String?
+  /// Random per-install id, so pre-login activity still counts.
+  anonymousId String?
+  role        String?
+  platform    String
+  sessionId   String?
+  screen      String?
+  properties  Json?
+  appVersion  String?
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([name, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([anonymousId])
+  @@index([occurredAt])
+  @@map("app_events")
+}
+
+/// One row per Lagos calendar day. `metrics` and `flags` are the raw output of
+/// `collectOpsMetrics` / `deriveFlags` (src/lib/opsBriefing.ts).
+model OpsBriefing {
+  id        String    @id @default(uuid())
+  /// Lagos calendar day covered, YYYY-MM-DD.
+  day       String    @unique
+  status    String
+  metrics   Json
+  flags     Json
+  sentAt    DateTime?
+  sendError String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("ops_briefings")
 }

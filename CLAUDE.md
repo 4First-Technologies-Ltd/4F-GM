@@ -57,6 +57,46 @@ Role scoping is **rank-based** and lives in `gas-monitor-backend/src/middleware/
 
 Every mutating admin route writes to `audit_logs` via `src/lib/audit.ts`. The audit trail is append-only and surfaced at `/dashboard/audit`, visible to super admins only.
 
+## Payouts and support inbox
+
+Added to the admin panel in Oct 2026, modelled on GoBuyMe's CRM/payout modules. Migration `20261009000000_payouts_and_support` (backend-owned; **not yet mirrored into `gas-monitor-web/prisma/schema.prisma`**, which was already behind).
+
+**Payouts** (`/dashboard/payouts`, `src/routes/admin/payouts.ts`, `src/lib/{earnings,payouts,paystack}.ts`):
+- An `Earning` row is written when a vendor order reaches `DELIVERED` (vendor PATCH and rider PATCH both call `recordEarningSafe`; `POST /api/admin/payouts/sync-earnings` backfills older orders). Commission % is frozen on the row from the vendor's plan (`PLANS` in `lib/plans.ts`), so a later plan change never rewrites history. Orders with no `vendorId` (monitor sales) earn nothing.
+- A `Payout` claims a vendor's AVAILABLE earnings with a compare-and-set inside one transaction, then sends a Paystack Transfer. The reference is the idempotency key; `dispatchPayout` verifies the reference with Paystack before sending, so a timed-out request is adopted rather than duplicated. Outcomes arrive on the existing `/api/orders/webhook` (`transfer.success|failed|reversed`).
+- Vendor bank accounts are set by admins (`PUT /payouts/vendors/:id/bank-account`); the account **name is resolved from the bank**, never typed. There is no vendor-facing UI for this yet.
+- Paystack prerequisites: transfers enabled on the account, **transfer OTP disabled** (otherwise payouts fail with an explanatory message), the server IP whitelisted, and enough balance.
+- Guards: initiate/retry/cancel/bank-account/sync = `requireOperations`; `mark-paid` (settled outside Paystack) = `requireSuperAdmin`.
+
+**Support inbox** (`/dashboard/support`, `src/routes/admin/support.ts`, `src/lib/tickets.ts`):
+- The public `POST /api/contact` now opens a `Ticket` (and still emails the support mailbox). SLA is a first-response deadline by priority (`SLA_HOURS`); there is no scheduled escalation job yet — breaches are computed on read.
+- **Deliberate exception to the "SUPPORT is read-only" rule:** ticket routes use `requireAdmin`, so SUPPORT can reply, assign and change ticket status (`support.reply`). Canned-reply management is `requireOperations` (`support.manage`).
+- Replies go out through Resend. **Inbound email is not wired up**: a customer's reply lands in the support mailbox, and an agent logs it on the ticket with "Log customer reply".
+
+## CRM and acquisition pipeline
+
+Migration `20261009100000_crm_and_pipeline` (backend-owned, not mirrored into web). Routes: `src/routes/admin/crm.ts`, mounted at `/api/admin/crm`.
+- **Pipeline** (`/dashboard/pipeline`): `Lead` = a vendor or rider being recruited, stages NEW → CONTACTED → ONBOARDING → WON/LOST. Every stage move writes a `LeadActivity`; LOST requires a reason. Moving to WON links the lead to a `User` with the same email if one exists. Leads are *not* accounts — approving the real vendor/rider still happens in Vendors/Riders.
+- **Tasks** (`/dashboard/tasks`): `CrmTask`, optionally tied to a lead or an account.
+- **Account notes and tags** appear in the user detail modal (`admin/primitives/crm-panel.tsx`), so every list that opens an account has them. Notes and tags are open to every admin role (`crm.note`); leads and tasks are OPERATIONS (`crm.manage`).
+- Not built from GoBuyMe: automations.
+
+## Server logs, app usage, ops briefing
+
+Migration `20261009300000_logs_usage_briefing`.
+- **Server logs** (`/dashboard/server-logs`, SUPER_ADMIN via `logs.read` in `EXPLICIT_ONLY_READS`): `lib/serverLog.ts` wraps `console.warn/error` and the Express error handler, buffers, and batch-writes to `server_logs` (Render's disk is ephemeral, so no log files). Entries are **redacted** (bearer tokens, JWTs, `password`/`token`/`secret` values, and OTP codes — `lib/email.ts` prints OTPs when Resend is unset) and pruned after 14 days. The buffer is capped at 500 and writes never throw; `installServerLogCapture()` must stay first in `index.ts`. Only `console.warn/error` are captured, not `console.log`.
+- **App usage** (`/dashboard/usage`): `POST /api/events` is public and defended (batch ≤25, 2 KB properties, strict event names, 60 req/min/IP, timestamps clamped, `userId` only from a valid access token). The mobile tracker is `gas-monitor/lib/analytics.ts`, started from `app/_layout.tsx` (`app_opened`, `screen_viewed` with the route *pattern*, never ids). **Only builds that include the tracker send data; the web app is not instrumented yet.** Queries stitch an install to the user it later signed in as, and bucket by Lagos day.
+- **Ops briefing** (`/dashboard/briefing`): `lib/opsBriefing.ts` builds a metrics snapshot and rule-based flags (each with an action and a link) for the previous Lagos day, stores it in `ops_briefings`, and posts it to Telegram (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`; link base `ADMIN_PANEL_URL`). A 15-minute check after 07:00 Lagos creates the day's row; the unique `day` key means only the run that creates the row sends, so restarts don't double-post — it still assumes a single instance for no duplicate *work*. `OPS_BRIEFING_ENABLED=false` disables it. "Live" figures (stuck orders, open tickets) always describe *now*, even when an old day is rebuilt. No LLM: thresholds live in `deriveFlags`. "Delivered" is approximated by `Order.updatedAt` (there is no status-change timestamp).
+
+## Marketing email
+
+Migration `20261009200000_marketing`. Admin routes `src/routes/admin/marketing.ts` (`/api/admin/marketing`), public `src/routes/marketing.ts` (`/api/marketing/unsubscribe`), logic in `src/lib/marketing.ts`. **Email only (Resend)** — no SMS yet.
+- `Segment.filter` is JSON validated by `segmentFilterSchema` and resolved to a Prisma query at send time (so an audience is "who matches now"). Eligible = email verified, not suspended, not on `MarketingSuppression`.
+- Sending: `startCampaign` flips DRAFT→SENDING with a compare-and-set, freezes recipients into `CampaignRecipient`, then `runCampaign` sends in batches of 50 via `resend.batch.send` (~700ms apart), re-checking suppression per batch. It runs in-process and `resumeCampaigns()` (called from `index.ts`) picks up any SENDING campaign after a restart — it assumes **a single backend instance**.
+- Every email carries `List-Unsubscribe` (+ one-click POST) and a footer link. The link is an HMAC of the email (`UNSUBSCRIBE_SECRET`, falling back to `ADMIN_JWT_SECRET` — rotating it breaks old links). GET only shows a confirm page; the opt-out happens on POST so mail scanners can't unsubscribe people. Needs `API_PUBLIC_URL`.
+- Guards: create/edit/send/cancel = OPERATIONS (`marketing.manage`); removing someone from the suppression list = SUPER_ADMIN (`marketing.unsuppress`).
+- Marketing consent is not modelled beyond unsubscribe; `User.emailNotifEnabled` is a notification preference and is deliberately not consulted.
+
 ## Mobile app builds (EAS)
 
 `gas-monitor/eas.json` defines `development`, `preview`, and `production` build profiles. Android package: `com.fourfirsttechnologies.gasmonitor`. EAS project: `@devopsbbcl/gas-monitor` (project ID in `gas-monitor/app.json` → `extra.eas.projectId`).

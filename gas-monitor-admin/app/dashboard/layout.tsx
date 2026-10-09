@@ -22,6 +22,9 @@ interface Counts {
   pendingVendors: number;
   pendingOrders: number;
   pendingRiders: number;
+  openTickets: number;
+  payoutIssues: number;
+  followUps: number;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -68,12 +71,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     Promise.allSettled([
       getJson<{ pagination: { total: number } }>('/vendors?status=PENDING&limit=1'),
       getJson<{ pagination: { total: number } }>('/orders?status=PENDING&limit=1'),
-      getJson<{ pagination: { total: number } }>('/riders?status=PENDING&limit=1')
-    ]).then(([v, o, r]) => {
+      getJson<{ pagination: { total: number } }>('/riders?status=PENDING&limit=1'),
+      getJson<{ open: number }>('/support/summary'),
+      getJson<{ payoutsNeedingAttention: number }>('/payouts/summary'),
+      getJson<{ followUpsDue: number; overdueTasks: number }>('/crm/overview')
+    ]).then(([v, o, r, t, p, c]) => {
       setBadges({
         pendingVendors: v.status === 'fulfilled' ? v.value.pagination.total : 0,
         pendingOrders: o.status === 'fulfilled' ? o.value.pagination.total : 0,
-        pendingRiders: r.status === 'fulfilled' ? r.value.pagination.total : 0
+        pendingRiders: r.status === 'fulfilled' ? r.value.pagination.total : 0,
+        openTickets: t.status === 'fulfilled' ? t.value.open : 0,
+        payoutIssues: p.status === 'fulfilled' ? p.value.payoutsNeedingAttention : 0,
+        followUps: c.status === 'fulfilled' ? c.value.followUpsDue + c.value.overdueTasks : 0
       });
     });
     // A failed badge count must never break the shell — hence allSettled and

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
+import { recordEarningSafe } from '../lib/earnings';
 
 const router = Router();
 
@@ -167,6 +168,7 @@ router.patch(
     }
 
     const order = await prisma.order.findUnique({ where: { id } });
+    if (target === 'DELIVERED') recordEarningSafe(id);
     return res.json({ order });
   })
 );

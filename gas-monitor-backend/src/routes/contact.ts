@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Resend } from 'resend';
 import { asyncHandler } from '../lib/asyncHandler';
+import { createTicket } from '../lib/tickets';
 
 const router = Router();
+
+const TOPIC_LABEL = { support: 'Support', sales: 'Sales', partnership: 'Partnership', other: 'General' } as const;
 
 const contactSchema = z.object({
   name: z.string().min(2).max(120),
@@ -30,6 +33,22 @@ router.post(
     }
 
     const { name, email, topic, message } = result.data;
+
+    // The inbox is the system of record; the email below is a notification.
+    // A DB failure must not stop the message reaching the support mailbox.
+    try {
+      await createTicket({
+        subject: `${TOPIC_LABEL[topic]} enquiry from ${name}`,
+        message,
+        requesterName: name,
+        requesterEmail: email,
+        channel: 'WEB_FORM',
+        category: topic === 'partnership' ? 'VENDOR' : 'OTHER'
+      });
+    } catch (err) {
+      console.error('[contact] failed to create ticket', err);
+    }
+
     const supportEmail = process.env.SUPPORT_EMAIL ?? process.env.EMAIL_FROM;
     const resend = getClient();
 

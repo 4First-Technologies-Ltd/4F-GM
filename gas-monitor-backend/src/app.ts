@@ -18,13 +18,23 @@ import { Sentry } from './lib/sentry';
 
 import adminAuthRoutes from './routes/admin/auth';
 import adminAdminUsersRoutes from './routes/admin/adminUsers';
+import adminBriefingRoutes from './routes/admin/briefing';
+import adminLogsRoutes from './routes/admin/logs';
+import adminUsageRoutes from './routes/admin/usage';
+import eventsRoutes from './routes/events';
+import { recordHttpError } from './lib/serverLog';
 import adminAnalyticsRoutes from './routes/admin/analytics';
 import adminAuditRoutes from './routes/admin/audit';
+import adminCrmRoutes from './routes/admin/crm';
 import adminCustomersRoutes from './routes/admin/customers';
+import adminMarketingRoutes from './routes/admin/marketing';
+import marketingPublicRoutes from './routes/marketing';
 import adminListingsRoutes from './routes/admin/listings';
 import adminOrdersRoutes from './routes/admin/orders';
 import adminRidersRoutes from './routes/admin/riders';
 import adminSettingsRoutes from './routes/admin/settings';
+import adminPayoutsRoutes from './routes/admin/payouts';
+import adminSupportRoutes from './routes/admin/support';
 import adminStatsRoutes from './routes/admin/stats';
 import adminUsersRoutes from './routes/admin/users';
 import adminVendorsRoutes from './routes/admin/vendors';
@@ -66,6 +76,8 @@ export function createApp() {
   app.use('/api/addresses', addressesRoutes);
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/contact', contactRoutes);
+  app.use('/api/events', eventsRoutes);
+  app.use('/api/marketing', marketingPublicRoutes);
   app.use('/api/device', deviceRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
 
@@ -75,10 +87,17 @@ export function createApp() {
   app.use('/api/admin/admin-users', adminAdminUsersRoutes);
   app.use('/api/admin/analytics', adminAnalyticsRoutes);
   app.use('/api/admin/audit', adminAuditRoutes);
+  app.use('/api/admin/briefing', adminBriefingRoutes);
+  app.use('/api/admin/logs', adminLogsRoutes);
+  app.use('/api/admin/usage', adminUsageRoutes);
+  app.use('/api/admin/crm', adminCrmRoutes);
   app.use('/api/admin/customers', adminCustomersRoutes);
+  app.use('/api/admin/marketing', adminMarketingRoutes);
   app.use('/api/admin/listings', adminListingsRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);
+  app.use('/api/admin/payouts', adminPayoutsRoutes);
   app.use('/api/admin/riders', adminRidersRoutes);
+  app.use('/api/admin/support', adminSupportRoutes);
   app.use('/api/admin/settings', adminSettingsRoutes);
   app.use('/api/admin/stats', adminStatsRoutes);
   app.use('/api/admin/users', adminUsersRoutes);
@@ -89,7 +108,8 @@ export function createApp() {
   });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    recordHttpError(err, req, 500);
     console.error(err);
     Sentry.captureException(err);
     res.status(500).json({ error: 'Internal server error' });

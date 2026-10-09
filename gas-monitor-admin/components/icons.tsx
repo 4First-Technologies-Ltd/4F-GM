@@ -228,3 +228,67 @@ export function IconKey({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconInbox({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M3 13.5 5.6 5.8A2 2 0 0 1 7.5 4.5h9a2 2 0 0 1 1.9 1.3L21 13.5" />
+      <path d="M3 13.5V18a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 18v-4.5h-5.2a1.8 1.8 0 0 1-1.8 1.8h-4a1.8 1.8 0 0 1-1.8-1.8H3Z" />
+    </svg>
+  );
+}
+
+export function IconFunnel({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M3 5h18l-7 8.5V19l-4 2v-7.5L3 5Z" />
+    </svg>
+  );
+}
+
+export function IconChecklist({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="m4 6 1.5 1.5L8 5" />
+      <path d="m4 12 1.5 1.5L8 11" />
+      <path d="m4 18 1.5 1.5L8 17" />
+      <path d="M12 6.5h8M12 12.5h8M12 18.5h8" />
+    </svg>
+  );
+}
+
+export function IconMegaphone({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M3 10v4a1 1 0 0 0 1 1h3l8 4V5L7 9H4a1 1 0 0 0-1 1Z" />
+      <path d="M19 9.5a3.5 3.5 0 0 1 0 5" />
+      <path d="M7 15l1.2 4.2a1 1 0 0 0 1 .8h1.3" />
+    </svg>
+  );
+}
+
+export function IconActivity({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
+    </svg>
+  );
+}
+
+export function IconBriefing({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <path d="M6 3h9l4 4v14H6V3Z" />
+      <path d="M14 3v5h5M9 12h6M9 16h6" />
+    </svg>
+  );
+}
+
+export function IconTerminal({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="m7 9 3 3-3 3M13 15h4" />
+    </svg>
+  );
+}

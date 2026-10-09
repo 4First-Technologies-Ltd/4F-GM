@@ -1,9 +1,9 @@
 import { Resend } from 'resend';
 
-const FROM = process.env.EMAIL_FROM ?? '4FG Smart Gas Monitor <onboarding@resend.dev>';
+export const EMAIL_FROM = process.env.EMAIL_FROM ?? '4FG Smart Gas Monitor <onboarding@resend.dev>';
 
 let client: Resend | null = null;
-function getClient(): Resend | null {
+export function getClient(): Resend | null {
   if (!process.env.RESEND_API_KEY) return null;
   if (!client) client = new Resend(process.env.RESEND_API_KEY);
   return client;
@@ -34,7 +34,7 @@ export async function sendOtpEmail(to: string, code: string, purpose: OtpEmailPu
   }
 
   const { error } = await resend.emails.send({
-    from: FROM,
+    from: EMAIL_FROM,
     to,
     subject,
     html: `
@@ -51,4 +51,47 @@ export async function sendOtpEmail(to: string, code: string, purpose: OtpEmailPu
   if (error) {
     console.error(`[email] Resend failed to send ${purpose} OTP to ${to}:`, error);
   }
+}
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * Email an admin's reply to the person who raised a ticket. Returns whether it
+ * was actually handed to Resend, so the inbox can tell the agent when a reply
+ * was saved but not delivered.
+ */
+export async function sendTicketReplyEmail(input: {
+  to: string;
+  name: string;
+  ticketNumber: number;
+  subject: string;
+  body: string;
+}): Promise<boolean> {
+  const resend = getClient();
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY not set — ticket #${input.ticketNumber} reply to ${input.to} not sent`);
+    return false;
+  }
+
+  const { error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: input.to,
+    replyTo: process.env.SUPPORT_EMAIL ?? undefined,
+    subject: `Re: ${input.subject} [#${input.ticketNumber}]`,
+    html: `
+      <div style="font-family: -apple-system, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px;">
+        <p style="font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: #2d7450; text-transform: uppercase; margin: 0 0 24px;">4FG Smart Gas Monitor Support</p>
+        <p style="font-size: 15px; color: #1a2e1a; margin: 0 0 16px;">Hi ${escapeHtml(input.name)},</p>
+        <p style="font-size: 15px; color: #333; line-height: 1.6; white-space: pre-wrap; margin: 0 0 24px;">${escapeHtml(input.body)}</p>
+        <p style="font-size: 12px; color: #888; line-height: 1.5;">Ticket #${input.ticketNumber} — ${escapeHtml(input.subject)}. Reply to this email to continue the conversation.</p>
+      </div>
+    `
+  });
+
+  if (error) {
+    console.error(`[email] Resend failed to send ticket #${input.ticketNumber} reply:`, error);
+    return false;
+  }
+  return true;
 }

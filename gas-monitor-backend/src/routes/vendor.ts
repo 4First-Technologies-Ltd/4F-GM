@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { VendorPlan } from '@prisma/client';
 import { listingSchema } from '../lib/vendorSchemas';
+import { recordEarningSafe } from '../lib/earnings';
 import { asyncHandler } from '../lib/asyncHandler';
 import {
   cooldownExpiry,
@@ -359,6 +360,7 @@ router.patch(
     }
 
     const order = await prisma.order.update({ where: { id }, data: { status: result.data.status } });
+    if (order.status === 'DELIVERED') recordEarningSafe(order.id);
     return res.json({ order });
   })
 );

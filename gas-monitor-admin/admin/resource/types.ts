@@ -155,6 +155,9 @@ export interface ResourceConfig<T> {
 
   detail?: DetailConfig<T>;
 
+  /** Rows navigate to this route on click, instead of opening the `detail` drawer. */
+  rowHref?: (row: T) => string;
+
   /**
    * For account-backed resources (users, customers, vendors, riders): maps a row
    * to its User id. When set, clicking a row opens the full user-detail modal

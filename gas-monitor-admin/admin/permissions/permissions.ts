@@ -39,11 +39,14 @@ export const ROLE_LABEL: Record<AdminRole, string> = {
  *   audit.read    - who did what; super admin only
  *   security.read - IP blocklist; super admin only
  *   admins.read   - the admin list; granted to OPERATIONS by name below
+ *   logs.read     - server logs (stack traces, paths); super admin only
  */
-export const EXPLICIT_ONLY_READS: readonly string[] = ['audit.read', 'security.read', 'admins.read'];
+export const EXPLICIT_ONLY_READS: readonly string[] = ['audit.read', 'security.read', 'admins.read', 'logs.read'];
 
 export const ROLE_GRANTS: Record<AdminRole, string[]> = {
-  SUPPORT: ['*.read'],
+  // Answering customers is what SUPPORT is for, so support.reply is the one
+  // write it holds. It mirrors the (deliberately) requireAdmin-level ticket routes.
+  SUPPORT: ['*.read', 'support.reply', 'crm.note'],
   OPERATIONS: [
     '*.read',
     'vendors.approve',
@@ -56,6 +59,17 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
     'users.delete',
     'errors.resolve',
     'settings.update',
+    'support.reply',
+    'support.manage',
+    // Pipeline leads and tasks; notes/tags (crm.note) are open to SUPPORT too.
+    'crm.manage',
+    // Creating and SENDING campaigns. marketing.unsuppress (re-subscribing an
+    // opted-out address) is deliberately not granted: SUPER_ADMIN only.
+    'marketing.manage',
+    'briefing.generate',
+    'crm.note',
+    'payouts.manage',
+    // payouts.markPaid is not granted here: settling outside Paystack stays SUPER_ADMIN.
     // Read-only view of the admin list; managing admins stays SUPER_ADMIN.
     'admins.read'
     // security.block / security.unblock deliberately excluded: a bad block can

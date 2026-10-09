@@ -30,6 +30,40 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   OPERATIONS: { tone: 'info', label: 'Operations' },
   SUPPORT: { tone: 'neutral', label: 'Support' },
 
+  // PayoutStatus / EarningStatus (PAID, PENDING, CANCELLED are shared above)
+  PROCESSING: { tone: 'info', label: 'Processing' },
+  FAILED: { tone: 'error', label: 'Failed' },
+  AVAILABLE: { tone: 'success', label: 'Available' },
+  IN_PAYOUT: { tone: 'info', label: 'In payout' },
+
+  // TicketStatus (PENDING = waiting on the customer)
+  OPEN: { tone: 'warning', label: 'Open' },
+  CLOSED: { tone: 'neutral', label: 'Closed' },
+
+  // TicketPriority (LOW/HIGH are shared with severity)
+  NORMAL: { tone: 'neutral', label: 'Normal' },
+  URGENT: { tone: 'error', label: 'Urgent' },
+
+  // LeadStage (WON/… reuse shared tones) 
+  NEW: { tone: 'info', label: 'New' },
+  CONTACTED: { tone: 'info', label: 'Contacted' },
+  ONBOARDING: { tone: 'warning', label: 'Onboarding' },
+  WON: { tone: 'success', label: 'Won' },
+  LOST: { tone: 'neutral', label: 'Lost' },
+  DONE: { tone: 'success', label: 'Done' },
+
+  // CampaignStatus (SENT, PENDING, FAILED, CANCELLED shared above)
+  DRAFT: { tone: 'neutral', label: 'Draft' },
+  SENDING: { tone: 'info', label: 'Sending' },
+  SENT: { tone: 'success', label: 'Sent' },
+
+  // ServerLogLevel / briefing status (HIGH/LOW/WARN shared where noted)
+  WARN: { tone: 'warning', label: 'Warning' },
+  ERROR: { tone: 'error', label: 'Error' },
+  ACTION: { tone: 'error', label: 'Action needed' },
+  WATCH: { tone: 'warning', label: 'Keep an eye on' },
+  OK: { tone: 'success', label: 'All clear' },
+
   // GasType
   COOKING: { tone: 'neutral', label: 'Cooking' },
   MEDICAL: { tone: 'info', label: 'Medical' },

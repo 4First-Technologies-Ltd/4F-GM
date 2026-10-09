@@ -302,3 +302,346 @@ export interface ErrorLogRow {
   occurrences: number;
   createdAt: string;
 }
+
+/* ------------------------------------------------------ payouts & support --- */
+
+export type EarningStatus = 'AVAILABLE' | 'IN_PAYOUT' | 'PAID';
+export type PayoutStatus = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED' | 'CANCELLED';
+
+export interface PayoutSummary {
+  available: number;
+  availableCount: number;
+  inPayout: number;
+  paid: number;
+  commissionEarned: number;
+  grossVolume: number;
+  payoutsNeedingAttention: number;
+  minimumPayout: number;
+}
+
+export interface VendorBalanceRow {
+  vendorId: string;
+  businessName: string;
+  plan: VendorPlan | null;
+  vendorStatus: VendorStatus | null;
+  bankAccount: { bankName: string; accountNumber: string; accountName: string } | null;
+  available: number;
+  earningsCount: number;
+  payable: boolean;
+}
+
+export interface EarningRow {
+  id: string;
+  orderId: string;
+  grossAmount: number;
+  commissionPercent: number;
+  commissionAmount: number;
+  netAmount: number;
+  status: EarningStatus;
+  payoutId: string | null;
+  createdAt: string;
+  vendor: { id: string; businessName: string };
+}
+
+export interface PayoutRow {
+  id: string;
+  amount: number;
+  status: PayoutStatus;
+  reference: string;
+  paystackTransferCode: string | null;
+  failureReason: string | null;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  initiatedByName: string;
+  paidAt: string | null;
+  createdAt: string;
+  vendor: { id: string; businessName: string; phone?: string };
+  _count?: { earnings: number };
+}
+
+export interface BankOption {
+  name: string;
+  code: string;
+}
+
+export type TicketStatus = 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
+export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type TicketCategory = 'ORDER' | 'PAYMENT' | 'DELIVERY' | 'ACCOUNT' | 'VENDOR' | 'DEVICE' | 'OTHER';
+
+export interface TicketRow {
+  id: string;
+  number: number;
+  subject: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
+  channel: 'WEB_FORM' | 'EMAIL' | 'ADMIN';
+  requesterName: string;
+  requesterEmail: string;
+  requesterId: string | null;
+  orderId: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  firstResponseAt: string | null;
+  slaDueAt: string;
+  resolvedAt: string | null;
+  lastMessageAt: string;
+  createdAt: string;
+  _count?: { messages: number };
+}
+
+export interface TicketMessageRow {
+  id: string;
+  author: 'REQUESTER' | 'ADMIN' | 'SYSTEM';
+  authorName: string;
+  body: string;
+  internal: boolean;
+  createdAt: string;
+}
+
+export interface TicketDetail extends TicketRow {
+  messages: TicketMessageRow[];
+  requester: { id: string; name: string; role: UserRole; phone: string | null; createdAt: string } | null;
+  order: {
+    id: string;
+    status: OrderStatus;
+    totalAmount: number;
+    cylinderSize: string;
+    quantity: number;
+    createdAt: string;
+  } | null;
+}
+
+export interface SupportSummary {
+  open: number;
+  pending: number;
+  unassigned: number;
+  slaBreached: number;
+  assignedToMe: number;
+}
+
+export interface CannedReplyRow {
+  id: string;
+  title: string;
+  body: string;
+}
+
+/* ------------------------------------------------------------------- crm --- */
+
+export type LeadType = 'VENDOR' | 'RIDER';
+export type LeadStage = 'NEW' | 'CONTACTED' | 'ONBOARDING' | 'WON' | 'LOST';
+export type LeadSource = 'REFERRAL' | 'OUTREACH' | 'WEBSITE' | 'SOCIAL' | 'EVENT' | 'OTHER';
+export type LeadActivityType = 'NOTE' | 'CALL' | 'MESSAGE' | 'MEETING' | 'STAGE_CHANGE';
+
+export interface LeadRow {
+  id: string;
+  name: string;
+  type: LeadType;
+  stage: LeadStage;
+  source: LeadSource;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  state: string | null;
+  city: string | null;
+  lostReason: string | null;
+  ownerId: string | null;
+  ownerName: string | null;
+  nextFollowUpAt: string | null;
+  convertedUserId: string | null;
+  stageChangedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { tasks: number };
+}
+
+export interface LeadActivityRow {
+  id: string;
+  type: LeadActivityType;
+  body: string;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface CrmTaskRow {
+  id: string;
+  title: string;
+  status: 'OPEN' | 'DONE';
+  dueAt: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  leadId: string | null;
+  userId: string | null;
+  completedAt: string | null;
+  createdByName: string;
+  createdAt: string;
+  lead?: { id: string; name: string } | null;
+  user?: { id: string; name: string } | null;
+}
+
+export interface LeadDetail extends LeadRow {
+  activities: LeadActivityRow[];
+  tasks: CrmTaskRow[];
+}
+
+export interface CrmOverview {
+  stages: Partial<Record<LeadStage, number>>;
+  overdueTasks: number;
+  myOpenTasks: number;
+  followUpsDue: number;
+  newThisWeek: number;
+  wonThisWeek: number;
+}
+
+export interface CrmProfile {
+  notes: { id: string; body: string; authorName: string; createdAt: string }[];
+  tags: { id: string; name: string }[];
+  tasks: CrmTaskRow[];
+}
+
+/* ------------------------------------------------------------- marketing --- */
+
+export interface SegmentFilter {
+  roles: UserRole[];
+  vendorStatus?: VendorStatus;
+  state?: string;
+  hasOrdered?: boolean;
+  joinedWithinDays?: number;
+  tag?: string;
+}
+
+export interface SegmentRow {
+  id: string;
+  name: string;
+  description: string | null;
+  filter: SegmentFilter;
+  createdByName: string;
+  createdAt: string;
+  _count?: { campaigns: number };
+}
+
+export type CampaignStatus = 'DRAFT' | 'SENDING' | 'SENT' | 'CANCELLED';
+
+export interface CampaignRow {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  segmentId: string | null;
+  status: CampaignStatus;
+  audienceSize: number;
+  sentCount: number;
+  failedCount: number;
+  createdByName: string;
+  startedAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  segment?: { id: string; name: string } | null;
+  pendingCount?: number;
+}
+
+export interface CampaignRecipientRow {
+  id: string;
+  email: string;
+  name: string;
+  status: 'PENDING' | 'SENT' | 'FAILED';
+  error: string | null;
+  sentAt: string | null;
+}
+
+export interface SuppressionRow {
+  email: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface MarketingOverview {
+  campaigns: number;
+  sending: number;
+  sent30: number;
+  failed30: number;
+  suppressed: number;
+  segments: number;
+}
+
+/* --------------------------------------- server logs, usage, briefing --- */
+
+export interface ServerLogRow {
+  id: string;
+  level: 'WARN' | 'ERROR';
+  source: 'console' | 'http';
+  message: string;
+  stack: string | null;
+  path: string | null;
+  method: string | null;
+  statusCode: number | null;
+  createdAt: string;
+}
+
+export interface ServerLogSummary {
+  errors24h: number;
+  warnings24h: number;
+  lastErrorAt: string | null;
+  retentionDays: number;
+}
+
+export interface UsageOverview {
+  days: number;
+  totals: { events: number; people: number; users: number; devices: number; sessions: number };
+  daily: { day: string; active: number; events: number }[];
+  topEvents: { name: string; count: number; actors: number }[];
+  topScreens: { screen: string; views: number; actors: number }[];
+  platforms: { platform: string; events: number; actors: number }[];
+  roles: { role: string; actors: number }[];
+  versions: { version: string; actors: number }[];
+}
+
+export interface OpsFlag {
+  key: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  action: string;
+  href: string;
+}
+
+export interface OpsMetrics {
+  day: string;
+  generatedAt: string;
+  orders: {
+    placed: number;
+    delivered: number;
+    cancelled: number;
+    gmv: number;
+    avgDeliveryHours: number | null;
+    sevenDayAvg: { placed: number; delivered: number; gmv: number };
+  };
+  live: { awaitingRider: number; oldestAwaitingRiderMin: number | null; stuckOutForDelivery: number; approvedRiders: number };
+  growth: {
+    signups: { consumers: number; vendors: number; riders: number };
+    pendingVendors: number;
+    pendingRiders: number;
+    oldestPendingDays: number | null;
+  };
+  support: { opened: number; openNow: number; overdueNow: number };
+  money: { owedToVendors: number; paidOut: number; commission: number; payoutsNeedingAttention: number };
+  reliability: { serverErrors: number; serverWarnings: number };
+  marketing: { campaignsSent: number; emailsSent: number };
+  crm: { followUpsOverdue: number; tasksOverdue: number };
+}
+
+export interface BriefingDay {
+  day: string;
+  status: 'ACTION' | 'WATCH' | 'OK';
+  sentAt: string | null;
+  sendError: string | null;
+}
+
+export interface Briefing extends BriefingDay {
+  id: string;
+  metrics: OpsMetrics;
+  flags: OpsFlag[];
+  createdAt: string;
+  updatedAt: string;
+}

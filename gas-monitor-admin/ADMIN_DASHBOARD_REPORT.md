@@ -73,7 +73,7 @@ consumer or vendor API surface was touched.
 
 | Module | Reason |
 |---|---|
-| payments, transactions, payouts | no `Payment`/`Transaction`/`Payout` entity. Paystack state lives on `Order` and is shown in the order detail drawer. |
+| payments, transactions | no `Payment`/`Transaction` entity. Paystack state lives on `Order` and is shown in the order detail drawer. (Payouts and earnings were added Oct 2026 — see root `CLAUDE.md`.) |
 | organizations | not multi-tenant |
 | media | `VendorDocument` is a related list on the vendor, not a media library |
 | content, moderation, notifications, reports | no corresponding entities |

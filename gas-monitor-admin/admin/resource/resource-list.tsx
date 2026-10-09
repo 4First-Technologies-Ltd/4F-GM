@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import type { ActionDef, ResourceConfig } from './types';
 import { useResource } from './use-resource';
 import { DataTable } from '@/admin/primitives/data-table';
@@ -23,13 +24,17 @@ import { usePermission } from '@/admin/permissions/use-permission';
  */
 export function ResourceList<T>({
   config,
-  toolbar
+  toolbar,
+  onRowOpen
 }: {
   config: ResourceConfig<T>;
   /** Module-specific content above the table — stat rows, alerts. */
   toolbar?: (ctx: { total: number; refresh: () => void }) => ReactNode;
+  /** Page-owned row click (e.g. opens a custom modal). Takes precedence over the config's own handlers. */
+  onRowOpen?: (row: T) => void;
 }) {
   const r = useResource(config);
+  const router = useRouter();
   const canRead = usePermission(config.permissions.read);
 
   const [pending, setPending] = useState<{ action: ActionDef<T>; row: T } | null>(null);
@@ -151,7 +156,15 @@ export function ResourceList<T>({
               onSort={r.toggleSort}
               rowActions={rowActions}
               onAction={invoke}
-              onRowClick={config.detail || config.userIdOf ? (row) => setDetailRow(row) : undefined}
+              onRowClick={
+                onRowOpen
+                  ? onRowOpen
+                  : config.rowHref
+                  ? (row) => router.push(config.rowHref!(row))
+                  : config.detail || config.userIdOf
+                    ? (row) => setDetailRow(row)
+                    : undefined
+              }
               rowNoun={config.labelSingular.toLowerCase()}
             />
             <Pagination
