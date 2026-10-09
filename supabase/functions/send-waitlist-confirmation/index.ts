@@ -7,6 +7,13 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+/** HMAC of the email, so only links we sent can remove an address. */
+async function unsubscribeToken(email: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(email.toLowerCase()))
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
@@ -23,7 +30,9 @@ serve(async (req) => {
     }
 
     const firstName = name ? name.trim().split(' ')[0] : 'there'
-    const unsubscribeUrl = 'https://4f-gas-monitor.4firsttechnologieslimited.workers.dev/unsubscribe.html?email=' + encodeURIComponent(email)
+    const secret = Deno.env.get('UNSUBSCRIBE_SECRET') ?? ''
+    const token = secret ? await unsubscribeToken(email, secret) : ''
+    const unsubscribeUrl = 'https://4f-gas-monitor.4firsttechnologieslimited.workers.dev/unsubscribe.html?email=' + encodeURIComponent(email) + '&token=' + token
 
     const resendKey = Deno.env.get('RESEND_API_KEY')
     if (!resendKey) {

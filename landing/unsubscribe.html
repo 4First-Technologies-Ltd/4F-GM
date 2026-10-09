@@ -99,8 +99,9 @@
     async function unsubscribe() {
       const params = new URLSearchParams(window.location.search);
       const email  = params.get('email');
+      const token  = params.get('token') || '';
 
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (!email || !token || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         document.getElementById('error-heading').textContent = 'Invalid link';
         document.getElementById('error-msg').textContent = 'This unsubscribe link is missing or malformed. Contact us at 4firsttechnologieslimited@gmail.com to be removed manually.';
         show('state-error');
@@ -110,7 +111,7 @@
       show('state-loading');
 
       try {
-        const res  = await fetch(SUPABASE_URL + '/functions/v1/unsubscribe?email=' + encodeURIComponent(email));
+        const res  = await fetch(SUPABASE_URL + '/functions/v1/unsubscribe?email=' + encodeURIComponent(email) + '&token=' + encodeURIComponent(token));
         const data = await res.json();
 
         if (!res.ok || data.error) {
@@ -119,8 +120,13 @@
           return;
         }
 
-        document.getElementById('success-msg').innerHTML =
-          'We\'ve deleted <strong>' + email + '</strong> from the 4FG Monitor waitlist. You won\'t hear from us again.';
+        // textContent, never innerHTML: the address comes from the URL.
+        var msg = document.getElementById('success-msg');
+        msg.textContent = '';
+        msg.append('We\'ve deleted ');
+        var strong = document.createElement('strong');
+        strong.textContent = email;
+        msg.append(strong, ' from the 4FG Monitor waitlist. You won\'t hear from us again.');
         show('state-success');
       } catch (err) {
         console.error(err);

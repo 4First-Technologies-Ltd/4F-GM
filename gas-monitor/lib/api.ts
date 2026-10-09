@@ -488,12 +488,38 @@ export const riderApi = {
 // ── Orders API ────────────────────────────────────────────────────────────────
 
 export interface InitializeOrderPayload {
-  supplierName: string;
+  /** Marketplace listing being bought. The server prices the order from it. */
+  listingId: string;
   cylinderSize: string;
   quantity: number;
-  totalAmount: number;
   deliveryAddress: string;
 }
+
+export interface MarketplaceListing {
+  id: string;
+  gasType: 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
+  customName: string | null;
+  pricePerKg: number;
+  cylinderSizes: string[];
+  otherSizes: string | null;
+  inStock: boolean;
+  vendor: {
+    id: string;
+    businessName: string;
+    businessAddress: string;
+    state: string | null;
+    city: string | null;
+    lat: number | null;
+    lng: number | null;
+    phone: string | null;
+  };
+}
+
+export const marketplaceApi = {
+  async listings(): Promise<{ listings: MarketplaceListing[] }> {
+    return request('/api/marketplace/listings');
+  },
+};
 
 export interface InitializeOrderResult {
   orderId: string;

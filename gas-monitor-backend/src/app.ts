@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 
 import authRoutes from './routes/auth';
 import vendorRoutes from './routes/vendor';
@@ -15,6 +16,7 @@ import marketplaceRoutes from './routes/marketplace';
 import { paystackWebhookHandler } from './routes/ordersWebhook';
 import { sentryWebhookHandler } from './routes/internalSentryWebhook';
 import { Sentry } from './lib/sentry';
+import { contactLimiter, guestOrderLimiter } from './lib/security';
 
 import adminAuthRoutes from './routes/admin/auth';
 import adminAdminUsersRoutes from './routes/admin/adminUsers';
@@ -47,6 +49,15 @@ const corsOrigins = (process.env.CORS_ORIGINS ?? '')
 export function createApp() {
   const app = express();
 
+  // Behind Render's proxy: without this every client shares the proxy's IP,
+  // which breaks per-IP rate limits and records the wrong IP in the audit log.
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+  app.use(helmet());
+
+  // Credentialed CORS must never reflect arbitrary origins in production.
+  if (process.env.NODE_ENV === 'production' && corsOrigins.length === 0) {
+    throw new Error('CORS_ORIGINS must be set in production');
+  }
   app.use(
     cors({
       origin: corsOrigins.length > 0 ? corsOrigins : true,
@@ -68,6 +79,8 @@ export function createApp() {
 
   // Consumer / vendor API — paths unchanged from gas-monitor-web so the
   // mobile app only needs to repoint API_BASE_URL.
+  app.use('/api/contact', contactLimiter);
+  app.use('/api/orders/guest', guestOrderLimiter);
   app.use('/api/auth', authRoutes);
   app.use('/api/vendor', vendorRoutes);
   app.use('/api/rider', riderRoutes);

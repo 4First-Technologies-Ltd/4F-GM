@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 import { signAccessToken, signRefreshToken, refreshTokenExpiresAt } from './jwt';
 import { generateOtp, hashOtp, otpExpiresAt } from './otp';
 import { sendOtpEmail } from './email';
+import { sha256 } from './security';
 
 export async function issueTokenPair(userId: string, email: string) {
   const accessToken = signAccessToken({ sub: userId, email });
@@ -9,7 +10,7 @@ export async function issueTokenPair(userId: string, email: string) {
 
   await prisma.refreshToken.create({
     data: {
-      token: rawRefresh,
+      token: sha256(rawRefresh), // only the hash is stored; the raw token lives on the device
       userId,
       expiresAt: refreshTokenExpiresAt()
     }

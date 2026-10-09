@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { createHmac } from 'crypto';
+import { safeEqual } from '../lib/security';
 import { prisma } from '../lib/prisma';
 import { PAYSTACK_SECRET } from '../lib/paystack';
 import { applyTransferStatus } from '../lib/payouts';
@@ -15,7 +16,7 @@ export async function paystackWebhookHandler(req: Request, res: Response) {
   }
 
   const hash = createHmac('sha512', PAYSTACK_SECRET).update(rawBody).digest('hex');
-  if (hash !== signature) {
+  if (!safeEqual(hash, signature)) {
     return res.status(400).send('Bad signature');
   }
 

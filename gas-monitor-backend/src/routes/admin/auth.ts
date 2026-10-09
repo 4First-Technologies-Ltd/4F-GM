@@ -7,6 +7,8 @@ import { resolveAdminSession } from '../../middleware/requireAdmin';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { writeAuditLog, writeAuthAudit } from '../../lib/audit';
 import type { AdminRole } from '@prisma/client';
+import { adminLoginLimiter, safeEqual } from '../../lib/security';
+import { validatePassword } from '../../lib/password';
 
 const router = Router();
 
@@ -17,6 +19,7 @@ const loginSchema = z.object({
 
 router.post(
   '/login',
+  adminLoginLimiter,
   asyncHandler(async (req, res) => {
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
@@ -34,7 +37,7 @@ router.post(
     // ADMIN_ROOT_LOGIN_DISABLED=true once named super admins exist.
     const rootEnabled = process.env.ADMIN_ROOT_LOGIN_DISABLED !== 'true';
 
-    if (rootEnabled && validUsername && validPassword && username === validUsername && password === validPassword) {
+    if (rootEnabled && validUsername && validPassword && safeEqual(username, validUsername) && safeEqual(password, validPassword)) {
       token = signAdminSession({
         adminId: 'root',
         username: validUsername,
@@ -114,7 +117,7 @@ router.get(
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Enter your current password'),
-  newPassword: z.string().min(8, 'New password must be at least 8 characters')
+  newPassword: z.string().superRefine(validatePassword)
 });
 
 // Deliberately not behind requireAdmin: an admin flagged mustChangePassword is

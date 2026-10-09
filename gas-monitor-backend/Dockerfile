@@ -20,5 +20,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 
+RUN chown -R node:node /app
+USER node
 EXPOSE 9000
 CMD ["npm", "run", "start"]
