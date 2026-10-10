@@ -46,9 +46,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             name: data.name,
             role: data.role,
             canChangePassword: !!data.canChangePassword,
-            mustChangePassword: !!data.mustChangePassword
+            mustChangePassword: !!data.mustChangePassword,
+            mfaEnabled: !!data.mfaEnabled,
+            mfaEnrollRequired: !!data.mfaEnrollRequired
           });
-          if (data.mustChangePassword && !window.location.pathname.startsWith('/dashboard/account')) {
+          if ((data.mustChangePassword || data.mfaEnrollRequired) && !window.location.pathname.startsWith('/dashboard/account')) {
             router.replace('/dashboard/account');
           }
         } else {
@@ -91,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     // Every data route is refused while a password change is pending.
-    if (session && !session.mustChangePassword) loadBadges();
+    if (session && !session.mustChangePassword && !session.mfaEnrollRequired) loadBadges();
   }, [session, pathname, loadBadges]);
 
   if (!session) {
@@ -125,7 +127,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               drawerOpen={drawerOpen}
             />
             <main id="adm-main" className="adm-main">
-              {session.mustChangePassword && !pathname.startsWith('/dashboard/account') ? null : children}
+              {(session.mustChangePassword || session.mfaEnrollRequired) && !pathname.startsWith('/dashboard/account') ? null : children}
             </main>
           </div>
         </div>

@@ -39,7 +39,7 @@ function DocumentRow({ doc }: { doc: VendorDocument }) {
       style={[s.docCard, cardShadow]}
       activeOpacity={0.8}
       onPress={() => {
-        if (doc.url.startsWith('http')) Linking.openURL(doc.url);
+        if (doc.url?.startsWith('http')) Linking.openURL(doc.url);
       }}
     >
       <View style={s.docIconCircle}>
@@ -91,7 +91,7 @@ export default function VendorDocumentsScreen() {
 
     setUploading(true);
     try {
-      await vendorApi.uploadDocuments([{ url: asset.uri, fileName }]);
+      await vendorApi.uploadDocument({ uri: asset.uri, fileName, mimeType: asset.mimeType });
       await loadDocuments();
     } catch (err) {
       setApiErr(err instanceof Error ? err.message : 'Failed to upload document.');

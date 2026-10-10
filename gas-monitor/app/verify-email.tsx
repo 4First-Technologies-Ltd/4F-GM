@@ -49,8 +49,14 @@ export default function VerifyEmailScreen() {
             lat: pending.lat,
             lng: pending.lng,
           });
-          if (pending.documents.length > 0) {
-            await vendorApi.uploadDocuments(pending.documents.map((d) => ({ url: d.uri, fileName: d.fileName })));
+          // The account already exists at this point, so a failed upload must not
+          // block sign-up; the vendor can add the file again from Documents.
+          for (const d of pending.documents) {
+            try {
+              await vendorApi.uploadDocument({ uri: d.uri, fileName: d.fileName });
+            } catch {
+              /* retry later from the Documents screen */
+            }
           }
         }
         router.replace('/vendor-pending');

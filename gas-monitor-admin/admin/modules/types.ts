@@ -205,6 +205,7 @@ export interface AdminUserRow {
   email: string;
   role: AdminRoleValue;
   isActive: boolean;
+  mfaEnabled: boolean;
   createdAt: string;
 }
 
@@ -644,4 +645,21 @@ export interface Briefing extends BriefingDay {
   flags: OpsFlag[];
   createdAt: string;
   updatedAt: string;
+}
+
+/* ------------------------------------------------------------- waitlist --- */
+
+export interface WaitlistRow {
+  id: string;
+  name: string | null;
+  email: string;
+  city: string | null;
+  created_at: string;
+}
+
+export interface WaitlistSummary {
+  total: number;
+  last7d: number;
+  cityCount: number;
+  cities: { city: string; signups: number }[];
 }

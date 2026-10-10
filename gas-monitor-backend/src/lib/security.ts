@@ -37,6 +37,8 @@ const MIN = 60 * 1000;
 /** Password guessing: customer and admin sign-in. */
 export const loginLimiter = limiter(15 * MIN, 10, emailOf);
 export const adminLoginLimiter = limiter(15 * MIN, 5);
+/** Guessing six-digit second-factor codes. */
+export const adminMfaLimiter = limiter(15 * MIN, 10);
 /** Anything that sends an email or SMS costs money and can be used to harass. */
 export const otpSendLimiter = limiter(10 * MIN, 3, emailOf);
 /** Guessing codes. */
@@ -44,3 +46,5 @@ export const otpVerifyLimiter = limiter(15 * MIN, 10, emailOf);
 export const registerLimiter = limiter(60 * MIN, 10);
 export const contactLimiter = limiter(60 * MIN, 5);
 export const guestOrderLimiter = limiter(15 * MIN, 20);
+/** Each call mints an upload link, so cap how many a vendor can request. */
+export const documentUploadLimiter = limiter(60 * MIN, 30);

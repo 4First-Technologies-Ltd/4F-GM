@@ -7,6 +7,17 @@ import { listingSchema } from '../lib/vendorSchemas';
 import { recordEarningSafe } from '../lib/earnings';
 import { asyncHandler } from '../lib/asyncHandler';
 import {
+  ALLOWED_DOC_TYPES,
+  isStorageKey,
+  MAX_DOC_BYTES,
+  newDocumentKey,
+  objectExists,
+  presignUpload,
+  storageConfigured,
+  withViewUrls
+} from '../lib/storage';
+import { documentUploadLimiter } from '../lib/security';
+import {
   cooldownExpiry,
   daysRemaining,
   DEFAULT_PLAN,
@@ -34,7 +45,7 @@ router.get(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
-    return res.json({ profile });
+    return res.json({ profile: { ...profile, documents: await withViewUrls(profile.documents) } });
   })
 );
 
@@ -187,15 +198,56 @@ router.patch(
   })
 );
 
+const uploadUrlSchema = z.object({
+  fileName: z.string().trim().min(1).max(120),
+  contentType: z.string(),
+  size: z.number().int().positive()
+});
+
+/** Step 1: validate the file and hand back a short-lived upload link to R2. */
+router.post(
+  '/documents/upload-url',
+  requireAuth,
+  documentUploadLimiter,
+  asyncHandler(async (req, res) => {
+    if (!storageConfigured()) {
+      return res.status(503).json({ error: 'Document upload is not available right now. Please try again later.' });
+    }
+    const result = uploadUrlSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: 'Invalid file details' });
+    const { contentType, size } = result.data;
+    if (!ALLOWED_DOC_TYPES[contentType]) {
+      return res.status(400).json({ error: 'Only JPG, PNG, WebP or PDF files are accepted.' });
+    }
+    if (size > MAX_DOC_BYTES) {
+      return res.status(400).json({ error: 'File is too large. The limit is 8 MB.' });
+    }
+
+    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
+    if (!profile) {
+      return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
+    }
+    if ((await prisma.vendorDocument.count({ where: { vendorId: profile.id } })) >= 20) {
+      return res.status(400).json({ error: 'Document limit reached. Contact support if you need to add more.' });
+    }
+
+    const key = newDocumentKey(profile.id, contentType);
+    const uploadUrl = await presignUpload(key, contentType, size);
+    return res.json({ key, uploadUrl, contentType, expiresInSeconds: 300 });
+  })
+);
+
+/** Step 2: after the upload, record the document. Only keys we issued are accepted. */
 const documentSchema = z.object({
   documents: z
     .array(
       z.object({
-        url: z.string().min(1),
-        fileName: z.string().min(1)
+        key: z.string().min(1),
+        fileName: z.string().trim().min(1).max(120)
       })
     )
     .min(1)
+    .max(5)
 });
 
 router.post(
@@ -204,7 +256,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = documentSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: 'Please update the app to upload documents.' });
     }
 
     const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
@@ -212,8 +264,19 @@ router.post(
       return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
     }
 
+    const prefix = `vendor-docs/${profile.id}/`;
+    for (const d of result.data.documents) {
+      if (!isStorageKey(d.key) || !d.key.startsWith(prefix) || d.key.includes('..')) {
+        return res.status(400).json({ error: 'Invalid document reference.' });
+      }
+      if (!(await objectExists(d.key))) {
+        return res.status(400).json({ error: 'Upload was not completed. Please try again.' });
+      }
+    }
+
     const count = await prisma.vendorDocument.createMany({
-      data: result.data.documents.map((d) => ({ vendorId: profile.id, ...d }))
+      data: result.data.documents.map((d) => ({ vendorId: profile.id, url: d.key, fileName: d.fileName })),
+      skipDuplicates: true
     });
 
     return res.status(201).json({ count: count.count });

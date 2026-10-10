@@ -1,5 +1,6 @@
 import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
+import { sendJson } from '@/lib/post';
 import { formatDateTime, formatRelative } from '@/admin/primitives/format';
 import type { AdminUserRow } from './types';
 
@@ -48,6 +49,13 @@ export const adminUsersModule: ResourceConfig<AdminUserRow> = {
       key: 'isActive',
       header: 'Status',
       accessor: (a) => (a.isActive ? 'ACTIVE' : 'INACTIVE'),
+      type: 'status',
+      priority: 1
+    },
+    {
+      key: 'mfaEnabled',
+      header: '2FA',
+      accessor: (a) => (a.mfaEnabled ? 'ON' : 'NOT SET UP'),
       type: 'status',
       priority: 1
     },
@@ -134,6 +142,22 @@ export const adminUsersModule: ResourceConfig<AdminUserRow> = {
       run: async (admin, h) => {
         await data.update!(admin.id, { role: 'SUPPORT' });
         h.toast(`${admin.name} is now support`);
+        h.refresh();
+      }
+    },
+    {
+      key: 'mfa-reset',
+      label: 'Reset 2FA',
+      permission: 'admins.update',
+      visible: (a) => a.mfaEnabled,
+      confirm: {
+        title: 'Reset two-factor authentication?',
+        body: 'Use this when they have lost their phone and their recovery codes. They are signed out everywhere and must set up an authenticator again at next sign-in. Recorded in the audit log.',
+        confirmLabel: 'Reset 2FA'
+      },
+      run: async (admin, h) => {
+        await sendJson('POST', `/admin-users/${admin.id}/mfa-reset`);
+        h.toast(`2FA reset for ${admin.name}`);
         h.refresh();
       }
     },

@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminFetch } from '@/lib/api';
 import { useAdminSession } from '@/lib/admin-session-context';
+import { MfaSection } from './mfa-section';
 
 export default function AccountPage() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="adm-page">
+    <div className="adm-page" style={{ display: 'grid', gap: 'var(--space-6)' }}>
       <header className="adm-page-header">
         <div>
           <h1 className="adm-page-title">Account</h1>
@@ -59,6 +60,8 @@ export default function AccountPage() {
           Your password was set by someone else. Choose your own before you continue.
         </p>
       )}
+
+      {canChangePassword && <MfaSection />}
 
       {!canChangePassword ? (
         <p className="adm-page-meta">

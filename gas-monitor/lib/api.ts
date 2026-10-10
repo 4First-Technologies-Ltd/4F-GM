@@ -41,7 +41,8 @@ export interface ApiUser {
 
 export interface VendorDocument {
   id: string;
-  url: string;
+  /** Short-lived signed link, or null for files that never reached storage. */
+  url: string | null;
   fileName: string;
   createdAt: string;
 }
@@ -342,11 +343,31 @@ export const vendorApi = {
     return res.profile;
   },
 
-  async uploadDocuments(documents: { url: string; fileName: string }[]): Promise<void> {
+  /**
+   * Uploads a picked file to private storage, then records it. The file goes
+   * straight to the storage provider on a short-lived link; the API only ever
+   * sees its name and the key it issued.
+   */
+  async uploadDocument(file: { uri: string; fileName: string; mimeType?: string | null }): Promise<void> {
+    const blob = await (await fetch(file.uri)).blob();
+    const contentType = blob.type || file.mimeType || 'image/jpeg';
+
+    const { key, uploadUrl } = await request<{ key: string; uploadUrl: string }>(
+      '/api/vendor/documents/upload-url',
+      {
+        method: 'POST',
+        auth: true,
+        body: JSON.stringify({ fileName: file.fileName, contentType, size: blob.size }),
+      },
+    );
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    if (!put.ok) throw new Error('Upload failed. Please try again.');
+
     await request('/api/vendor/documents', {
       method: 'POST',
       auth: true,
-      body: JSON.stringify({ documents }),
+      body: JSON.stringify({ documents: [{ key, fileName: file.fileName }] }),
     });
   },
 

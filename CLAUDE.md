@@ -57,6 +57,14 @@ Role scoping is **rank-based** and lives in `gas-monitor-backend/src/middleware/
 
 Every mutating admin route writes to `audit_logs` via `src/lib/audit.ts`. The audit trail is append-only and surfaced at `/dashboard/audit`, visible to super admins only.
 
+### Admin two-factor authentication
+
+Migration `20261010000000_admin_mfa`. TOTP (RFC 6238, `src/lib/totp.ts`, no third-party OTP library) is **required for every named admin** unless `ADMIN_MFA_REQUIRED=false`. Login is two steps: `POST /api/admin/auth/login` returns `{ mfaRequired, challenge }` (a 5-minute signed token that is *not* a session; `verifyAdminSession` rejects it), then `POST /login/mfa` with a 6-digit code or a single-use recovery code. An admin with no factor yet gets a session that `guard()` blocks with `MFA_ENROLLMENT_REQUIRED` everywhere except `/auth/*`; the panel sends them to `/dashboard/account` to enrol (`/auth/mfa/setup` → `/auth/mfa/enable`, which returns 8 recovery codes once and signs out other sessions). Secrets are AES-256-GCM encrypted (`MFA_ENCRYPTION_KEY`, falling back to `ADMIN_JWT_SECRET`); `mfaLastStep` blocks code replay. Lost phone → another SUPER_ADMIN uses `POST /admin-users/:id/mfa-reset` ("Reset 2FA" row action); you cannot reset your own. The env root login has no row: set `ADMIN_ROOT_TOTP_SECRET` to put a factor on it, or `ADMIN_ROOT_LOGIN_DISABLED=true` once a named super admin has enrolled.
+
+### Vendor document storage
+
+Vendor KYC files live in a **private Cloudflare R2 bucket** (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`; `src/lib/storage.ts`). Flow: `POST /api/vendor/documents/upload-url` validates type (JPG/PNG/WebP/PDF) and size (8 MB), returns a 5-minute presigned PUT with type and length signed in; the app PUTs the file straight to R2; `POST /api/vendor/documents` takes only the issued `key`, checks it sits under the vendor's own `vendor-docs/<profileId>/` prefix and exists in R2, then stores it in `VendorDocument.url`. Reads (admin vendor/user detail, vendor `/me`) swap the key for a 5-minute presigned GET via `withViewUrls`; rows from before this existed hold a phone-local `file://` path and come back with `url: null`. The R2 bucket must never be made public.
+
 ## Payouts and support inbox
 
 Added to the admin panel in Oct 2026, modelled on GoBuyMe's CRM/payout modules. Migration `20261009000000_payouts_and_support` (backend-owned; **not yet mirrored into `gas-monitor-web/prisma/schema.prisma`**, which was already behind).

@@ -7,6 +7,7 @@ import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 import { writeAuditLog } from '../../lib/audit';
 import { cooldownExpiry, PLANS } from '../../lib/plans';
+import { withViewUrls } from '../../lib/storage';
 
 const router = Router();
 
@@ -53,7 +54,10 @@ router.get(
       prisma.vendorProfile.count({ where })
     ]);
 
-    return res.json(paginated(vendors, total, query));
+    const signed = await Promise.all(
+      vendors.map(async (v) => ({ ...v, documents: await withViewUrls(v.documents) }))
+    );
+    return res.json(paginated(signed, total, query));
   })
 );
 
@@ -72,7 +76,7 @@ router.get(
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
     }
-    return res.json({ vendor });
+    return res.json({ vendor: { ...vendor, documents: await withViewUrls(vendor.documents) } });
   })
 );
 
