@@ -20,33 +20,66 @@ import { Eye, EyeOff } from 'lucide-react';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 
-type Role = 'CONSUMER' | 'VENDOR' | 'RIDER' | 'LOGISTICS_COMPANY' | 'BRANCH_MANAGER';
+// What gets registered. A logistics company is a rider-side sign-up, not a fourth category.
+type Role = 'CONSUMER' | 'VENDOR' | 'RIDER' | 'LOGISTICS_COMPANY';
 
-const ROLE_LABEL: Record<Role, string> = {
-  CONSUMER: 'Consumer',
-  VENDOR: 'Vendor',
-  RIDER: 'Rider',
-  LOGISTICS_COMPANY: 'Logistics company',
-  BRANCH_MANAGER: 'Branch manager'
-};
+type Category = 'CONSUMER' | 'VENDOR' | 'RIDER';
+type RiderKind = 'SINGLE' | 'COMPANY';
+
+const CATEGORY_LABEL: Record<Category, string> = { CONSUMER: 'Consumer', VENDOR: 'Vendor', RIDER: 'Rider' };
+
+const RIDER_TABS: { key: RiderKind; label: string }[] = [
+  { key: 'SINGLE', label: 'Single Rider' },
+  { key: 'COMPANY', label: 'Logistics Company' }
+];
+
+/** The second row of tabs under Vendor and Rider. */
+function SubTabs<K extends string>({
+  label,
+  tabs,
+  value,
+  onChange
+}: {
+  label: string;
+  tabs: { key: K; label: string }[];
+  value: K;
+  onChange: (k: K) => void;
+}) {
+  return (
+    <div className="flex gap-1 mb-6 border-b border-border" role="tablist" aria-label={label}>
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          aria-selected={value === t.key}
+          onClick={() => onChange(t.key)}
+          className={`flex-1 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            value === t.key
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function SignUpForm() {
   const { register } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // `/sign-up?role=vendor|rider|company` lands straight on that application.
-  const [role, setRole] = useState<Role>(() => {
-    const param = searchParams.get('role')?.toLowerCase();
-    return param === 'vendor'
-      ? 'VENDOR'
-      : param === 'rider'
-        ? 'RIDER'
-        : param === 'company' || param === 'logistics'
-          ? 'LOGISTICS_COMPANY'
-          : param === 'manager'
-            ? 'BRANCH_MANAGER'
-            : 'CONSUMER';
-  });
+  // `/sign-up?role=vendor|rider` lands straight on that application; `role=company` (a logistics
+  // company) lands on the Rider category's second tab.
+  const param = searchParams.get('role')?.toLowerCase();
+  const [category, setCategory] = useState<Category>(
+    param === 'vendor' ? 'VENDOR' : param === 'rider' || param === 'company' || param === 'logistics' ? 'RIDER' : 'CONSUMER'
+  );
+  const [riderKind, setRiderKind] = useState<RiderKind>(param === 'company' || param === 'logistics' ? 'COMPANY' : 'SINGLE');
+  const role: Role =
+    category === 'VENDOR' ? 'VENDOR' : category === 'RIDER' ? (riderKind === 'COMPANY' ? 'LOGISTICS_COMPANY' : 'RIDER') : 'CONSUMER';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -169,31 +202,45 @@ function SignUpForm() {
             {role === 'CONSUMER'
               ? 'Monitor cylinders and order refills from trusted vendors.'
               : role === 'VENDOR'
-                ? 'List gas products and manage incoming orders. Your account is reviewed before it goes live.'
+                ? 'List gas products and manage incoming orders. Run one location or add more branches whenever you like. Your account is reviewed before it goes live.'
                 : role === 'RIDER'
                   ? 'Deliver gas cylinders for vendors on the marketplace. Your application is reviewed before you can take deliveries.'
-                  : role === 'LOGISTICS_COMPANY'
-                    ? 'Run a fleet of riders. Your company is reviewed once; riders you invite are approved by joining it.'
-                    : 'Run orders and stock for a vendor branch. Use the email address the vendor invited; you see their branch once you verify it.'}
+                  : 'Run a fleet of riders. Your company is reviewed once; riders you invite are approved by joining it.'}
           </p>
 
           {/* Role Tabs */}
-          <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label="Account type">
-            {(['CONSUMER', 'VENDOR', 'RIDER', 'LOGISTICS_COMPANY', 'BRANCH_MANAGER'] as const).map((r) => (
+          <div className="flex gap-2 mb-4" role="group" aria-label="Account type">
+            {(['CONSUMER', 'VENDOR', 'RIDER'] as const).map((c) => (
               <button
-                key={r}
+                key={c}
                 type="button"
-                onClick={() => setRole(r)}
-                className={`flex-1 min-w-[7rem] py-2 px-3 rounded-lg font-medium text-sm transition-all duration-200 ${
-                  role === r
+                onClick={() => {
+                  setCategory(c);
+                  setError(null);
+                }}
+                className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all duration-200 ${
+                  category === c
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {ROLE_LABEL[r]}
+                {CATEGORY_LABEL[c]}
               </button>
             ))}
           </div>
+
+          {category === 'RIDER' && (
+            <SubTabs
+              label="Rider type"
+              tabs={RIDER_TABS}
+              value={riderKind}
+              onChange={(k) => {
+                setRiderKind(k);
+                setError(null);
+              }}
+            />
+          )}
+          {category === 'CONSUMER' && <div className="mb-2" />}
 
           {/* Form */}
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
@@ -392,11 +439,9 @@ function SignUpForm() {
               {submitting ? (
                 <span className="flex items-center gap-2">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  {role === 'CONSUMER' || role === 'BRANCH_MANAGER' ? 'Creating account…' : 'Submitting application…'}
+                  {role === 'CONSUMER' ? 'Creating account…' : 'Submitting application…'}
                 </span>
               ) : role === 'CONSUMER' ? (
-                'Create account'
-              ) : role === 'BRANCH_MANAGER' ? (
                 'Create account'
               ) : (
                 'Submit application'

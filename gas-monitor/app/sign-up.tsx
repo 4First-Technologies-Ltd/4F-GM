@@ -10,6 +10,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
 import { NetworkStatusDot } from '@/components/network-status-dot';
 import { LegalConsent } from '@/components/legal-consent';
+import { SignUpTabs } from '@/components/signup-tabs';
 import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
@@ -93,47 +94,6 @@ function Field({
   );
 }
 
-function RoleTabs({
-  role,
-  onChange,
-}: {
-  role: 'CONSUMER' | 'VENDOR' | 'RIDER' | 'COMPANY';
-  onChange: (r: 'CONSUMER' | 'VENDOR' | 'RIDER' | 'COMPANY') => void;
-}) {
-  return (
-    <View style={rt.wrap}>
-      <TouchableOpacity
-        style={[rt.tab, role === 'CONSUMER' && rt.tabActive]}
-        onPress={() => onChange('CONSUMER')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'CONSUMER' && rt.tabTextActive]}>Consumer</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[rt.tab, role === 'VENDOR' && rt.tabActive]}
-        onPress={() => onChange('VENDOR')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'VENDOR' && rt.tabTextActive]}>Vendor</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[rt.tab, role === 'RIDER' && rt.tabActive]}
-        onPress={() => onChange('RIDER')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'RIDER' && rt.tabTextActive]}>Rider</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[rt.tab, role === 'COMPANY' && rt.tabActive]}
-        onPress={() => onChange('COMPANY')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'COMPANY' && rt.tabTextActive]}>Company</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 export default function SignUpScreen() {
   const consent = useLegalConsent();
   const [consentInvalid, setConsentInvalid] = useState(false);
@@ -199,14 +159,7 @@ export default function SignUpScreen() {
             <Text style={s.subtitle}>Start monitoring your gas today</Text>
           </View>
 
-          <RoleTabs
-            role="CONSUMER"
-            onChange={(r) => {
-              if (r === 'VENDOR') router.replace('/vendor-sign-up');
-              if (r === 'RIDER') router.replace('/rider-sign-up');
-              if (r === 'COMPANY') router.replace('/company-sign-up');
-            }}
-          />
+          <SignUpTabs category="CONSUMER" />
 
           {/* Form */}
           <View style={s.form}>
@@ -323,27 +276,6 @@ const sf = StyleSheet.create({
 });
 
 // ── Role tabs styles ──────────────────────────────────────────────────────────
-const rt = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    marginBottom: 22,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tabActive: { backgroundColor: C.accent },
-  tabText: { color: C.muted, fontSize: 14, fontWeight: '700' },
-  tabTextActive: { color: '#FFFFFF' },
-});
-
 // ── Screen styles ─────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: {

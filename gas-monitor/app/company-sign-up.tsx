@@ -10,36 +10,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, companyApi } from '@/lib/api';
 import { setPendingCompanyProfile } from '@/lib/pendingCompanyProfile';
 import { LegalConsent } from '@/components/legal-consent';
+import { SignUpTabs, RIDER_SUBTABS } from '@/components/signup-tabs';
 import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
   bg: '#FFFFFF', surface: '#F8FCF8', accent: '#2D7450', text: '#1A2E1A',
   muted: '#7A9A7A', border: '#E0EEE0', red: '#D32F2F',
 };
-
-const ROLE_TABS = [
-  { key: 'CONSUMER', label: 'Consumer', href: '/sign-up' },
-  { key: 'VENDOR', label: 'Vendor', href: '/vendor-sign-up' },
-  { key: 'RIDER', label: 'Rider', href: '/rider-sign-up' },
-  { key: 'COMPANY', label: 'Company', href: null },
-] as const;
-
-function RoleTabs() {
-  return (
-    <View style={rt.wrap}>
-      {ROLE_TABS.map((r) => (
-        <TouchableOpacity
-          key={r.key}
-          style={[rt.tab, r.key === 'COMPANY' && rt.tabActive]}
-          onPress={() => { if (r.href) router.replace(r.href); }}
-          activeOpacity={0.8}
-        >
-          <Text style={[rt.tabText, r.key === 'COMPANY' && rt.tabTextActive]}>{r.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
 
 /**
  * Logistics company sign-up: owner account plus company details in one form.
@@ -129,7 +106,16 @@ export default function CompanySignUpScreen() {
             After 4FG approves your company you can invite your riders by email. Riders you invite are approved by joining your fleet.
           </Text>
 
-          {!resuming && <RoleTabs />}
+          {!resuming && (
+            <SignUpTabs
+              category="RIDER"
+              sub={{
+                tabs: RIDER_SUBTABS,
+                value: 'COMPANY',
+                onChange: (k) => { if (k === 'SINGLE') router.replace('/rider-sign-up'); },
+              }}
+            />
+          )}
 
           {!resuming && (
             <>
@@ -167,22 +153,6 @@ export default function CompanySignUpScreen() {
     </SafeAreaView>
   );
 }
-
-const rt = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    marginBottom: 12,
-  },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: C.accent },
-  tabText: { color: C.muted, fontSize: 13, fontWeight: '700' },
-  tabTextActive: { color: '#FFFFFF' },
-});
 
 const s = StyleSheet.create({
   body: { padding: 24, gap: 8 },

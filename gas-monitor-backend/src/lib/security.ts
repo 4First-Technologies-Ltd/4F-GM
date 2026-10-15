@@ -44,6 +44,14 @@ export const otpSendLimiter = limiter(10 * MIN, 3, emailOf);
 /** Guessing codes. */
 export const otpVerifyLimiter = limiter(15 * MIN, 10, emailOf);
 export const registerLimiter = limiter(60 * MIN, 10);
+/**
+ * Opening and accepting an invite link. The token is 256 random bits so guessing is
+ * hopeless; this only stops hammering, and is generous enough for several managers
+ * accepting from one shop's shared connection.
+ */
+export const inviteLimiter = limiter(15 * MIN, 60);
+/** Each invite sends an email, so cap how many one vendor can send (and spam someone with). */
+export const inviteSendLimiter = limiter(60 * MIN, 30, (req: Request) => (req.user?.sub ?? req.ip ?? 'anon'));
 export const contactLimiter = limiter(60 * MIN, 5);
 export const guestOrderLimiter = limiter(15 * MIN, 20);
 /** Each call mints an upload link, so cap how many a vendor can request. */

@@ -37,6 +37,7 @@ function BranchManagers({ branchId }: { branchId: string }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [notice, setNotice] = useState('');
 
   async function load() {
     try {
@@ -58,7 +59,13 @@ function BranchManagers({ branchId }: { branchId: string }) {
     setBusy(true);
     setErr('');
     try {
-      await vendorApi.inviteStaff(branchId, email.trim());
+      setNotice('');
+      const { emailSent } = await vendorApi.inviteStaff(branchId, email.trim());
+      setNotice(
+        emailSent
+          ? `Invitation sent to ${email.trim()}. The link works once and expires in 14 days.`
+          : 'The invite was saved, but the email could not be sent. Send it again in a moment.',
+      );
       setEmail('');
       await load();
     } catch (e) {
@@ -102,7 +109,7 @@ function BranchManagers({ branchId }: { branchId: string }) {
               <View style={{ flex: 1 }}>
                 <Text style={[s.branchLine, { color: C.text }]} numberOfLines={1}>{m.user?.name ?? m.email}</Text>
                 <Text style={s.branchLine}>
-                  {m.status === 'ACTIVE' ? m.email : `Invited ${m.email}, waiting for them to sign up`}
+                  {m.status === 'ACTIVE' ? m.email : `Invited ${m.email}, waiting for them to accept`}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => revoke(m)}>
@@ -121,6 +128,7 @@ function BranchManagers({ branchId }: { branchId: string }) {
             keyboardType="email-address"
           />
           {!!err && <Text style={[s.branchLine, { color: C.red }]}>{err}</Text>}
+          {!!notice && <Text style={[s.branchLine, { color: C.accent }]}>{notice}</Text>}
           <TouchableOpacity style={[s.btn, busy && { opacity: 0.7 }]} onPress={invite} disabled={busy}>
             {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.btnText}>Send invite</Text>}
           </TouchableOpacity>

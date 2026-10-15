@@ -7,6 +7,7 @@ import authRoutes from './routes/auth';
 import vendorRoutes from './routes/vendor';
 import vendorBranchesRoutes from './routes/vendorBranches';
 import staffRoutes from './routes/staff';
+import staffInviteRoutes from './routes/staffInvite';
 import companyRoutes from './routes/company';
 import riderRoutes from './routes/rider';
 import ordersRoutes from './routes/orders';
@@ -90,6 +91,8 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/vendor/branches', vendorBranchesRoutes);
   app.use('/api/vendor', vendorRoutes);
+  // Public: an invited manager sets up their account here. Must precede the gated /api/staff.
+  app.use('/api/staff/invite', staffInviteRoutes);
   app.use('/api/staff', staffRoutes);
   app.use('/api/company', companyRoutes);
   app.use('/api/rider', riderRoutes);

@@ -270,28 +270,6 @@ export default function SignInScreen() {
               <Text style={{ color: C.accent, fontWeight: '700' }}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push('/manager-sign-up')}
-            style={s.switchLink}
-          >
-            <Text style={s.switchText}>
-              Invited as a branch manager?{'  '}
-              <Text style={{ color: C.accent, fontWeight: '700' }}>Create your account</Text>
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push('/company-sign-up')}
-            style={s.switchLink}
-          >
-            <Text style={s.switchText}>
-              Run a logistics company?{'  '}
-              <Text style={{ color: C.accent, fontWeight: '700' }}>Register your fleet</Text>
-            </Text>
-          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

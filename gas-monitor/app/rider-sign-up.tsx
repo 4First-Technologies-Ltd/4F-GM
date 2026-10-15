@@ -11,6 +11,7 @@ import { authApi, riderApi } from '@/lib/api';
 import { setPendingRiderProfile } from '@/lib/pendingRiderProfile';
 import { NetworkStatusDot } from '@/components/network-status-dot';
 import { LegalConsent } from '@/components/legal-consent';
+import { SignUpTabs, RIDER_SUBTABS } from '@/components/signup-tabs';
 import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
@@ -77,30 +78,6 @@ function Field({
         )}
       </View>
       {!!error && <Text style={sf.error}>{error}</Text>}
-    </View>
-  );
-}
-
-function RoleTabs() {
-  const roles = [
-    { key: 'CONSUMER', label: 'Consumer', href: '/sign-up' },
-    { key: 'VENDOR', label: 'Vendor', href: '/vendor-sign-up' },
-    { key: 'RIDER', label: 'Rider', href: null },
-    { key: 'COMPANY', label: 'Company', href: '/company-sign-up' },
-  ] as const;
-
-  return (
-    <View style={rt.wrap}>
-      {roles.map((r) => (
-        <TouchableOpacity
-          key={r.key}
-          style={[rt.tab, r.key === 'RIDER' && rt.tabActive]}
-          onPress={() => { if (r.href) router.replace(r.href); }}
-          activeOpacity={0.8}
-        >
-          <Text style={[rt.tabText, r.key === 'RIDER' && rt.tabTextActive]}>{r.label}</Text>
-        </TouchableOpacity>
-      ))}
     </View>
   );
 }
@@ -195,7 +172,16 @@ export default function RiderSignUpScreen() {
             </Text>
           </View>
 
-          {!resuming && <RoleTabs />}
+          {!resuming && (
+            <SignUpTabs
+              category="RIDER"
+              sub={{
+                tabs: RIDER_SUBTABS,
+                value: 'SINGLE',
+                onChange: (k) => { if (k === 'COMPANY') router.replace('/company-sign-up'); },
+              }}
+            />
+          )}
 
           {!resuming && (
             <View style={s.steps}>
@@ -316,22 +302,6 @@ const sf = StyleSheet.create({
   rowError: { borderColor: C.red, backgroundColor: '#FFF5F5' },
   input: { flex: 1, color: C.text, fontSize: 15, paddingVertical: 0 },
   error: { color: C.red, fontSize: 12, marginTop: 2 },
-});
-
-const rt = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    marginBottom: 22,
-  },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: C.accent },
-  tabText: { color: C.muted, fontSize: 14, fontWeight: '700' },
-  tabTextActive: { color: '#FFFFFF' },
 });
 
 const s = StyleSheet.create({

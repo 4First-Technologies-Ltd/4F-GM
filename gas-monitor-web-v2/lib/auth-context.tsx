@@ -1,7 +1,15 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { authApi, ApiUser, UserRole, RegisterResult, OtpSentResult, UpdateProfilePayload } from './api';
+import {
+  authApi,
+  ApiUser,
+  UserRole,
+  RegisterResult,
+  OtpSentResult,
+  UpdateProfilePayload,
+  AcceptInviteResult
+} from './api';
 import { getAccessToken, getSavedUser, clearSession, saveSession, getRefreshToken } from './storage';
 
 interface AuthContextValue {
@@ -11,6 +19,8 @@ interface AuthContextValue {
   register: (name: string, email: string, password: string, role?: UserRole) => Promise<RegisterResult>;
   verifyOtp: (email: string, otp: string) => Promise<ApiUser>;
   resendOtp: (email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET') => Promise<OtpSentResult>;
+  /** Accept a branch-manager invitation from its emailed token; signs in a new manager. */
+  acceptInvite: (token: string, input: { name: string; password: string }) => Promise<AcceptInviteResult>;
   logout: () => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<ApiUser>;
   /** Re-fetches the user and persists it, so role-status changes (e.g. rider approval) take effect. */
@@ -61,6 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authApi.resendOtp(email, purpose);
   }, []);
 
+  const acceptInvite = useCallback(async (token: string, input: { name: string; password: string }) => {
+    const result = await authApi.acceptInvite(token, input);
+    if (result.status === 'CREATED') setUser(result.user);
+    return result;
+  }, []);
+
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => {});
     setUser(null);
@@ -86,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, verifyOtp, resendOtp, logout, updateProfile, refreshUser }}
+      value={{ user, loading, login, register, verifyOtp, resendOtp, acceptInvite, logout, updateProfile, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

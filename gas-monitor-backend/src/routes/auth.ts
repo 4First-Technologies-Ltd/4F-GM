@@ -19,7 +19,8 @@ const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email('Invalid email address'),
   password: z.string().superRefine(validatePassword),
-  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER', 'BRANCH_MANAGER', 'LOGISTICS_COMPANY']).optional().default('CONSUMER'),
+  // BRANCH_MANAGER is deliberately absent: managers only join through a vendor's invite email.
+  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER', 'LOGISTICS_COMPANY']).optional().default('CONSUMER'),
   acceptedTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the Terms and Privacy Policy' }) }),
   legalVersion: z.string().refine((v) => v === LEGAL_VERSION, {
     message: 'The Terms have been updated. Please reload and review them again.'

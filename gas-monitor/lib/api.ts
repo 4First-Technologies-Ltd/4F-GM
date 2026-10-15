@@ -494,8 +494,9 @@ export const vendorApi = {
     return res.staff;
   },
 
-  async inviteStaff(branchId: string, email: string): Promise<void> {
-    await request(`/api/vendor/branches/${branchId}/staff`, {
+  /** `emailSent` is false when the invite was saved but the email could not be delivered. */
+  async inviteStaff(branchId: string, email: string): Promise<{ emailSent: boolean }> {
+    return request(`/api/vendor/branches/${branchId}/staff`, {
       method: 'POST', auth: true, body: JSON.stringify({ email }),
     });
   },
