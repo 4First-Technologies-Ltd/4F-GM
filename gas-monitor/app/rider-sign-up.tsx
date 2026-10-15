@@ -86,6 +86,7 @@ function RoleTabs() {
     { key: 'CONSUMER', label: 'Consumer', href: '/sign-up' },
     { key: 'VENDOR', label: 'Vendor', href: '/vendor-sign-up' },
     { key: 'RIDER', label: 'Rider', href: null },
+    { key: 'COMPANY', label: 'Company', href: '/company-sign-up' },
   ] as const;
 
   return (

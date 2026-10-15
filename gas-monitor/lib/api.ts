@@ -192,6 +192,8 @@ export interface FleetDelivery {
 
 export interface VendorOrder {
   id: string;
+  /** The branch fulfilling the order; null for orders that predate branches. */
+  branchId?: string | null;
   consumer: { id: string; name: string; email: string };
   listing: GasListing;
   assignedAt?: string | null;

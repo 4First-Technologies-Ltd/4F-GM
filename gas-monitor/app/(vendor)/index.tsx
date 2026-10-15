@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { vendorApi, VendorOrder, OrderStatus } from '@/lib/api';
+import { vendorApi, VendorOrder, OrderStatus, Branch } from '@/lib/api';
 import { AssignRiderSheet } from '@/components/assign-rider-sheet';
 import { useDrawer } from './_layout';
 
@@ -75,8 +75,11 @@ function OrderCard({
   onDeliver,
   onCancel,
   onAssignRider,
+  branchName,
 }: {
   order: VendorOrder;
+  /** Shown only when the vendor has more than one branch. */
+  branchName?: string;
   onConfirm: () => void;
   onDeliver: () => void;
   onCancel: () => void;
@@ -92,6 +95,7 @@ function OrderCard({
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={oc.orderId}>Order #{order.id.slice(0, 8).toUpperCase()}</Text>
           <Text style={oc.date}>{fmtDate(order.createdAt)}</Text>
+          {!!branchName && <Text style={oc.date}>{branchName}</Text>}
         </View>
         <View style={[oc.statusBadge, { backgroundColor: meta.bg }]}>
           <Text style={[oc.statusText, { color: meta.color }]}>{meta.label}</Text>
@@ -187,11 +191,14 @@ export default function VendorOrdersScreen() {
   const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [assigning, setAssigning] = useState<VendorOrder | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState('all');
 
   async function loadOrders() {
     try {
-      const data = await vendorApi.getOrders();
+      const [data, b] = await Promise.all([vendorApi.getOrders(), vendorApi.getBranches()]);
       setOrders(data);
+      setBranches(b.branches);
     } catch {
       // silently fail — empty state handles this
     }
@@ -214,7 +221,9 @@ export default function VendorOrdersScreen() {
     }
   }
 
-  const filtered = filter === 'ALL' ? orders : orders.filter((o) => o.status === filter);
+  const filtered = orders.filter(
+    (o) => (filter === 'ALL' || o.status === filter) && (branchFilter === 'all' || o.branchId === branchFilter),
+  );
   const pendingCount = orders.filter((o) => o.status === 'PENDING').length;
   const needsRiderCount = orders.filter((o) => canAssignRider(o) && !o.rider).length;
 
@@ -243,6 +252,27 @@ export default function VendorOrdersScreen() {
           </View>
         )}
       </View>
+
+      {/* Branch pills (only when the vendor has more than one branch) */}
+      {branches.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.filterRow}
+          style={s.filterScroll}
+        >
+          {[{ id: 'all', name: 'All branches' }, ...branches].map((b) => (
+            <TouchableOpacity
+              key={b.id}
+              style={[s.pill, branchFilter === b.id && s.pillActive]}
+              onPress={() => setBranchFilter(b.id)}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.pillText, branchFilter === b.id && s.pillTextActive]}>{b.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Filter pills */}
       <ScrollView
@@ -292,6 +322,7 @@ export default function VendorOrdersScreen() {
               onDeliver={() => updateStatus(order.id, 'DELIVERED')}
               onCancel={() => updateStatus(order.id, 'CANCELLED')}
               onAssignRider={() => setAssigning(order)}
+              branchName={branches.length > 1 ? branches.find((b) => b.id === order.branchId)?.name : undefined}
             />
           ))
         )}
