@@ -1,0 +1,29 @@
+# Reviewed gitleaks findings: false positives, not secrets. Each line is an exact
+# finding (commit:file:rule:line), so a NEW leak anywhere still fails CI.
+# Verified 2026-10-15: curl examples use 10-char placeholders; the two landing keys
+# decode to role=anon. The one test-fixture finding is allowlisted by path in .gitleaks.toml.
+
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:DEVICE_INTEGRATION_GUIDE.md:curl-auth-header:237
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:DEVICE_INTEGRATION_GUIDE.md:curl-auth-header:240
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TEST_CHECKLIST.md:curl-auth-header:143
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TEST_CHECKLIST.md:curl-auth-header:148
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TEST_CHECKLIST.md:curl-auth-header:154
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TEST_CHECKLIST.md:curl-auth-header:160
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TEST_CHECKLIST.md:curl-auth-header:166
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TERMII_INTEGRATION_GUIDE.md:curl-auth-header:132
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TERMII_SETUP_CHECKLIST.md:curl-auth-header:49
+# placeholder bearer token in a docs curl example
+bbdc3d99bae0c04bce732a9c234feac6d43f8565:TERMII_VERIFICATION_GUIDE.md:curl-auth-header:27
+# Supabase anon key (role=anon, public by design; RLS protects the data)
+b45c1951b054540da187c3fd9583c9cd8e6c5628:landing/index.html:jwt:1052
+# Supabase anon key (role=anon, public by design; RLS protects the data)
+b45c1951b054540da187c3fd9583c9cd8e6c5628:landing/waitlist-admin.html:jwt:577

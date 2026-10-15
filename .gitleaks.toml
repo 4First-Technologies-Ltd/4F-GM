@@ -1,0 +1,10 @@
+# Extends the built-in ruleset; this only adds narrow allowlists.
+[extend]
+useDefault = true
+
+# Matched by path + rule rather than commit fingerprint (see .gitleaksignore) so it
+# keeps working if the commit that added it is rebased or squash-merged.
+[[allowlists]]
+description = "Unsigned fixture token in the log-redaction unit test (sub claim only, no signature)"
+targetRules = ["jwt"]
+paths = ['''gas-monitor-backend/tests/security\.test\.ts$''']
