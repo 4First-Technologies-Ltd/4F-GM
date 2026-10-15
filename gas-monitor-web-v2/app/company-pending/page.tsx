@@ -169,7 +169,7 @@ export default function CompanyPendingPage() {
         )}
 
         <p className="mt-6 text-sm text-muted-foreground">
-          Need help? <span className="font-medium text-primary">support@4fg.com</span>
+          Need help? <span className="font-medium text-primary">4fgmonitor@gmail.com</span>
           {' · '}
           <button
             type="button"

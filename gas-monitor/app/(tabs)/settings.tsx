@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Platform, Switch, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { authApi } from '@/lib/api';
+import { authApi, ApiUser } from '@/lib/api';
+import { getSavedUser } from '@/lib/storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const C = {
@@ -29,6 +30,20 @@ export default function SettingsScreen() {
   const [emailNotif, setEmailNotif] = useState(false);
   const [units, setUnits] = useState<'kg' | 'lbs'>('kg');
   const [signingOut, setSigningOut] = useState(false);
+  const [user, setUser] = useState<ApiUser | null>(null);
+
+  useEffect(() => {
+    getSavedUser<ApiUser>().then(setUser);
+  }, []);
+
+  const initials =
+    (user?.name ?? '')
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '?';
 
   function handleSignOut() {
     Alert.alert(
@@ -66,11 +81,11 @@ export default function SettingsScreen() {
           <View style={[s.accentBar, { backgroundColor: C.accent }]} />
           <View style={s.profileRow}>
             <View style={s.avatar}>
-              <Text style={[s.avatarText, { color: C.accent }]}>BB</Text>
+              <Text style={[s.avatarText, { color: C.accent }]}>{initials}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.profileName}>Bubble Barrel User</Text>
-              <Text style={s.profileEmail}>devops@bubblebarrel.dev</Text>
+              <Text style={s.profileName} numberOfLines={1}>{user?.name ?? 'Your account'}</Text>
+              <Text style={s.profileEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
             </View>
             <TouchableOpacity style={s.editBtn} activeOpacity={0.7}>
               <Text style={s.editBtnText}>Edit</Text>

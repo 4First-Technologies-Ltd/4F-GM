@@ -14,8 +14,7 @@ export const LEGAL_EFFECTIVE_DATE = "1 October 2026";
 export const COMPANY = {
   name: "4First Technologies Limited",
   product: "4FG Smart Gas Monitor",
-  email: "4fg@4firsttechnologies.com",
-  supportEmail: "4fg-support@4firsttechnologies.com",
+  email: "4fgmonitor@gmail.com",
 } as const;
 
 export type LegalBlock = string | { list: string[] };
@@ -164,7 +163,7 @@ export const TERMS: LegalDoc = {
       heading: "Governing law and contact",
       body: [
         "These Terms are governed by the laws of the Federal Republic of Nigeria, and the courts of Nigeria have jurisdiction over any dispute, unless the law gives you the right to bring a claim elsewhere. We encourage you to contact us first so we can try to resolve a problem informally.",
-        `Questions about these Terms: ${EMAIL}. For help with your account or an order: ${COMPANY.supportEmail}.`,
+        `Questions about these Terms, and help with your account or an order: ${EMAIL}.`,
       ],
     },
   ],
@@ -295,7 +294,7 @@ export const PRIVACY: LegalDoc = {
       id: "contact",
       heading: "Contact us",
       body: [
-        `${CO}. Privacy questions and requests: ${EMAIL}. Account and order support: ${COMPANY.supportEmail}.`,
+        `${CO}. Privacy questions and requests, and account and order support: ${EMAIL}.`,
       ],
     },
   ],

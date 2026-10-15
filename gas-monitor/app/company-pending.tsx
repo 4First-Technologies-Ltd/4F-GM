@@ -95,6 +95,10 @@ export default function CompanyPendingScreen() {
         )}
       </View>
 
+      <Text style={s.supportText}>
+        Need help? <Text style={{ color: C.accent, fontWeight: '700' }}>Contact 4fgmonitor@gmail.com</Text>
+      </Text>
+
       <TouchableOpacity style={s.signOut} onPress={signOut} activeOpacity={0.8}>
         <Text style={s.signOutText}>Sign Out</Text>
       </TouchableOpacity>
@@ -115,6 +119,7 @@ const s = StyleSheet.create({
   primaryText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   secondary: { borderWidth: 1.5, borderColor: C.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   secondaryText: { color: C.accent, fontSize: 15, fontWeight: '700' },
+  supportText: { color: C.muted, fontSize: 13, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
   signOut: { alignItems: 'center', padding: 20 },
   signOutText: { color: C.muted, fontSize: 14, fontWeight: '600' },
 });
