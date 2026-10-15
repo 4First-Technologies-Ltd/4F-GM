@@ -24,8 +24,7 @@ const TOPICS = [
 const CONTACT_INFO = {
   address: "Head Office: Imo Digital City Limited, 23 Egbu Road, Owerri, Imo State, Nigeria.",
   phone: "+234 906 476 8335",
-  email: "4fg@4firsttechnologies.com",
-  supportEmail: "4fg-support@4firsttechnologies.com",
+  email: "4fgmonitor@gmail.com",
   hours: "Monday – Friday: 8:00am – 6:00pm\nSaturday: 9:00am – 3:00pm\nSunday: Closed",
 };
 
@@ -116,12 +115,6 @@ export default function ContactPage() {
                 className="block text-base text-primary transition-colors hover:text-primary/80"
               >
                 {CONTACT_INFO.email}
-              </a>
-              <a
-                href={`mailto:${CONTACT_INFO.supportEmail}`}
-                className="block text-base text-primary transition-colors hover:text-primary/80"
-              >
-                {CONTACT_INFO.supportEmail}
               </a>
             </div>
           </div>

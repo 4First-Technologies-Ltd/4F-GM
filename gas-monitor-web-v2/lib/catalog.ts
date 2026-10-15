@@ -153,7 +153,7 @@ export const LISTINGS: Listing[] = [
     price: 45000,
     minOrderQty: MONITOR_MOQ,
     sellerRole: 'manufacturer',
-    contact: { phone: '+234 906 476 8335', email: '4fg@4firsttechnologies.com' },
+    contact: { phone: '+234 906 476 8335', email: '4fgmonitor@gmail.com' },
     rating: 4.9,
     reviews: 124,
     isOpen: true,

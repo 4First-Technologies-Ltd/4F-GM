@@ -127,7 +127,7 @@ export default function RiderPendingScreen() {
 
         <Text style={s.supportText}>
           Need help?{' '}
-          <Text style={{ color: C.accent, fontWeight: '700' }}>Contact support@4fg.com</Text>
+          <Text style={{ color: C.accent, fontWeight: '700' }}>Contact 4fgmonitor@gmail.com</Text>
         </Text>
       </View>
 

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     const result = await resend.emails.send({
       from: 'noreply@notifications.4fgmonitor.com',
-      to: '4firsttechnologieslimited@gmail.com',
+      to: '4fgmonitor@gmail.com',
       replyTo: email,
       subject: `New Contact Form Submission: ${topic}`,
       html: `
