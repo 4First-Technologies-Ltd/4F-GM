@@ -5,7 +5,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { vendorApi, AssignableRider, VendorOrder } from '@/lib/api';
+import { vendorApi, AssignableRider } from '@/lib/api';
+
+type RiderApi = {
+  getRiders: () => Promise<AssignableRider[]>;
+  assignRider: (orderId: string, riderId: string | null) => Promise<void>;
+};
+
+/** The order fields the sheet needs; vendor and manager orders both satisfy it. */
+type AssignableOrder = {
+  id: string;
+  deliveryAddress: string;
+  rider?: { id: string } | null;
+};
 
 const C = {
   card: '#FFFFFF',
@@ -26,9 +38,12 @@ export function AssignRiderSheet({
   order,
   onClose,
   onAssigned,
+  api = vendorApi,
 }: {
   /** The order being assigned; the sheet is open while this is set. */
-  order: VendorOrder | null;
+  order: AssignableOrder | null;
+  /** Vendors and branch managers hit different endpoints; defaults to the vendor's. */
+  api?: RiderApi;
   onClose: () => void;
   onAssigned: () => void | Promise<void>;
 }) {
@@ -48,13 +63,15 @@ export function AssignRiderSheet({
     setLoadError('');
     setError('');
     setSelected(currentRiderId);
-    vendorApi
+    api
       .getRiders()
       .then((data) => { if (!cancelled) setRiders(data); })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load riders.');
       });
     return () => { cancelled = true; };
+    // `api` is a module-level object (or a stable prop), never recreated per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, currentRiderId]);
 
   async function save(riderId: string | null) {
@@ -62,7 +79,7 @@ export function AssignRiderSheet({
     setSaving(true);
     setError('');
     try {
-      await vendorApi.assignRider(order.id, riderId);
+      await api.assignRider(order.id, riderId);
       await onAssigned();
       onClose();
     } catch (err) {
@@ -126,7 +143,7 @@ export function AssignRiderSheet({
                 <View style={{ flex: 1 }}>
                   <Text style={s.riderName}>{r.user.name}</Text>
                   <Text style={s.riderMeta}>
-                    {[r.vehicleType, r.phone].filter(Boolean).join(' · ')}
+                    {[r.company?.companyName, r.vehicleType, r.phone].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
                 <View style={[s.radio, checked && s.radioActive]}>

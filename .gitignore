@@ -46,3 +46,8 @@ Thumbs.db
 *.docx
 *.zip
 !**/node_modules/**
+.gstack/
+
+# Retired web builds - gas-monitor-web-v2 is the web app. Kept on disk locally, not in the repo.
+/gas-monitor-web/
+/gas-monitor-3d-web/

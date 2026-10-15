@@ -41,6 +41,21 @@ export const ridersModule: ResourceConfig<RiderRow> = {
     { key: 'status', header: 'Status', accessor: (r) => r.status, type: 'status', sortable: true, priority: 1 },
     { key: 'phone', header: 'Phone', accessor: (r) => r.phone, priority: 2 },
     {
+      key: 'fleet',
+      header: 'Fleet',
+      accessor: (r) => r.company?.companyName ?? '',
+      priority: 2,
+      render: (r) =>
+        r.company ? (
+          <>
+            {r.company.companyName}
+            {r.company.status !== 'APPROVED' ? <span className="adm-td-sub">Company {r.company.status.toLowerCase()}</span> : null}
+          </>
+        ) : (
+          <span className="adm-muted">Independent</span>
+        )
+    },
+    {
       key: 'vehicle',
       header: 'Vehicle',
       accessor: (r) => r.vehicleType ?? '—',

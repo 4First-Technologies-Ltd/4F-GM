@@ -158,6 +158,16 @@ router.get(
             planLockedUntil: true,
             createdAt: true,
             documents: { select: { id: true, url: true, fileName: true, createdAt: true } },
+            branches: {
+              orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+              select: { id: true, name: true, address: true, state: true, city: true, phone: true, isMain: true, isActive: true, suspendedAt: true, suspendedReason: true,
+                staff: {
+              where: { status: { not: 'REVOKED' } },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true, email: true, status: true, expiresAt: true, user: { select: { name: true } } }
+            }
+              }
+            },
             planChanges: {
               orderBy: { createdAt: 'desc' },
               take: 20,

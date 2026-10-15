@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
 import { recordEarningSafe } from '../lib/earnings';
+import { claimFleetInvite, effectiveRiderStatus } from '../lib/fleet';
 
 const router = Router();
 
@@ -13,12 +14,17 @@ const router = Router();
  * Sends the error response itself and returns null when the rider may not proceed.
  */
 async function loadApprovedRider(req: Request, res: Response) {
-  const profile = await prisma.riderProfile.findUnique({ where: { userId: req.user!.sub } });
+  const profile = await prisma.riderProfile.findUnique({
+    where: { userId: req.user!.sub },
+    include: { company: { select: { status: true } } }
+  });
   if (!profile) {
     res.status(404).json({ error: 'Rider profile not found' });
     return null;
   }
-  if (profile.status !== 'APPROVED') {
+  // Effective, not stored: a rider approved through a company stops being able
+  // to work the moment that company is no longer APPROVED.
+  if (effectiveRiderStatus(profile) !== 'APPROVED') {
     res.status(403).json({ error: 'Your rider account has not been approved yet', code: 'RIDER_NOT_APPROVED' });
     return null;
   }
@@ -29,14 +35,18 @@ router.get(
   '/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const profile = await prisma.riderProfile.findUnique({
-      where: { userId: req.user!.sub }
-    });
-
-    if (!profile) {
+    const mine = await prisma.riderProfile.findUnique({ where: { userId: req.user!.sub } });
+    if (!mine) {
       return res.status(404).json({ error: 'Rider profile not found' });
     }
 
+    const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { id: true, email: true, emailVerified: true } });
+    if (user) await claimFleetInvite(user);
+
+    const profile = await prisma.riderProfile.findUnique({
+      where: { userId: req.user!.sub },
+      include: { company: { select: { companyName: true, status: true } } }
+    });
     return res.json({ profile });
   })
 );
@@ -64,7 +74,11 @@ router.post(
       update: result.data
     });
 
-    return res.status(201).json({ profile });
+    // Signing up after being invited: join the fleet now rather than on the next check.
+    const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { id: true, email: true, emailVerified: true } });
+    if (user) await claimFleetInvite(user);
+
+    return res.status(201).json({ profile: await prisma.riderProfile.findUnique({ where: { id: profile.id } }) });
   })
 );
 

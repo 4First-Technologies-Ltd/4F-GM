@@ -12,7 +12,9 @@ import { getMonitorTerms } from '../lib/pricing';
 const router = Router();
 
 const publicWhere: Prisma.GasListingWhereInput = {
-  vendor: { status: 'APPROVED', user: { isSuspended: false } }
+  vendor: { status: 'APPROVED', user: { isSuspended: false } },
+  // Listings on a closed or suspended branch drop out; pre-branch rows (null) stay visible.
+  OR: [{ branchId: null }, { branch: { isActive: true, suspendedAt: null } }]
 };
 
 // Explicit select: never leak plan, commission or account details publicly.
@@ -26,6 +28,9 @@ const publicSelect = {
   inStock: true,
   createdAt: true,
   updatedAt: true,
+  branch: {
+    select: { id: true, name: true, address: true, state: true, city: true, lat: true, lng: true, phone: true }
+  },
   vendor: {
     select: {
       id: true,

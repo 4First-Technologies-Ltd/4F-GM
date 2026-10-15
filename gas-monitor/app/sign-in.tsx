@@ -153,9 +153,13 @@ export default function SignInScreen() {
     try {
       await authApi.login(email.trim(), password);
       const user = await getSavedUser<ApiUser>();
-      if (user?.role !== role) {
+      // Branch managers are vendor staff, so they sign in from the Vendor tab.
+      // Logistics companies sign in from the Rider tab (they run riders).
+      const effective =
+        user?.role === 'BRANCH_MANAGER' ? 'VENDOR' : user?.role === 'LOGISTICS_COMPANY' ? 'RIDER' : user?.role;
+      if (effective !== role) {
         await clearSession();
-        const actual = user?.role === 'VENDOR' ? 'Vendor' : user?.role === 'RIDER' ? 'Rider' : 'Consumer';
+        const actual = effective === 'VENDOR' ? 'Vendor' : effective === 'RIDER' ? 'Rider' : 'Consumer';
         setApiErr(`This account is registered as a ${actual}. Switch to the ${actual} tab to sign in.`);
         return;
       }
@@ -264,6 +268,28 @@ export default function SignInScreen() {
             <Text style={s.switchText}>
               Don&apos;t have an account?{'  '}
               <Text style={{ color: C.accent, fontWeight: '700' }}>Sign Up</Text>
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/manager-sign-up')}
+            style={s.switchLink}
+          >
+            <Text style={s.switchText}>
+              Invited as a branch manager?{'  '}
+              <Text style={{ color: C.accent, fontWeight: '700' }}>Create your account</Text>
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push('/company-sign-up')}
+            style={s.switchLink}
+          >
+            <Text style={s.switchText}>
+              Run a logistics company?{'  '}
+              <Text style={{ color: C.accent, fontWeight: '700' }}>Register your fleet</Text>
             </Text>
           </TouchableOpacity>
         </ScrollView>

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ASSIGNABLE_RIDER } from '../../lib/fleet';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { requireAdmin, requireOperations } from '../../middleware/requireAdmin';
@@ -107,8 +108,8 @@ router.patch(
 
     const { riderId } = result.data;
     if (riderId) {
-      const rider = await prisma.riderProfile.findUnique({ where: { id: riderId } });
-      if (!rider || rider.status !== 'APPROVED') {
+      const rider = await prisma.riderProfile.findFirst({ where: { id: riderId, ...ASSIGNABLE_RIDER } });
+      if (!rider) {
         return res.status(400).json({ error: 'Rider not found or not approved' });
       }
     }

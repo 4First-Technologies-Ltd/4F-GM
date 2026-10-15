@@ -139,7 +139,7 @@ router.post(
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
-    const { supplierName, totalAmount, listingId, vendorId } = priced;
+    const { supplierName, totalAmount, listingId, vendorId, branchId } = priced;
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) {
@@ -152,6 +152,7 @@ router.post(
         consumerId: req.user!.sub,
         listingId,
         vendorId,
+        branchId,
         supplierName,
         cylinderSize,
         quantity,
@@ -258,7 +259,7 @@ router.post(
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
-    const { supplierName, totalAmount, listingId, vendorId } = priced;
+    const { supplierName, totalAmount, listingId, vendorId, branchId } = priced;
 
     // Attach the order to an existing account with this email, or create a
     // lightweight guest account (unverified, random password) to own the order.
@@ -280,6 +281,7 @@ router.post(
         consumerId: user.id,
         listingId,
         vendorId,
+        branchId,
         supplierName,
         cylinderSize,
         quantity,

@@ -71,6 +71,11 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   BULK: { tone: 'neutral', label: 'Bulk' },
   OTHER: { tone: 'neutral', label: 'Other' },
 
+  // StaffStatus (ACTIVE is shared below; EXPIRED is an INVITED past its expiry)
+  INVITED: { tone: 'info', label: 'Invited' },
+  EXPIRED: { tone: 'warning', label: 'Invite expired' },
+  REVOKED: { tone: 'neutral', label: 'Revoked' },
+
   // Derived booleans
   IN_STOCK: { tone: 'success', label: 'In stock' },
   OUT_OF_STOCK: { tone: 'neutral', label: 'Out of stock' },

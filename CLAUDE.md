@@ -8,7 +8,7 @@ This is the root of the 4FG Smart Gas Monitor monorepo. It provides guidance to 
 4FG-MONITOR/
 ├── gas-monitor/              # Expo React Native app (consumer + vendor mobile client)
 ├── gas-monitor-backend/      # Express + Prisma + PostgreSQL API — the real backend, deployed on Render
-├── gas-monitor-web/          # Next.js 15 consumer/vendor web dashboard
+├── gas-monitor-web-v2/       # Next.js 15 consumer/vendor web app (the web app; Tailwind v4 + R3F)
 ├── gas-monitor-admin/        # Next.js 15 internal admin panel (separate project, shares the DB)
 ├── landing/                  # Static marketing site + waitlist admin (plain HTML/JS)
 ├── supabase/functions/       # Supabase Edge Functions (waitlist email confirmation)
@@ -21,11 +21,11 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 
 **`gas-monitor-backend/` is the live, deployed API** — Express + Prisma + PostgreSQL on Render at `https://ugo.4fgmonitor.com`, port `9000` locally. Routes live in `src/routes/{auth,vendor,orders,ordersWebhook,cylinders,addresses,analytics,contact}.ts` and `src/routes/admin/{adminUsers,analytics,auth,customers,listings,orders,settings,stats,users,vendors}.ts`. It has a `GET /health` endpoint and CORS gated by the `CORS_ORIGINS` env var.
 
-`gas-monitor-web` and `gas-monitor-admin` both call this backend via `NEXT_PUBLIC_API_URL`.
+`gas-monitor-web-v2` and `gas-monitor-admin` both call this backend via `NEXT_PUBLIC_API_URL`. **`gas-monitor-web-v2` is the only web app.** The older `gas-monitor-web` and `gas-monitor-3d-web` are retired: they are git-ignored and no longer tracked, any copy on disk is a leftover, and nothing should be built, mirrored or fixed there.
 
 **`gas-monitor-admin` has no server-side data layer of its own.** Its `app/api/**`, `lib/server/**` and `prisma/` directories were deleted in the Admin Dashboard OS refactor (2026-09-03): they were an unreachable byte-for-byte copy of `src/routes/admin/*`, left behind when the backend was split out. `@prisma/client`, `prisma`, `bcryptjs` and `jsonwebtoken` were dropped from its dependencies at the same time. The admin now talks to the backend exclusively through `lib/api.ts` → `adminFetch`. Do not reintroduce Prisma there.
 
-`gas-monitor-web/prisma/schema.prisma` is a second copy of the schema kept in sync manually with `gas-monitor-backend/prisma/schema.prisma`. **The backend is the migration owner** — its `start` script runs `prisma migrate deploy`, and it is currently ahead of web (`devicePhone`, `audit_logs`). Add migrations there and mirror the schema into web.
+**The backend owns the schema and the migrations** (`gas-monitor-backend/prisma/`; its `start` script runs `prisma migrate deploy`). No other project has a Prisma schema to keep in sync: `gas-monitor-web-v2` and `gas-monitor-admin` read and write only through the API.
 
 ## Projects at a glance
 
@@ -33,7 +33,7 @@ Only `gas-monitor/` has its own `CLAUDE.md` today (routing tables, screen-by-scr
 |---|---|---|---|
 | `gas-monitor` | Expo SDK 54, expo-router, React 19 | Metro (`npm start`) | EAS Build (see below) |
 | `gas-monitor-backend` | Express, Prisma, PostgreSQL | `9000` | Render — `ugo.4fgmonitor.com` |
-| `gas-monitor-web` | Next.js 15 App Router | `3000`* | `4fgmonitor.com` |
+| `gas-monitor-web-v2` | Next.js 15 App Router | `3000`* (Docker `3140`) | `4fgmonitor.com` |
 | `gas-monitor-admin` | Next.js 15 App Router (no Prisma) | `3010` | `4fgmpanel.4fgmonitor.com` |
 | `landing` | Static HTML + Supabase Edge Functions | — | — |
 
@@ -65,9 +65,32 @@ Migration `20261010000000_admin_mfa`. TOTP (RFC 6238, `src/lib/totp.ts`, no thir
 
 Vendor KYC files live in a **private Cloudflare R2 bucket** (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`; `src/lib/storage.ts`). Flow: `POST /api/vendor/documents/upload-url` validates type (JPG/PNG/WebP/PDF) and size (8 MB), returns a 5-minute presigned PUT with type and length signed in; the app PUTs the file straight to R2; `POST /api/vendor/documents` takes only the issued `key`, checks it sits under the vendor's own `vendor-docs/<profileId>/` prefix and exists in R2, then stores it in `VendorDocument.url`. Reads (admin vendor/user detail, vendor `/me`) swap the key for a 5-minute presigned GET via `withViewUrls`; rows from before this existed hold a phone-local `file://` path and come back with `url: null`. The R2 bucket must never be made public.
 
+## Vendor branches
+
+Migration `20261015000000_vendor_branches`. A vendor (`VendorProfile`) stays the business, KYC, plan and payout entity; a `Branch` is a location that sells and owns address, lat/lng, phone, listings and orders. The backend owns the schema; `gas-monitor-web-v2` has no Prisma and reads branches through the API only.
+- **Never hard-deleted** (orders reference it): close with `isActive=false`. Exactly one `isMain` per vendor, enforced by a partial unique index that exists only in the migration SQL (Prisma cannot express it).
+- The migration backfills a "Main branch" per vendor from its business location and links existing listings/orders. `POST /api/vendor/profile` seeds the main branch for new vendors and accepts `branches[]` for extras at sign-up. `GasListing.branchId`/`Order.branchId` are still **nullable** — tighten `GasListing.branchId` to NOT NULL in a later migration once nothing writes without it.
+- Routes `src/routes/vendorBranches.ts` at `/api/vendor/branches` (list/create/patch/`make-main`/`deactivate`/`reactivate`). Every one resolves the branch through `findOwnBranch(vendorId, id)` (`lib/branches.ts`) — a client-sent branch id is never trusted alone. The cap is `PLANS[plan].maxBranches` (placeholder values: Basic 1, Growth 5, Pro 20 — a business decision), counted over *active* branches in a serializable transaction.
+- Close is refused for the main branch and while the branch has PENDING/CONFIRMED/OUT_FOR_DELIVERY orders. Listings on a closed branch drop off the marketplace and cannot be ordered.
+- `Order.branchId` is derived from the listing in `priceListingOrder`, never from the request. Earnings and payouts remain per vendor.
+- **Admin suspension** (migration `20261015100000_branch_suspension`): `POST /api/admin/vendors/:id/branches/:branchId/suspend|restore` (OPERATIONS, `branches.suspend`, reason required, audited as `BRANCH_SUSPENDED`/`BRANCH_RESTORED`). Separate from the vendor's own `isActive`: a suspended branch drops off the marketplace and cannot be ordered from, and the vendor cannot reopen, promote or list on it. Orders already in flight are left alone (count recorded in the audit entry).
+- **Branch managers** (migration `20261015200000_branch_staff`; `Role.BRANCH_MANAGER`, table `branch_staff`): the owner invites by email (`/api/vendor/branches/:id/staff`, 14-day expiry, max 10 per branch). The manager registers as `BRANCH_MANAGER` with that email; the invite is **claimed on the first request after the email is verified** (`lib/staff.ts`, no token — verification is the proof). Whether an email already has an account is never revealed to the vendor. `/api/staff/*` is scoped to `branch_staff` ACTIVE rows on every query: orders and stock of their branch(es) only — no earnings, documents, plan, profile or branch management; customer email is never returned. Managers may only move CONFIRMED/OUT_FOR_DELIVERY orders forward (never unpaid PENDING ones) with a compare-and-set, assign approved riders, and toggle `inStock`. Revoking keeps the row as history. Mobile app: `gas-monitor/app/(manager)/`, sign-up at `/manager-sign-up`, owner UI under each branch on the Branches screen. **Known gap:** the *vendor* order PATCH (`routes/vendor.ts`) has no transition rules, so an owner can still move an unpaid order; managers are deliberately stricter.
+- Not built: per-branch KYC, per-branch bank accounts, invite emails (the owner tells the manager), manager access to earnings or rider/branch reports, admin-side revoke of a manager (admins suspend the branch or the account instead).
+- **Admin view of branch staff:** `/dashboard/branch-staff` (`GET /api/admin/branch-staff`, read-only, `branchStaff.read` via the `*.read` wildcard so every admin role sees it). Filters by Active/Invited/Expired/Revoked — an INVITED row past `expiresAt` is shown and filtered as EXPIRED. The vendor detail modal also lists each branch's managers.
+
+## Logistics companies (rider fleets)
+
+Migration `20261016000000_logistics_companies`. `Role.LOGISTICS_COMPANY`, tables `logistics_companies` and `fleet_invites`, plus `RiderProfile.companyId` / `approvedViaCompany`. A company is a fleet owner: it invites riders by email and watches their deliveries. **It does not assign orders** — vendors, branch managers and admins still assign individual riders, who are labelled with their company in the picker. Riders have no earnings or payouts today, so the company has none either.
+- **Approval:** an admin approves the company once (`/dashboard/companies`, `PATCH /api/admin/companies/:id`, OPERATIONS `companies.approve`, audited as `COMPANY_APPROVED/REJECTED/STATUS_RESET`). A rider is then **assignable only while their company is APPROVED**, and that is *derived*, never copied onto riders: `ASSIGNABLE_RIDER` / `effectiveRiderStatus` in `lib/fleet.ts` are the single rule, used by the vendor, branch-manager and admin assignment routes, the rider's own routes and `riderStatus` in the auth responses. Rejecting a company pulls its whole fleet off the road at once; approving it again brings them back. Deliveries already out are not cancelled.
+- **Invite flow:** `/api/company/riders/invite` (14-day expiry, max 200 per fleet). The rider signs up as a normal RIDER with that email. The invite is **claimed once their email is verified and they have a rider profile** (`claimFleetInvite`, on profile create, `GET /api/rider/me` and `GET /api/auth/me`), only from an APPROVED company. Claiming approves a PENDING rider (`approvedViaCompany=true`); an already-approved independent rider just gains the link. An admin-REJECTED rider is never pulled in, and a rider already in another fleet is left alone.
+- **Leaving:** removing a rider (`removeFromFleet`) sends a company-approved rider back to PENDING; an independently approved one keeps working. If a company row is ever deleted, `approvedViaCompany` with no company counts as not approved.
+- **Company API** `/api/company/*`: profile routes work while PENDING (so sign-up can finish); fleet routes need APPROVED. Everything is scoped to the company id resolved from the signed-in user. `/deliveries` shows rider, vendor name and delivery address, never customer email or phone. A company cannot set its own status.
+- **Mobile:** `/company-sign-up` (`?resume=1` to finish details only), `/company-pending`, and `app/(company)/` (Riders, Deliveries, Account). Companies sign in from the **Rider** tab. The admin rider list shows each rider's fleet.
+- **Not built:** company KYC documents (the R2 upload flow is vendor-only, so approval rests on the details and the admin's own checks), company-level dispatch (assign an order to a company, which picks the rider), company earnings or payouts, a web (`gas-monitor-web-v2`) UI for companies, branches or managers, and invite emails.
+
 ## Payouts and support inbox
 
-Added to the admin panel in Oct 2026, modelled on GoBuyMe's CRM/payout modules. Migration `20261009000000_payouts_and_support` (backend-owned; **not yet mirrored into `gas-monitor-web/prisma/schema.prisma`**, which was already behind).
+Added to the admin panel in Oct 2026, modelled on GoBuyMe's CRM/payout modules. Migration `20261009000000_payouts_and_support` (backend-owned).
 
 **Payouts** (`/dashboard/payouts`, `src/routes/admin/payouts.ts`, `src/lib/{earnings,payouts,paystack}.ts`):
 - An `Earning` row is written when a vendor order reaches `DELIVERED` (vendor PATCH and rider PATCH both call `recordEarningSafe`; `POST /api/admin/payouts/sync-earnings` backfills older orders). Commission % is frozen on the row from the vendor's plan (`PLANS` in `lib/plans.ts`), so a later plan change never rewrites history. Orders with no `vendorId` (monitor sales) earn nothing.
@@ -83,7 +106,7 @@ Added to the admin panel in Oct 2026, modelled on GoBuyMe's CRM/payout modules. 
 
 ## CRM and acquisition pipeline
 
-Migration `20261009100000_crm_and_pipeline` (backend-owned, not mirrored into web). Routes: `src/routes/admin/crm.ts`, mounted at `/api/admin/crm`.
+Migration `20261009100000_crm_and_pipeline` (backend-owned). Routes: `src/routes/admin/crm.ts`, mounted at `/api/admin/crm`.
 - **Pipeline** (`/dashboard/pipeline`): `Lead` = a vendor or rider being recruited, stages NEW → CONTACTED → ONBOARDING → WON/LOST. Every stage move writes a `LeadActivity`; LOST requires a reason. Moving to WON links the lead to a `User` with the same email if one exists. Leads are *not* accounts — approving the real vendor/rider still happens in Vendors/Riders.
 - **Tasks** (`/dashboard/tasks`): `CrmTask`, optionally tied to a lead or an account.
 - **Account notes and tags** appear in the user detail modal (`admin/primitives/crm-panel.tsx`), so every list that opens an account has them. Notes and tags are open to every admin role (`crm.note`); leads and tasks are OPERATIONS (`crm.manage`).

@@ -13,6 +13,7 @@ const SORTABLE = ['createdAt', 'status'] as const;
 
 const LIST_INCLUDE = {
   user: { select: { id: true, name: true, email: true, createdAt: true } },
+  company: { select: { id: true, companyName: true, status: true } },
   _count: { select: { orders: true } }
 } as const;
 

@@ -1,9 +1,12 @@
+import type { BranchInput } from '@/lib/api';
+
 interface PendingVendorProfile {
   businessName: string;
   businessAddress: string;
   phone: string;
   lat?: number;
   lng?: number;
+  branches?: BranchInput[];
   documents: { uri: string; fileName: string }[];
 }
 

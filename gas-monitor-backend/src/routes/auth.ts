@@ -11,6 +11,7 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { LEGAL_VERSION } from '../lib/legal';
 import { loginLimiter, otpSendLimiter, otpVerifyLimiter, registerLimiter, sha256 } from '../lib/security';
 import { validatePassword } from '../lib/password';
+import { claimFleetInvite, effectiveRiderStatus, RIDER_STATUS_SELECT } from '../lib/fleet';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email('Invalid email address'),
   password: z.string().superRefine(validatePassword),
-  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER']).optional().default('CONSUMER'),
+  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER', 'BRANCH_MANAGER', 'LOGISTICS_COMPANY']).optional().default('CONSUMER'),
   acceptedTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the Terms and Privacy Policy' }) }),
   legalVersion: z.string().refine((v) => v === LEGAL_VERSION, {
     message: 'The Terms have been updated. Please reload and review them again.'
@@ -87,7 +88,8 @@ router.post(
       where: { email },
       include: {
         vendorProfile: { select: { status: true } },
-        riderProfile: { select: { status: true } }
+        riderProfile: { select: RIDER_STATUS_SELECT },
+        logisticsCompany: { select: { status: true } }
       }
     });
 
@@ -119,7 +121,8 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
-        riderStatus: user.riderProfile?.status ?? undefined,
+        riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
+        companyStatus: user.logisticsCompany?.status ?? undefined,
         createdAt: user.createdAt
       },
       ...tokens
@@ -308,7 +311,8 @@ router.post(
       where: { email },
       include: {
         vendorProfile: { select: { status: true } },
-        riderProfile: { select: { status: true } }
+        riderProfile: { select: RIDER_STATUS_SELECT },
+        logisticsCompany: { select: { status: true } }
       }
     });
     if (!user) {
@@ -337,7 +341,8 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
-        riderStatus: user.riderProfile?.status ?? undefined,
+        riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
+        companyStatus: user.logisticsCompany?.status ?? undefined,
         createdAt: user.createdAt
       },
       ...tokens
@@ -359,17 +364,23 @@ const SELECT = {
   createdAt: true,
   updatedAt: true,
   vendorProfile: { select: { status: true } },
-  riderProfile: { select: { status: true } }
+  riderProfile: { select: RIDER_STATUS_SELECT },
+  logisticsCompany: { select: { status: true } }
 } as const;
 
-function serialize<T extends { vendorProfile: { status: string } | null; riderProfile: { status: string } | null }>(
-  user: T
-) {
-  const { vendorProfile, riderProfile, ...userData } = user;
+function serialize<
+  T extends {
+    vendorProfile: { status: string } | null;
+    riderProfile: Parameters<typeof effectiveRiderStatus>[0] | null;
+    logisticsCompany: { status: string } | null;
+  }
+>(user: T) {
+  const { vendorProfile, riderProfile, logisticsCompany, ...userData } = user;
   return {
     ...userData,
     vendorStatus: vendorProfile?.status ?? undefined,
-    riderStatus: riderProfile?.status ?? undefined
+    riderStatus: riderProfile ? effectiveRiderStatus(riderProfile) : undefined,
+    companyStatus: logisticsCompany?.status ?? undefined
   };
 }
 
@@ -377,10 +388,18 @@ router.get(
   '/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT });
+    let user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // A rider invited to a fleet after signing up joins here, so the approval
+    // the invite grants shows on their very next status check.
+    if (user.role === 'RIDER' && user.riderProfile) {
+      const v = await prisma.user.findUnique({ where: { id: user.id }, select: { emailVerified: true } });
+      const joined = await claimFleetInvite({ id: user.id, email: user.email, emailVerified: !!v?.emailVerified });
+      if (joined) user = (await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT })) ?? user;
     }
 
     return res.json({ user: serialize(user) });

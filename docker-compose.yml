@@ -6,21 +6,9 @@ services:
       - ./gas-monitor-backend/.env
     environment:
       PORT: 9000
-      CORS_ORIGINS: http://localhost:3100,http://localhost:3110,http://localhost:3140
+      CORS_ORIGINS: http://localhost:3110,http://localhost:3140
     ports:
       - "9000:9000"
-
-  web:
-    build:
-      context: ./gas-monitor-web
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:9000
-    env_file:
-      - ./gas-monitor-web/.env.local
-    ports:
-      - "3100:3000"
-    depends_on:
-      - backend
 
   admin:
     build:

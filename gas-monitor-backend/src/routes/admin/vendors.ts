@@ -8,6 +8,7 @@ import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 import { writeAuditLog } from '../../lib/audit';
 import { cooldownExpiry, PLANS } from '../../lib/plans';
 import { withViewUrls } from '../../lib/storage';
+import { OPEN_ORDER_STATUSES } from '../../lib/branches';
 
 const router = Router();
 
@@ -70,6 +71,10 @@ router.get(
       // Plan history is only worth loading for one vendor, not a whole page.
       include: {
         ...LIST_INCLUDE,
+        branches: {
+          orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+          include: { staff: { where: { status: { not: 'REVOKED' } }, orderBy: { createdAt: 'asc' } } }
+        },
         planChanges: { orderBy: { createdAt: 'desc' }, take: 20 }
       }
     });
@@ -190,6 +195,78 @@ router.patch(
     });
 
     return res.json({ vendor: updated });
+  })
+);
+
+const suspendSchema = z.object({
+  reason: z.string().trim().min(3, 'Give a reason for the suspension').max(300)
+});
+
+/**
+ * Suspend one branch without touching the vendor. The vendor can no longer sell
+ * from, reopen or promote it until it is restored. Orders already in flight are
+ * left alone (the count is recorded in the audit entry) so customers who have
+ * paid are not stranded.
+ */
+router.post(
+  '/:id/branches/:branchId/suspend',
+  requireOperations,
+  asyncHandler(async (req, res) => {
+    const result = suspendSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+
+    const branch = await prisma.branch.findFirst({
+      where: { id: req.params.branchId, vendorId: req.params.id },
+      include: { vendor: { select: { businessName: true } } }
+    });
+    if (!branch) return res.status(404).json({ error: 'Branch not found' });
+    if (branch.suspendedAt) return res.status(409).json({ error: 'Branch is already suspended' });
+
+    const openOrders = await prisma.order.count({
+      where: { branchId: branch.id, status: { in: [...OPEN_ORDER_STATUSES] } }
+    });
+    const updated = await prisma.branch.update({
+      where: { id: branch.id },
+      data: { suspendedAt: new Date(), suspendedReason: result.data.reason }
+    });
+
+    await writeAuditLog(req, {
+      action: 'BRANCH_SUSPENDED',
+      resource: 'branch',
+      resourceId: branch.id,
+      summary: `${branch.vendor.businessName} / ${branch.name} suspended`,
+      metadata: { vendorId: req.params.id, reason: result.data.reason, openOrders, wasMain: branch.isMain }
+    });
+
+    return res.json({ branch: updated, openOrders });
+  })
+);
+
+router.post(
+  '/:id/branches/:branchId/restore',
+  requireOperations,
+  asyncHandler(async (req, res) => {
+    const branch = await prisma.branch.findFirst({
+      where: { id: req.params.branchId, vendorId: req.params.id },
+      include: { vendor: { select: { businessName: true } } }
+    });
+    if (!branch) return res.status(404).json({ error: 'Branch not found' });
+    if (!branch.suspendedAt) return res.status(409).json({ error: 'Branch is not suspended' });
+
+    const updated = await prisma.branch.update({
+      where: { id: branch.id },
+      data: { suspendedAt: null, suspendedReason: null }
+    });
+
+    await writeAuditLog(req, {
+      action: 'BRANCH_RESTORED',
+      resource: 'branch',
+      resourceId: branch.id,
+      summary: `${branch.vendor.businessName} / ${branch.name} restored`,
+      metadata: { vendorId: req.params.id, previousReason: branch.suspendedReason }
+    });
+
+    return res.json({ branch: updated });
   })
 );
 

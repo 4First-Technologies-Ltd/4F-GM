@@ -8,11 +8,11 @@ import { VendorPlan } from '@prisma/client';
  */
 export const PLANS: Record<
   VendorPlan,
-  { name: string; commissionPercent: number }
+  { name: string; commissionPercent: number; maxBranches: number }
 > = {
-  BASIC: { name: 'Basic', commissionPercent: 5 },
-  GROWTH: { name: 'Growth', commissionPercent: 7 },
-  PRO: { name: 'Pro / Premium', commissionPercent: 10 }
+  BASIC: { name: 'Basic', commissionPercent: 5, maxBranches: 1 },
+  GROWTH: { name: 'Growth', commissionPercent: 7, maxBranches: 5 },
+  PRO: { name: 'Pro / Premium', commissionPercent: 10, maxBranches: 20 }
 };
 
 /**

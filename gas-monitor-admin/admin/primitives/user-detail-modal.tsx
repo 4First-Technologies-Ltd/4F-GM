@@ -15,7 +15,9 @@ import {
   shortId
 } from '@/admin/primitives/format';
 import { CrmPanel } from '@/admin/primitives/crm-panel';
-import type { UserDetail } from '@/admin/modules/types';
+import { adminFetch } from '@/lib/api';
+import { usePermission } from '@/admin/permissions/use-permission';
+import type { BranchRow, UserDetail } from '@/admin/modules/types';
 
 const PLAN_NAMES = { BASIC: 'Basic (5%)', GROWTH: 'Growth (7%)', PRO: 'Pro / Premium (10%)' } as const;
 
@@ -40,6 +42,99 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 const yesNo = (v: boolean) => (v ? 'On' : 'Off');
 const coords = (lat: number | null, lng: number | null) => (lat != null && lng != null ? `${lat}, ${lng}` : null);
+
+/** One branch with its suspend / restore control (OPERATIONS and up). */
+function BranchItem({ vendorId, branch, onChanged }: { vendorId: string; branch: BranchRow; onChanged: () => void }) {
+  const canSuspend = usePermission('branches.suspend');
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(action: 'suspend' | 'restore') {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await adminFetch(`/vendors/${vendorId}/branches/${branch.id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action === 'suspend' ? { reason } : {})
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+      setAsking(false);
+      setReason('');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="adm-doc-item" style={{ flexWrap: 'wrap' }}>
+      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+        {branch.name}
+        {branch.isMain ? ' · Main' : ''}
+        {branch.isActive ? '' : ' · Closed'}
+        {branch.suspendedAt ? ' · Suspended' : ''}
+        <span className="adm-td-sub">
+          {[branch.address, branch.city, branch.state].filter(Boolean).join(', ')} · {branch.phone}
+        </span>
+        {branch.suspendedAt && (
+          <span className="adm-td-sub">
+            Suspended {formatDate(branch.suspendedAt)}: {branch.suspendedReason}
+          </span>
+        )}
+        {(branch.staff ?? []).length > 0 && (
+          <span className="adm-td-sub">
+            Managers:{' '}
+            {(branch.staff ?? [])
+              .map((m) => {
+                const expired = m.status === 'INVITED' && new Date(m.expiresAt) <= new Date();
+                return `${m.user?.name ?? m.email}${m.status === 'INVITED' ? (expired ? ' (invite expired)' : ' (invited)') : ''}`;
+              })
+              .join(', ')}
+          </span>
+        )}
+      </span>
+      {canSuspend && !asking && (
+        <button
+          className="adm-btn adm-btn--sm"
+          disabled={busy}
+          onClick={() => (branch.suspendedAt ? act('restore') : setAsking(true))}
+        >
+          {branch.suspendedAt ? 'Restore' : 'Suspend'}
+        </button>
+      )}
+      {asking && (
+        <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8, flexWrap: 'wrap' }}>
+          <input
+            className="adm-input"
+            style={{ flex: 1, minWidth: 180 }}
+            placeholder="Reason (required, visible to the vendor)"
+            value={reason}
+            maxLength={300}
+            onChange={(e) => setReason(e.target.value)}
+            aria-label="Suspension reason"
+          />
+          <button
+            className="adm-btn adm-btn--sm adm-btn--primary"
+            disabled={busy || reason.trim().length < 3}
+            onClick={() => act('suspend')}
+          >
+            Confirm suspend
+          </button>
+          <button className="adm-btn adm-btn--sm" disabled={busy} onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {error && <span className="adm-muted" style={{ width: '100%', color: 'var(--danger, #D32F2F)' }}>{error}</span>}
+    </li>
+  );
+}
 
 /**
  * Full-detail modal for any account (consumer, vendor or rider). Fetches the
@@ -141,6 +236,17 @@ export function UserDetailModal({
                   ) : null}
                 </Field>
               </dl>
+
+              <h4 className="adm-micro-label">Branches ({(v.branches ?? []).length})</h4>
+              {(v.branches ?? []).length === 0 ? (
+                <p className="adm-muted">No branches.</p>
+              ) : (
+                <ul className="adm-doc-list">
+                  {(v.branches ?? []).map((b) => (
+                    <BranchItem key={b.id} vendorId={v.id} branch={b} onChanged={() => setAttempt((n) => n + 1)} />
+                  ))}
+                </ul>
+              )}
 
               <h4 className="adm-micro-label">Documents ({v.documents.length})</h4>
               {v.documents.length === 0 ? (

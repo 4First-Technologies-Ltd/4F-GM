@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi } from '@/lib/api';
+import { authApi, BranchInput } from '@/lib/api';
 import { setPendingVendorProfile } from '@/lib/pendingVendorProfile';
 import { NetworkStatusDot } from '@/components/network-status-dot';
 import { LegalConsent } from '@/components/legal-consent';
@@ -36,6 +36,12 @@ const C = {
 const PLATFORM_COMMISSION_PERCENT = 7;
 
 type Step = 1 | 2 | 3;
+
+/**
+ * Extra branches allowed at sign-up besides the main one. Mirrors
+ * `PLANS[DEFAULT_PLAN].maxBranches - 1` in the backend; the server enforces it.
+ */
+const MAX_EXTRA_BRANCHES = 4;
 
 interface SelectedDoc {
   uri: string;
@@ -179,6 +185,11 @@ export default function VendorSignUpScreen() {
   // Step 3
   const [selectedDocs, setSelectedDocs] = useState<SelectedDoc[]>([]);
 
+  // Step 2 — optional extra branches (the business address above is the main one)
+  const [branches, setBranches] = useState<BranchInput[]>([]);
+  const [draft, setDraft] = useState<BranchInput | null>(null);
+  const [draftErr, setDraftErr] = useState('');
+
   // Shared
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiErr, setApiErr] = useState('');
@@ -206,6 +217,18 @@ export default function VendorSignUpScreen() {
     if (!businessAddress.trim()) errs.businessAddress = 'Business address is required';
     setErrors(errs);
     return Object.keys(errs).length === 0;
+  }
+
+  function saveDraft() {
+    if (!draft || !draft.name.trim() || !draft.address.trim() || !draft.phone.trim()) {
+      setDraftErr('Branch name, address and phone are required.');
+      return;
+    }
+    setBranches((b) => [...b, {
+      name: draft.name.trim(), address: draft.address.trim(), phone: draft.phone.trim(),
+    }]);
+    setDraft(null);
+    setDraftErr('');
   }
 
   function goBack() {
@@ -270,6 +293,7 @@ export default function VendorSignUpScreen() {
         phone: phone.trim(),
         lat: coords?.lat,
         lng: coords?.lng,
+        branches,
         documents: selectedDocs.map((d) => ({ uri: d.uri, fileName: d.fileName })),
       });
 
@@ -411,6 +435,54 @@ export default function VendorSignUpScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
+              </View>
+
+              {/* Additional branches */}
+              <View style={sf.wrap}>
+                <Text style={sf.label}>
+                  Other branches{'  '}
+                  <Text style={{ color: C.muted, fontWeight: '400' }}>(optional)</Text>
+                </Text>
+                <Text style={s.formSub}>
+                  The address above is your main branch. Add others now, or later from the Branches screen.
+                </Text>
+
+                {branches.map((b, i) => (
+                  <View key={i} style={s.locationCaptured}>
+                    <IconSymbol name="mappin" size={15} color={C.accent} />
+                    <Text style={s.locationCapturedText} numberOfLines={1}>{b.name} · {b.address}</Text>
+                    <TouchableOpacity onPress={() => setBranches((all) => all.filter((_, j) => j !== i))}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <IconSymbol name="xmark.circle.fill" size={18} color={C.dim} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                {draft ? (
+                  <View style={{ gap: 10 }}>
+                    <Field label="Branch name" value={draft.name} autoCapitalize="words"
+                      onChangeText={(t) => setDraft({ ...draft, name: t })} placeholder="e.g. Lekki Phase 1" />
+                    <Field label="Branch address" value={draft.address} autoCapitalize="sentences"
+                      onChangeText={(t) => setDraft({ ...draft, address: t })} placeholder="Street and area" />
+                    <Field label="Branch phone" value={draft.phone} keyboardType="phone-pad"
+                      onChangeText={(t) => setDraft({ ...draft, phone: t })} placeholder="+234 800 000 0000" />
+                    {!!draftErr && <Text style={sf.error}>{draftErr}</Text>}
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity style={[s.locationBtn, { flex: 1 }]} onPress={() => { setDraft(null); setDraftErr(''); }} activeOpacity={0.8}>
+                        <Text style={s.locationBtnText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[s.locationBtn, { flex: 1 }]} onPress={saveDraft} activeOpacity={0.8}>
+                        <Text style={s.locationBtnText}>Add branch</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : branches.length < MAX_EXTRA_BRANCHES ? (
+                  <TouchableOpacity style={s.locationBtn} activeOpacity={0.8}
+                    onPress={() => setDraft({ name: '', address: '', phone: '' })}>
+                    <IconSymbol name="plus" size={16} color={C.accent} />
+                    <Text style={s.locationBtnText}>Add another branch</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
           )}

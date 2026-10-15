@@ -56,6 +56,7 @@ export type PricedOrder = {
   totalAmount: number;
   listingId?: string;
   vendorId?: string;
+  branchId?: string;
 };
 
 export class PricingError extends Error {
@@ -88,10 +89,16 @@ export async function priceListingOrder(
   quantity: number
 ): Promise<PricedOrder> {
   const listing = await prisma.gasListing.findFirst({
-    where: { id: listingId, inStock: true, vendor: { status: 'APPROVED', user: { isSuspended: false } } },
+    where: {
+      id: listingId,
+      inStock: true,
+      vendor: { status: 'APPROVED', user: { isSuspended: false } },
+      OR: [{ branchId: null }, { branch: { isActive: true, suspendedAt: null } }]
+    },
     select: {
       id: true,
       vendorId: true,
+      branchId: true,
       pricePerKg: true,
       cylinderSizes: true,
       otherSizes: true,
@@ -120,7 +127,8 @@ export async function priceListingOrder(
     unitPrice,
     totalAmount: withDelivery(unitPrice, quantity, DELIVERY_FEE),
     listingId: listing.id,
-    vendorId: listing.vendorId
+    vendorId: listing.vendorId,
+    branchId: listing.branchId ?? undefined
   };
 }
 

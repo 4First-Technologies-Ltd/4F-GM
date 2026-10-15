@@ -5,6 +5,8 @@ import { requireAuth } from '../middleware/requireAuth';
 import { VendorPlan } from '@prisma/client';
 import { listingSchema } from '../lib/vendorSchemas';
 import { recordEarningSafe } from '../lib/earnings';
+import { ASSIGNABLE_RIDER } from '../lib/fleet';
+import { branchSchema, findMainBranch, findOwnBranch, isSellable } from '../lib/branches';
 import { asyncHandler } from '../lib/asyncHandler';
 import {
   ALLOWED_DOC_TYPES,
@@ -37,6 +39,7 @@ router.get(
       include: {
         documents: true,
         listings: true,
+        branches: { orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] },
         planChanges: { orderBy: { createdAt: 'desc' }, take: 10 }
       }
     });
@@ -64,7 +67,10 @@ const profileSchema = z.object({
     .refine(isOfferedPlan, { message: 'That partner plan is not available' })
     .optional(),
   lat: z.number().optional(),
-  lng: z.number().optional()
+  lng: z.number().optional(),
+  // Additional branches created at sign-up, besides the main one that is
+  // seeded from the business location above.
+  branches: z.array(branchSchema).max(19).optional()
 });
 
 router.post(
@@ -76,7 +82,15 @@ router.post(
       return res.status(400).json({ error: result.error.errors[0].message });
     }
 
-    const { plan, ...details } = result.data;
+    const { plan, branches: extraBranches = [], ...details } = result.data;
+
+    const effectivePlan = plan ?? DEFAULT_PLAN;
+    if (1 + extraBranches.length > PLANS[effectivePlan].maxBranches) {
+      return res.status(400).json({
+        error: `The ${PLANS[effectivePlan].name} plan allows up to ${PLANS[effectivePlan].maxBranches} branches`,
+        code: 'BRANCH_LIMIT'
+      });
+    }
 
     const profile = await prisma.vendorProfile.upsert({
       where: { userId: req.user!.sub },
@@ -85,6 +99,31 @@ router.post(
       // cooldown — switching plans goes through PATCH /plan only.
       update: details
     });
+
+    // Every vendor has a main branch from day one, seeded from the business
+    // location. Skipped when one exists so re-posting the profile is harmless.
+    if (!(await findMainBranch(profile.id))) {
+      await prisma.$transaction([
+        prisma.branch.create({
+          data: {
+            vendorId: profile.id,
+            name: 'Main branch',
+            address: profile.businessAddress,
+            state: profile.state,
+            city: profile.city,
+            lat: profile.lat,
+            lng: profile.lng,
+            phone: profile.phone,
+            isMain: true
+          }
+        }),
+        ...extraBranches.map(({ openingHours, ...b }) =>
+          prisma.branch.create({
+            data: { ...b, ...(openingHours ? { openingHours: openingHours as object } : {}), vendorId: profile.id }
+          })
+        )
+      ]);
+    }
 
     return res.status(201).json({ profile });
   })
@@ -292,8 +331,9 @@ router.get(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
+    const branchId = typeof req.query.branchId === 'string' ? req.query.branchId : undefined;
     const listings = await prisma.gasListing.findMany({
-      where: { vendorId: profile.id },
+      where: { vendorId: profile.id, ...(branchId ? { branchId } : {}) },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -319,8 +359,18 @@ router.post(
       return res.status(403).json({ error: 'Vendor account must be approved to create listings' });
     }
 
+    // Omitted branchId means the main branch. A named one must be this
+    // vendor's own and still open.
+    const { branchId: requestedBranchId, ...listingData } = result.data;
+    const branch = requestedBranchId
+      ? await findOwnBranch(profile.id, requestedBranchId)
+      : await findMainBranch(profile.id);
+    if (!branch || !isSellable(branch)) {
+      return res.status(400).json({ error: 'Choose one of your open branches' });
+    }
+
     const listing = await prisma.gasListing.create({
-      data: { ...result.data, vendorId: profile.id }
+      data: { ...listingData, vendorId: profile.id, branchId: branch.id }
     });
 
     return res.status(201).json({ listing });
@@ -346,6 +396,14 @@ router.patch(
     const exists = await prisma.gasListing.findFirst({ where: { id, vendorId: profile.id } });
     if (!exists) {
       return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    // Moving a listing to another branch needs the same ownership check.
+    if (result.data.branchId) {
+      const branch = await findOwnBranch(profile.id, result.data.branchId);
+      if (!branch || !isSellable(branch)) {
+        return res.status(400).json({ error: 'Choose one of your open branches' });
+      }
     }
 
     const listing = await prisma.gasListing.update({ where: { id }, data: result.data });
@@ -457,8 +515,8 @@ router.patch(
     }
 
     if (riderId) {
-      const rider = await prisma.riderProfile.findUnique({ where: { id: riderId } });
-      if (!rider || rider.status !== 'APPROVED') {
+      const rider = await prisma.riderProfile.findFirst({ where: { id: riderId, ...ASSIGNABLE_RIDER } });
+      if (!rider) {
         return res.status(400).json({ error: 'Rider not found or not approved' });
       }
     }
@@ -483,8 +541,14 @@ router.get(
     }
 
     const riders = await prisma.riderProfile.findMany({
-      where: { status: 'APPROVED' },
-      select: { id: true, phone: true, vehicleType: true, user: { select: { name: true } } },
+      where: ASSIGNABLE_RIDER,
+      select: {
+        id: true,
+        phone: true,
+        vehicleType: true,
+        user: { select: { name: true } },
+        company: { select: { companyName: true } }
+      },
       orderBy: { createdAt: 'desc' }
     });
 
