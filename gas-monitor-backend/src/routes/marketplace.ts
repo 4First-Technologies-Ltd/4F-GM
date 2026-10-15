@@ -29,7 +29,17 @@ const publicSelect = {
   createdAt: true,
   updatedAt: true,
   branch: {
-    select: { id: true, name: true, address: true, state: true, city: true, lat: true, lng: true, phone: true }
+    select: {
+      id: true,
+      name: true,
+      isMain: true,
+      address: true,
+      state: true,
+      city: true,
+      lat: true,
+      lng: true,
+      phone: true
+    }
   },
   vendor: {
     select: {

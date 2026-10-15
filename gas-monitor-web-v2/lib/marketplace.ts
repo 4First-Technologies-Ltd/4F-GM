@@ -30,6 +30,18 @@ export interface PublicListing {
   otherSizes: string | null;
   inStock: boolean;
   createdAt: string;
+  /** The branch the listing is sold from; null for listings that predate branches. */
+  branch: {
+    id: string;
+    name: string;
+    isMain: boolean;
+    address: string;
+    state: string | null;
+    city: string | null;
+    lat: number | null;
+    lng: number | null;
+    phone: string;
+  } | null;
   vendor: {
     id: string;
     businessName: string;
@@ -104,17 +116,26 @@ export function toCatalogListing(l: PublicListing): Listing {
   const onRequest = allSizes.filter((s) => kgOf(s) == null);
   const title = l.customName?.trim() || GAS_TYPE_TITLE[l.gasType];
   const gasType = GAS_TYPE_MAP[l.gasType];
+  // A listing is sold from a branch, so its location and phone are the branch's;
+  // listings that predate branches fall back to the vendor's own.
+  const b = l.branch;
+  const address = b?.address ?? l.vendor.businessAddress;
+  const phone = b?.phone ?? l.vendor.phone;
+  // The seed branch is just "Main branch": only a named branch is worth showing.
+  const sellerName =
+    b && !b.isMain && b.name.trim() ? `${l.vendor.businessName} · ${b.name.trim()}` : l.vendor.businessName;
   // Vendors pick state and city at sign-up; older profiles fall back to the address.
-  const guessed = locate(l.vendor.businessAddress);
-  const state = l.vendor.state ?? guessed.state;
-  const city = l.vendor.city ?? (l.vendor.state ? '' : guessed.city);
+  const guessed = locate(address);
+  const bState = b ? b.state : l.vendor.state;
+  const state = bState ?? l.vendor.state ?? guessed.state;
+  const city = (b ? b.city : l.vendor.city) ?? (state === guessed.state ? guessed.city : '');
   const weights = sizes.map((s) => kgOf(s)!);
   const baseDescription =
-    l.vendor.bio?.trim() || `${title} from ${l.vendor.businessName}, ${l.vendor.businessAddress}.`;
+    l.vendor.bio?.trim() || `${title} from ${sellerName}, ${address}.`;
 
   return {
     id: l.id,
-    vendor: l.vendor.businessName,
+    vendor: sellerName,
     initials: initialsOf(l.vendor.businessName),
     color: '#2D7450',
     title,
@@ -125,11 +146,11 @@ export function toCatalogListing(l: PublicListing): Listing {
     category: 'refill',
     gasTypes: gasType ? [gasType] : [],
     sizes: sizes.length > 0 ? sizes : [PER_KG_SIZE],
-    location: l.vendor.businessAddress,
+    location: address,
     state,
     city,
-    lat: l.vendor.lat ?? undefined,
-    lng: l.vendor.lng ?? undefined,
+    lat: (b ? b.lat : l.vendor.lat) ?? l.vendor.lat ?? undefined,
+    lng: (b ? b.lng : l.vendor.lng) ?? l.vendor.lng ?? undefined,
     // Uploaded logos are stored as data URLs. Anything else (a remote URL) is
     // not an allowed next/image source, so those vendors keep their initials.
     logo: l.vendor.logoUrl?.startsWith('data:image/') ? l.vendor.logoUrl : undefined,
@@ -137,7 +158,7 @@ export function toCatalogListing(l: PublicListing): Listing {
     price: Math.round(l.pricePerKg * (weights.length > 0 ? Math.min(...weights) : 1)),
     pricePerKg: l.pricePerKg,
     sellerRole: 'vendor',
-    contact: { phone: l.vendor.phone },
+    contact: { phone },
     rating: 0,
     reviews: 0,
     isOpen: l.inStock,

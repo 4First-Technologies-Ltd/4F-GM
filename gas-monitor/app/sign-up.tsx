@@ -97,8 +97,8 @@ function RoleTabs({
   role,
   onChange,
 }: {
-  role: 'CONSUMER' | 'VENDOR' | 'RIDER';
-  onChange: (r: 'CONSUMER' | 'VENDOR' | 'RIDER') => void;
+  role: 'CONSUMER' | 'VENDOR' | 'RIDER' | 'COMPANY';
+  onChange: (r: 'CONSUMER' | 'VENDOR' | 'RIDER' | 'COMPANY') => void;
 }) {
   return (
     <View style={rt.wrap}>
@@ -122,6 +122,13 @@ function RoleTabs({
         activeOpacity={0.8}
       >
         <Text style={[rt.tabText, role === 'RIDER' && rt.tabTextActive]}>Rider</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[rt.tab, role === 'COMPANY' && rt.tabActive]}
+        onPress={() => onChange('COMPANY')}
+        activeOpacity={0.8}
+      >
+        <Text style={[rt.tabText, role === 'COMPANY' && rt.tabTextActive]}>Company</Text>
       </TouchableOpacity>
     </View>
   );
@@ -197,6 +204,7 @@ export default function SignUpScreen() {
             onChange={(r) => {
               if (r === 'VENDOR') router.replace('/vendor-sign-up');
               if (r === 'RIDER') router.replace('/rider-sign-up');
+              if (r === 'COMPANY') router.replace('/company-sign-up');
             }}
           />
 

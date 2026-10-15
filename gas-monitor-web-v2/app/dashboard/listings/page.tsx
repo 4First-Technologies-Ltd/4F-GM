@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { vendorApi, GasListing, GasType } from '@/lib/api';
+import { vendorApi, Branch, GasListing, GasType } from '@/lib/api';
 import { formatNaira } from '@/lib/format';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
@@ -28,6 +28,9 @@ export default function ListingsPage() {
   const [customName, setCustomName] = useState('');
   const [pricePerKg, setPricePerKg] = useState('');
   const [sizes, setSizes] = useState<string[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchId] = useState('');
+  const [branchFilter, setBranchFilter] = useState('all');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -40,7 +43,10 @@ export default function ListingsPage() {
     setLoading(true);
     setError(null);
     try {
-      setListings(await vendorApi.getListings());
+      const [l, b] = await Promise.all([vendorApi.getListings(), vendorApi.getBranches()]);
+      setListings(l);
+      // Only branches that can sell: open and not suspended by an admin.
+      setBranches(b.branches.filter((x) => x.isActive && !x.suspendedAt));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load listings.');
     } finally {
@@ -71,6 +77,7 @@ export default function ListingsPage() {
     setSubmitting(true);
     try {
       const listing = await vendorApi.createListing({
+        ...(branchId ? { branchId } : {}),
         gasType,
         customName: customName.trim() || undefined,
         pricePerKg: price,
@@ -128,6 +135,27 @@ export default function ListingsPage() {
           <>
             <p className="text-sm text-muted-foreground mb-6">Consumers see these in the marketplace.</p>
             <form onSubmit={handleCreate} noValidate className="space-y-4">
+              {branches.length > 1 && (
+                <div>
+                  <label htmlFor="branchId" className="block text-sm font-medium text-foreground mb-2">
+                    Branch
+                  </label>
+                  <select
+                    id="branchId"
+                    value={branchId || branches.find((b) => b.isMain)?.id || ''}
+                    onChange={(e) => setBranchId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                        {b.isMain ? ' (main)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="gasType" className="block text-sm font-medium text-foreground mb-2">
                   Gas type
@@ -214,6 +242,27 @@ export default function ListingsPage() {
       <div className="rounded-2xl bg-card border border-border p-6 md:p-8">
         <h2 className="text-xl font-semibold text-foreground mb-6">Your listings</h2>
 
+        {branches.length > 1 && listings.length > 0 && (
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Filter by branch">
+            {[{ id: 'all', name: 'All branches' }, ...branches].map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                role="tab"
+                aria-selected={branchFilter === b.id}
+                onClick={() => setBranchFilter(b.id)}
+                className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  branchFilter === b.id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         {error && (
           <div
             className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive flex items-start gap-2 mb-4"
@@ -231,7 +280,9 @@ export default function ListingsPage() {
 
         {listings.length > 0 && (
           <ul className="divide-y divide-border -my-4">
-            {listings.map((listing) => (
+            {listings
+              .filter((l) => branchFilter === 'all' || l.branchId === branchFilter)
+              .map((listing) => (
               <li key={listing.id} className="py-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -239,6 +290,11 @@ export default function ListingsPage() {
                     <p className="text-sm text-muted-foreground">
                       {formatNaira(listing.pricePerKg)}/kg · {listing.cylinderSizes.join(', ')}
                     </p>
+                    {branches.length > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        {branches.find((b) => b.id === listing.branchId)?.name}
+                      </p>
+                    )}
                   </div>
                   <span
                     className={`inline-flex flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${

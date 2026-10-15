@@ -2,8 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { vendorApi, AssignableRider, VendorOrder } from '@/lib/api';
+import { vendorApi, AssignableRider } from '@/lib/api';
 import { orderRef } from '@/lib/rider';
+
+type RiderApi = {
+  getRiders: () => Promise<AssignableRider[]>;
+  assignRider: (orderId: string, riderId: string | null) => Promise<void>;
+};
+
+/** The order fields the modal needs; vendor and manager orders both satisfy it. */
+type AssignableOrder = {
+  id: string;
+  deliveryAddress: string;
+  rider?: { id: string } | null;
+};
 import { Button } from '@/components/motion/button/base';
 import { Modal } from '@/components/motion/modal';
 
@@ -14,10 +26,13 @@ import { Modal } from '@/components/motion/modal';
 export function AssignRiderModal({
   order,
   onClose,
-  onAssigned
+  onAssigned,
+  api = vendorApi
 }: {
   /** The order being assigned; the modal is open while this is set. */
-  order: VendorOrder | null;
+  order: AssignableOrder | null;
+  /** Vendors and branch managers hit different endpoints; defaults to the vendor's. */
+  api?: RiderApi;
   onClose: () => void;
   onAssigned: () => void | Promise<void>;
 }) {
@@ -37,7 +52,7 @@ export function AssignRiderModal({
     setLoadError(null);
     setError(null);
     setSelected(currentRiderId);
-    vendorApi
+    api
       .getRiders()
       .then((data) => {
         if (!cancelled) setRiders(data);
@@ -48,6 +63,8 @@ export function AssignRiderModal({
     return () => {
       cancelled = true;
     };
+    // `api` is a module-level object (or a stable prop), never recreated per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, currentRiderId]);
 
   async function save(riderId: string | null) {
@@ -55,7 +72,7 @@ export function AssignRiderModal({
     setSubmitting(true);
     setError(null);
     try {
-      await vendorApi.assignRider(order.id, riderId);
+      await api.assignRider(order.id, riderId);
       await onAssigned();
       onClose();
     } catch (err) {
@@ -124,7 +141,7 @@ export function AssignRiderModal({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">{r.user.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {[r.vehicleType, r.phone].filter(Boolean).join(' · ')}
+                      {[r.company?.companyName, r.vehicleType, r.phone].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                 </label>

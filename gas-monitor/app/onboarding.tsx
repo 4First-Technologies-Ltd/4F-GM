@@ -306,6 +306,15 @@ export default function OnboardingScreen() {
                         <Text style={s.roleCardTitle}>Rider</Text>
                         <Text style={s.roleCardSub}>Deliver orders</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity
+                        style={s.roleCard}
+                        activeOpacity={0.85}
+                        onPress={() => router.push('/company-sign-up')}
+                      >
+                        <IconSymbol name="shippingbox.fill" size={26} color={C.greenBright} />
+                        <Text style={s.roleCardTitle}>Logistics company</Text>
+                        <Text style={s.roleCardSub}>Run a fleet of riders</Text>
+                      </TouchableOpacity>
                     </View>
                     <TouchableOpacity
                       activeOpacity={0.7}
@@ -559,11 +568,13 @@ const s = StyleSheet.create({
   },
   roleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     width: '100%',
   },
   roleCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '45%',
     backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.22)',

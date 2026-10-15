@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { RiderDeliveries } from '@/components/rider/RiderDeliveries';
+import { CompanyFleet } from '@/components/company/CompanyFleet';
+import { ManagerOrders } from '@/components/manager/ManagerOrders';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -16,6 +18,8 @@ export default function DashboardPage() {
   }, [isConsumer, router]);
 
   if (user?.role === 'RIDER') return <RiderDeliveries />;
+  if (user?.role === 'LOGISTICS_COMPANY') return <CompanyFleet />;
+  if (user?.role === 'BRANCH_MANAGER') return <ManagerOrders />;
 
   if (user?.role === 'VENDOR') {
     return (

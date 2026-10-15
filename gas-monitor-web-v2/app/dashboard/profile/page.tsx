@@ -7,6 +7,8 @@ import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
 import { PlanSection } from '@/components/vendor/PlanSection';
 import { RiderDetailsSection } from '@/components/rider/RiderDetailsSection';
+import { CompanyDetailsSection } from '@/components/company/CompanyDetailsSection';
+import { ManagerBranchesSection } from '@/components/manager/ManagerBranchesSection';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
 import { AlertCircle, Check } from 'lucide-react';
 
@@ -203,7 +205,15 @@ export default function ProfilePage() {
             <div className="flex justify-between items-start">
               <dt className="text-sm font-medium text-muted-foreground">Account type</dt>
               <dd className="text-sm font-medium text-foreground">
-                {user.role === 'VENDOR' ? 'Vendor' : user.role === 'RIDER' ? 'Rider' : 'Consumer'}
+                {user.role === 'VENDOR'
+                  ? 'Vendor'
+                  : user.role === 'RIDER'
+                    ? 'Rider'
+                    : user.role === 'LOGISTICS_COMPANY'
+                      ? 'Logistics company'
+                      : user.role === 'BRANCH_MANAGER'
+                        ? 'Branch manager'
+                        : 'Consumer'}
               </dd>
             </div>
             <div className="flex justify-between items-start">
@@ -360,6 +370,12 @@ export default function ProfilePage() {
 
       {/* Rider details (Riders only) */}
       {user.role === 'RIDER' && <RiderDetailsSection />}
+
+      {/* Company details (Logistics companies only) */}
+      {user.role === 'LOGISTICS_COMPANY' && <CompanyDetailsSection />}
+
+      {/* Branches (Branch managers only) */}
+      {user.role === 'BRANCH_MANAGER' && <ManagerBranchesSection />}
 
       {/* Partner plan (Vendors only, once the profile exists) */}
       {user.role === 'VENDOR' && vendorProfile && (
