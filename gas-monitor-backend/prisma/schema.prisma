@@ -334,6 +334,9 @@ model BranchStaff {
   userId    String?
   user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   status    StaffStatus @default(INVITED)
+  /// sha256 of the one-time token in the invite email. Cleared once the invite is
+  /// used, so the link works once; only the hash is ever stored.
+  tokenHash String?     @unique
   /// Unclaimed invites stop working after this; ignored once ACTIVE.
   expiresAt DateTime
   createdAt DateTime    @default(now())

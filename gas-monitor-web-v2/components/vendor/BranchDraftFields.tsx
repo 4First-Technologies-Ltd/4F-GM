@@ -40,7 +40,7 @@ export function BranchDraftFields({
         Other branches <span className="font-normal text-muted-foreground">(optional)</span>
       </legend>
       <p className="text-xs text-muted-foreground">
-        The address above is your main branch. Add others now, or later from the Branches page.
+        Only have one location? Skip this. The address above is your main branch, and you can add more at any time from the Branches page.
       </p>
 
       {branches.map((b, i) => (

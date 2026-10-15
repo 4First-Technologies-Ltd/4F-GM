@@ -87,7 +87,7 @@ export default function SignInPage() {
               </button>
             ))}
           </div>
-          <p className="-mt-3 mb-6 text-xs text-muted-foreground">Logistics companies sign in on the Rider tab; branch managers on the Vendor tab.</p>
+          <p className="-mt-3 mb-6 text-xs text-muted-foreground">Logistics companies sign in on the Rider tab; branch managers on the Vendor tab (they get their account from the vendor&apos;s invitation email).</p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} noValidate className="space-y-4">

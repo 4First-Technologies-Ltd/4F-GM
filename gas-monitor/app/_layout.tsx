@@ -57,7 +57,6 @@ function RootLayout() {
         <Stack.Screen name="company-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="company-pending" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(company)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
-        <Stack.Screen name="manager-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="(manager)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(rider)" options={{ headerShown: false, animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="rider-order/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />

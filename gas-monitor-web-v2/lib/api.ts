@@ -175,6 +175,31 @@ export const authApi = {
     return data;
   },
 
+  /** Look up an invitation from its emailed one-time token. Public. */
+  async peekInvite(token: string): Promise<InviteInfo> {
+    const data = await request<{ invite: InviteInfo }>(`/api/staff/invite/${encodeURIComponent(token)}`);
+    return data.invite;
+  },
+
+  /**
+   * Accept a branch-manager invitation. A new manager gets an account and is signed
+   * in; an existing manager just has the branch added (they sign in as usual).
+   */
+  async acceptInvite(token: string, input: { name: string; password: string }): Promise<AcceptInviteResult> {
+    const data = await request<
+      | { status: 'CREATED'; user: ApiUser; accessToken: string; refreshToken: string }
+      | { status: 'LINKED'; branchName: string }
+    >(`/api/staff/invite/${encodeURIComponent(token)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ ...input, acceptedTerms: true, legalVersion: LEGAL_VERSION })
+    });
+    if (data.status === 'CREATED') {
+      saveSession(data.accessToken, data.refreshToken, data.user);
+      return { status: 'CREATED', user: data.user };
+    }
+    return data;
+  },
+
   async resendOtp(email: string, purpose: 'SIGNUP_VERIFICATION' | 'PASSWORD_RESET'): Promise<OtpSentResult> {
     return request('/api/auth/resend-otp', {
       method: 'POST',
@@ -321,6 +346,18 @@ export type BranchInput = {
   lat?: number;
   lng?: number;
 };
+
+/** What the accept-invite page shows before the manager commits. */
+export interface InviteInfo {
+  email: string;
+  branchName: string;
+  businessName: string;
+  accountExists: boolean;
+  /** They already have a manager account, so the branch can simply be added to it. */
+  canLink: boolean;
+}
+
+export type AcceptInviteResult = { status: 'CREATED'; user: ApiUser } | { status: 'LINKED'; branchName: string };
 
 export interface StaffMember {
   id: string;
@@ -523,8 +560,9 @@ export const vendorApi = {
     return data.staff;
   },
 
-  async inviteStaff(branchId: string, email: string): Promise<void> {
-    await request(`/api/vendor/branches/${branchId}/staff`, {
+  /** `emailSent` is false when the invite was saved but the email could not be delivered. */
+  async inviteStaff(branchId: string, email: string): Promise<{ emailSent: boolean }> {
+    return request(`/api/vendor/branches/${branchId}/staff`, {
       method: 'POST',
       auth: true,
       body: JSON.stringify({ email })

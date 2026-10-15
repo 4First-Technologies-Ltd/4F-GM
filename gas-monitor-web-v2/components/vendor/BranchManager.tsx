@@ -16,6 +16,7 @@ function BranchManagers({ branchId }: { branchId: string }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -42,8 +43,14 @@ function BranchManagers({ branchId }: { branchId: string }) {
     }
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      await vendorApi.inviteStaff(branchId, email.trim());
+      const { emailSent } = await vendorApi.inviteStaff(branchId, email.trim());
+      setNotice(
+        emailSent
+          ? `Invitation sent to ${email.trim()}. The link works once and expires in 14 days.`
+          : 'The invite was saved, but the email could not be sent. Send it again in a moment.'
+      );
       setEmail('');
       await load();
     } catch (err) {
@@ -75,7 +82,7 @@ function BranchManagers({ branchId }: { branchId: string }) {
         <div className="mt-3 space-y-3">
           <p className="text-xs text-muted-foreground">
             Managers can run this branch&apos;s orders and stock. They cannot see earnings, documents or other branches.
-            They sign up as a <strong className="text-foreground">Branch manager</strong> with the email you invite.
+            We email them a link to set up their account.
           </p>
           {staff === null && !error && <p className="text-sm text-muted-foreground">Loading…</p>}
           {staff?.map((m) => (
@@ -83,7 +90,7 @@ function BranchManagers({ branchId }: { branchId: string }) {
               <div className="min-w-0 text-sm">
                 <p className="truncate font-medium text-foreground">{m.user?.name ?? m.email}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {m.status === 'ACTIVE' ? m.email : `Invited ${m.email}, waiting for them to sign up`}
+                  {m.status === 'ACTIVE' ? m.email : `Invited ${m.email}, waiting for them to accept`}
                 </p>
               </div>
               {confirmId === m.id ? (
@@ -124,6 +131,11 @@ function BranchManagers({ branchId }: { branchId: string }) {
             {error && (
               <p className="text-sm text-destructive" role="alert">
                 {error}
+              </p>
+            )}
+            {notice && (
+              <p className="text-sm text-primary" role="status">
+                {notice}
               </p>
             )}
             <Button type="submit" size="sm" disabled={busy}>

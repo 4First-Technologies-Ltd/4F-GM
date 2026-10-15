@@ -93,13 +93,6 @@ function VerifyEmailContent() {
         return;
       }
 
-      if (role === 'BRANCH_MANAGER') {
-        // No profile to create: access comes from the vendor's invite, which is
-        // picked up on the first request now that the email is verified.
-        router.push('/dashboard');
-        return;
-      }
-
       if (role === 'LOGISTICS_COMPANY') {
         const pending = readPendingCompany();
         if (pending) {

@@ -53,6 +53,53 @@ export async function sendOtpEmail(to: string, code: string, purpose: OtpEmailPu
   }
 }
 
+/**
+ * Email a branch-manager invite with its one-time link. Returns whether it was
+ * handed to Resend, so the vendor can be told when the invite was saved but the
+ * email did not go out. Outside production the link is logged when email is not
+ * configured (like OTPs); in production it never is.
+ */
+export async function sendManagerInviteEmail(input: {
+  to: string;
+  businessName: string;
+  branchName: string;
+  link: string;
+  expiresAt: Date;
+}): Promise<boolean> {
+  const resend = getClient();
+  if (!resend) {
+    const detail = process.env.NODE_ENV !== 'production' ? `: ${input.link}` : '';
+    console.warn(`[email] RESEND_API_KEY not set — manager invite for ${input.to} not sent${detail}`);
+    return false;
+  }
+
+  const { error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: input.to,
+    subject: `${input.businessName} invited you to manage ${input.branchName}`,
+    html: `
+      <div style="font-family: -apple-system, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px;">
+        <p style="font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: #2d7450; text-transform: uppercase; margin: 0 0 24px;">4FG Smart Gas Monitor</p>
+        <h1 style="font-size: 20px; margin: 0 0 12px;">You've been invited to manage a branch</h1>
+        <p style="font-size: 15px; color: #444; line-height: 1.5; margin: 0 0 24px;">
+          <strong>${escapeHtml(input.businessName)}</strong> invited you to run orders and stock for
+          <strong>${escapeHtml(input.branchName)}</strong> on 4FG Smart Gas Monitor.
+        </p>
+        <p style="margin: 0 0 24px;">
+          <a href="${escapeHtml(input.link)}" style="display: inline-block; background: #2d7450; color: #fff; text-decoration: none; font-weight: 700; padding: 12px 22px; border-radius: 8px;">Set up your account</a>
+        </p>
+        <p style="font-size: 13px; color: #888; line-height: 1.5;">This link works once and expires on ${input.expiresAt.toUTCString()}. If you weren't expecting this, you can safely ignore this email.</p>
+      </div>
+    `
+  });
+
+  if (error) {
+    console.error(`[email] Resend failed to send a manager invite to ${input.to}:`, error);
+    return false;
+  }
+  return true;
+}
+
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

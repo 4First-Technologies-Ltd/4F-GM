@@ -72,11 +72,6 @@ export default function VerifyEmailScreen() {
         return;
       }
 
-      if (role === 'BRANCH_MANAGER') {
-        router.replace('/(manager)');
-        return;
-      }
-
       if (role === 'RIDER') {
         const pending = takePendingRiderProfile();
         if (pending) await riderApi.createProfile(pending);

@@ -4,7 +4,9 @@ import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
 import { PLANS } from '../lib/plans';
 import { z } from 'zod';
-import { inviteExpiry, MAX_STAFF_PER_BRANCH } from '../lib/staff';
+import { inviteExpiry, inviteLink, MAX_STAFF_PER_BRANCH, newInviteToken } from '../lib/staff';
+import { sendManagerInviteEmail } from '../lib/email';
+import { inviteSendLimiter } from '../lib/security';
 import {
   branchPatchSchema,
   branchSchema,
@@ -213,12 +215,15 @@ router.get(
 );
 
 /**
- * Invite a manager by email. The invite is claimed when a BRANCH_MANAGER account
- * with that verified email signs in. Re-inviting refreshes an expired or revoked
- * invite. Whether the email already has an account is never revealed.
+ * Invite a manager by email. They get a one-time link to a private page where they
+ * set a name and password (an existing manager account is simply linked). Re-inviting
+ * issues a fresh link and invalidates the old one, which is also how an expired or
+ * revoked invite is renewed. Whether the email already has an account is never
+ * revealed to the vendor.
  */
 router.post(
   '/:id/staff',
+  inviteSendLimiter,
   asyncHandler(async (req, res) => {
     const result = inviteSchema.safeParse(req.body);
     if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
@@ -245,13 +250,23 @@ router.post(
       return res.status(409).json({ error: `A branch can have up to ${MAX_STAFF_PER_BRANCH} managers`, code: 'STAFF_LIMIT' });
     }
 
+    const { token, tokenHash } = newInviteToken();
+    const expiresAt = inviteExpiry();
     const staff = await prisma.branchStaff.upsert({
       where: { branchId_email: { branchId: branch.id, email } },
-      create: { branchId: branch.id, email, expiresAt: inviteExpiry() },
-      update: { status: 'INVITED', userId: null, expiresAt: inviteExpiry() },
+      create: { branchId: branch.id, email, expiresAt, tokenHash },
+      update: { status: 'INVITED', userId: null, expiresAt, tokenHash },
       select: { id: true, email: true, status: true, expiresAt: true }
     });
-    return res.status(201).json({ staff });
+
+    const emailSent = await sendManagerInviteEmail({
+      to: email,
+      businessName: vendor.businessName,
+      branchName: branch.name,
+      link: inviteLink(token),
+      expiresAt
+    });
+    return res.status(201).json({ staff, emailSent });
   })
 );
 

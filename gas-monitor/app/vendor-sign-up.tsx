@@ -13,6 +13,7 @@ import { authApi, BranchInput } from '@/lib/api';
 import { setPendingVendorProfile } from '@/lib/pendingVendorProfile';
 import { NetworkStatusDot } from '@/components/network-status-dot';
 import { LegalConsent } from '@/components/legal-consent';
+import { SignUpTabs } from '@/components/signup-tabs';
 import { useLegalConsent } from '@/lib/legal-consent';
 
 const C = {
@@ -99,47 +100,6 @@ function Field({
 }
 
 // ── Role tabs ─────────────────────────────────────────────────────────────────
-
-function RoleTabs({
-  role,
-  onChange,
-}: {
-  role: 'CONSUMER' | 'VENDOR' | 'RIDER' | 'COMPANY';
-  onChange: (r: 'CONSUMER' | 'VENDOR' | 'RIDER' | 'COMPANY') => void;
-}) {
-  return (
-    <View style={rt.wrap}>
-      <TouchableOpacity
-        style={[rt.tab, role === 'CONSUMER' && rt.tabActive]}
-        onPress={() => onChange('CONSUMER')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'CONSUMER' && rt.tabTextActive]}>Consumer</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[rt.tab, role === 'VENDOR' && rt.tabActive]}
-        onPress={() => onChange('VENDOR')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'VENDOR' && rt.tabTextActive]}>Vendor</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[rt.tab, role === 'RIDER' && rt.tabActive]}
-        onPress={() => onChange('RIDER')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'RIDER' && rt.tabTextActive]}>Rider</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[rt.tab, role === 'COMPANY' && rt.tabActive]}
-        onPress={() => onChange('COMPANY')}
-        activeOpacity={0.8}
-      >
-        <Text style={[rt.tabText, role === 'COMPANY' && rt.tabTextActive]}>Company</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 // ── Step indicator ────────────────────────────────────────────────────────────
 
@@ -351,14 +311,7 @@ export default function VendorSignUpScreen() {
                 <Text style={s.formSub}>Set up your login and business identity</Text>
               </View>
 
-              <RoleTabs
-                role="VENDOR"
-                onChange={(r) => {
-                  if (r === 'CONSUMER') router.replace('/sign-up');
-                  if (r === 'RIDER') router.replace('/rider-sign-up');
-                  if (r === 'COMPANY') router.replace('/company-sign-up');
-                }}
-              />
+              <SignUpTabs category="VENDOR" />
 
               <Field label="Your full name" value={name}
                 onChangeText={(t) => { setName(t); clearErr('name'); }}
@@ -445,14 +398,14 @@ export default function VendorSignUpScreen() {
                 )}
               </View>
 
-              {/* Additional branches */}
+              {/* Additional branches (optional) */}
               <View style={sf.wrap}>
                 <Text style={sf.label}>
                   Other branches{'  '}
                   <Text style={{ color: C.muted, fontWeight: '400' }}>(optional)</Text>
                 </Text>
                 <Text style={s.formSub}>
-                  The address above is your main branch. Add others now, or later from the Branches screen.
+                  Only have one location? Skip this. The address above is your main branch, and you can add more at any time from the Branches screen.
                 </Text>
 
                 {branches.map((b, i) => (
@@ -624,26 +577,6 @@ const si = StyleSheet.create({
 });
 
 // ── Role tabs styles ──────────────────────────────────────────────────────────
-const rt = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1.5,
-    borderColor: C.border,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tabActive: { backgroundColor: C.accent },
-  tabText: { color: C.muted, fontSize: 14, fontWeight: '700' },
-  tabTextActive: { color: '#FFFFFF' },
-});
-
 // ── Field styles ──────────────────────────────────────────────────────────────
 const sf = StyleSheet.create({
   wrap: { gap: 6 },
