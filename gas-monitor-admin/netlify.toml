@@ -2,5 +2,15 @@
   command = "npm run build"
   publish = ".next"
 
+# NEXT_PUBLIC_API_URL is baked into the client bundle at build time and
+# next.config.js fails the build without it. It is a public URL (it ships to every
+# browser), so it lives here rather than only in the Netlify UI: that way branch
+# and deploy-preview builds get it too, not just production. Deploy previews talk
+# to the production API; its CORS allow-list decides whether login works from a
+# preview origin.
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_PUBLIC_API_URL = "https://ugo.4fgmonitor.com"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
