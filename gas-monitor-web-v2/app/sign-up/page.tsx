@@ -10,24 +10,42 @@ import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
 import { RiderDetailsFields } from '@/components/rider/RiderDetailsFields';
+import { CompanyDetailsFields } from '@/components/company/CompanyDetailsFields';
+import { BranchDraftFields } from '@/components/vendor/BranchDraftFields';
+import type { BranchInput } from '@/lib/api';
+import { PENDING_COMPANY_KEY } from '@/lib/company';
 import { PENDING_RIDER_KEY } from '@/lib/rider';
 import { DEFAULT_VENDOR_PLAN, PLATFORM_COMMISSION_PERCENT } from '@/lib/plans';
 import { Eye, EyeOff } from 'lucide-react';
 
 const PENDING_VENDOR_KEY = '4fg_pending_vendor_profile';
 
-type Role = 'CONSUMER' | 'VENDOR' | 'RIDER';
+type Role = 'CONSUMER' | 'VENDOR' | 'RIDER' | 'LOGISTICS_COMPANY' | 'BRANCH_MANAGER';
 
-const ROLE_LABEL: Record<Role, string> = { CONSUMER: 'Consumer', VENDOR: 'Vendor', RIDER: 'Rider' };
+const ROLE_LABEL: Record<Role, string> = {
+  CONSUMER: 'Consumer',
+  VENDOR: 'Vendor',
+  RIDER: 'Rider',
+  LOGISTICS_COMPANY: 'Logistics company',
+  BRANCH_MANAGER: 'Branch manager'
+};
 
 function SignUpForm() {
   const { register } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // `/sign-up?role=vendor|rider` lands straight on that application.
+  // `/sign-up?role=vendor|rider|company` lands straight on that application.
   const [role, setRole] = useState<Role>(() => {
     const param = searchParams.get('role')?.toLowerCase();
-    return param === 'vendor' ? 'VENDOR' : param === 'rider' ? 'RIDER' : 'CONSUMER';
+    return param === 'vendor'
+      ? 'VENDOR'
+      : param === 'rider'
+        ? 'RIDER'
+        : param === 'company' || param === 'logistics'
+          ? 'LOGISTICS_COMPANY'
+          : param === 'manager'
+            ? 'BRANCH_MANAGER'
+            : 'CONSUMER';
   });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -39,6 +57,11 @@ function SignUpForm() {
   const [vendorCity, setVendorCity] = useState('');
   const [vehicleType, setVehicleType] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
+  const [extraBranches, setExtraBranches] = useState<BranchInput[]>([]);
+  const [companyName, setCompanyName] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [companyState, setCompanyState] = useState('');
+  const [companyCity, setCompanyCity] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [consentInvalid, setConsentInvalid] = useState(false);
@@ -66,8 +89,25 @@ function SignUpForm() {
       return;
     }
 
+    if (role === 'LOGISTICS_COMPANY' && (!companyName.trim() || !companyAddress.trim() || !phone.trim())) {
+      setError('Add your company name, phone number and address.');
+      return;
+    }
+
     setSubmitting(true);
     try {
+      if (role === 'LOGISTICS_COMPANY') {
+        window.sessionStorage.setItem(
+          PENDING_COMPANY_KEY,
+          JSON.stringify({
+            companyName: companyName.trim(),
+            address: companyAddress.trim(),
+            phone: phone.trim(),
+            ...(companyState ? { state: companyState } : {}),
+            ...(companyCity.trim() ? { city: companyCity.trim() } : {})
+          })
+        );
+      }
       if (role === 'RIDER') {
         window.sessionStorage.setItem(
           PENDING_RIDER_KEY,
@@ -87,7 +127,8 @@ function SignUpForm() {
             state: vendorState,
             city: vendorCity.trim(),
             phone: phone.trim(),
-            plan: DEFAULT_VENDOR_PLAN
+            plan: DEFAULT_VENDOR_PLAN,
+            ...(extraBranches.length ? { branches: extraBranches } : {})
           })
         );
       }
@@ -103,6 +144,9 @@ function SignUpForm() {
       }
       if (role === 'RIDER') {
         window.sessionStorage.removeItem(PENDING_RIDER_KEY);
+      }
+      if (role === 'LOGISTICS_COMPANY') {
+        window.sessionStorage.removeItem(PENDING_COMPANY_KEY);
       }
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
@@ -126,17 +170,21 @@ function SignUpForm() {
               ? 'Monitor cylinders and order refills from trusted vendors.'
               : role === 'VENDOR'
                 ? 'List gas products and manage incoming orders. Your account is reviewed before it goes live.'
-                : 'Deliver gas cylinders for vendors on the marketplace. Your application is reviewed before you can take deliveries.'}
+                : role === 'RIDER'
+                  ? 'Deliver gas cylinders for vendors on the marketplace. Your application is reviewed before you can take deliveries.'
+                  : role === 'LOGISTICS_COMPANY'
+                    ? 'Run a fleet of riders. Your company is reviewed once; riders you invite are approved by joining it.'
+                    : 'Run orders and stock for a vendor branch. Use the email address the vendor invited; you see their branch once you verify it.'}
           </p>
 
           {/* Role Tabs */}
-          <div className="flex gap-2 mb-6" role="group" aria-label="Account type">
-            {(['CONSUMER', 'VENDOR', 'RIDER'] as const).map((r) => (
+          <div className="flex flex-wrap gap-2 mb-6" role="group" aria-label="Account type">
+            {(['CONSUMER', 'VENDOR', 'RIDER', 'LOGISTICS_COMPANY', 'BRANCH_MANAGER'] as const).map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setRole(r)}
-                className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all duration-200 ${
+                className={`flex-1 min-w-[7rem] py-2 px-3 rounded-lg font-medium text-sm transition-all duration-200 ${
                   role === r
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -251,6 +299,8 @@ function SignUpForm() {
                   classNames={{ root: 'w-full' }}
                 />
 
+                <BranchDraftFields branches={extraBranches} onChange={setExtraBranches} disabled={submitting} />
+
                 <div className="rounded-xl border border-primary/40 bg-primary/[0.06] p-4">
                   <span className="block text-sm font-medium text-foreground">
                     Platform commission
@@ -291,6 +341,22 @@ function SignUpForm() {
               />
             )}
 
+            {role === 'LOGISTICS_COMPANY' && (
+              <CompanyDetailsFields
+                companyName={companyName}
+                phone={phone}
+                address={companyAddress}
+                state={companyState}
+                city={companyCity}
+                onCompanyNameChange={setCompanyName}
+                onPhoneChange={setPhone}
+                onAddressChange={setCompanyAddress}
+                onStateChange={setCompanyState}
+                onCityChange={setCompanyCity}
+                disabled={submitting}
+              />
+            )}
+
             <LegalConsent
               termsAccepted={termsAccepted}
               privacyAccepted={privacyAccepted}
@@ -326,9 +392,11 @@ function SignUpForm() {
               {submitting ? (
                 <span className="flex items-center gap-2">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  {role === 'CONSUMER' ? 'Creating account…' : 'Submitting application…'}
+                  {role === 'CONSUMER' || role === 'BRANCH_MANAGER' ? 'Creating account…' : 'Submitting application…'}
                 </span>
               ) : role === 'CONSUMER' ? (
+                'Create account'
+              ) : role === 'BRANCH_MANAGER' ? (
                 'Create account'
               ) : (
                 'Submit application'

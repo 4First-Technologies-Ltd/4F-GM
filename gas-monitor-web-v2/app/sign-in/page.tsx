@@ -11,7 +11,13 @@ import { Button } from '@/components/motion/button/base';
 import { LogoEmblem } from '@/components/site/Logo';
 import { Eye, EyeOff } from 'lucide-react';
 
-const ROLE_LABEL: Record<UserRole, string> = { CONSUMER: 'Consumer', VENDOR: 'Vendor', RIDER: 'Rider' };
+const ROLE_LABEL: Record<UserRole, string> = {
+  CONSUMER: 'Consumer',
+  VENDOR: 'Vendor',
+  RIDER: 'Rider',
+  BRANCH_MANAGER: 'Branch manager',
+  LOGISTICS_COMPANY: 'Logistics company'
+};
 
 export default function SignInPage() {
   const { login, logout } = useAuth();
@@ -29,9 +35,13 @@ export default function SignInPage() {
     setSubmitting(true);
     try {
       const user = await login(email, password);
-      if (user.role !== role) {
+      // Logistics companies sign in from the Rider tab (they run riders), as in the app.
+      // Branch managers are vendor staff, so they sign in from the Vendor tab.
+      const tab: UserRole =
+        user.role === 'LOGISTICS_COMPANY' ? 'RIDER' : user.role === 'BRANCH_MANAGER' ? 'VENDOR' : user.role;
+      if (tab !== role) {
         await logout();
-        const actual = ROLE_LABEL[user.role];
+        const actual = ROLE_LABEL[tab];
         setError(`This account is registered as a ${actual}. Switch to the ${actual} tab to sign in.`);
         return;
       }
@@ -77,6 +87,7 @@ export default function SignInPage() {
               </button>
             ))}
           </div>
+          <p className="-mt-3 mb-6 text-xs text-muted-foreground">Logistics companies sign in on the Rider tab; branch managers on the Vendor tab.</p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} noValidate className="space-y-4">

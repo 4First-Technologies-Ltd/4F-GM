@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Bike, UserPlus } from 'lucide-react';
-import { vendorApi, OrderStatus, VendorOrder } from '@/lib/api';
+import { vendorApi, Branch, OrderStatus, VendorOrder } from '@/lib/api';
 import { STATUS_LABEL, formatNaira } from '@/lib/format';
 import { RIDER_STATUS_BADGE, orderRef } from '@/lib/rider';
 import { Button } from '@/components/motion/button/base';
@@ -21,10 +21,14 @@ export function VendorOrders() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [assigning, setAssigning] = useState<VendorOrder | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState('all');
 
   const load = useCallback(async () => {
     try {
-      setOrders(await vendorApi.getOrders());
+      const [o, b] = await Promise.all([vendorApi.getOrders(), vendorApi.getBranches()]);
+      setOrders(o);
+      setBranches(b.branches);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load orders.');
@@ -38,9 +42,13 @@ export function VendorOrders() {
   }, [load]);
 
   const filtered = useMemo(
-    () => (filter === 'ALL' ? orders : orders.filter((o) => o.status === filter)),
-    [orders, filter]
+    () =>
+      orders.filter(
+        (o) => (filter === 'ALL' || o.status === filter) && (branchFilter === 'all' || o.branchId === branchFilter)
+      ),
+    [orders, filter, branchFilter]
   );
+  const multiBranch = branches.length > 1;
   const needsRider = orders.filter((o) => canAssign(o) && !o.rider).length;
 
   return (
@@ -53,6 +61,31 @@ export function VendorOrders() {
           </p>
         )}
       </div>
+
+      {multiBranch && (
+        <div
+          className="flex gap-2 mb-3 overflow-x-auto pb-2 -mx-2 px-2"
+          role="tablist"
+          aria-label="Filter orders by branch"
+        >
+          {[{ id: 'all', name: 'All branches' }, ...branches].map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              role="tab"
+              aria-selected={branchFilter === b.id}
+              onClick={() => setBranchFilter(b.id)}
+              className={`whitespace-nowrap px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                branchFilter === b.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {b.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         className="flex gap-2 mb-6 overflow-x-auto pb-2 -mx-2 px-2"
@@ -116,6 +149,11 @@ export function VendorOrders() {
                     <span className="block text-xs text-muted-foreground">
                       {new Date(order.createdAt).toLocaleDateString()}
                     </span>
+                    {multiBranch && (
+                      <span className="block text-xs text-muted-foreground">
+                        {branches.find((b) => b.id === order.branchId)?.name}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-foreground">
                     {order.consumer.name}

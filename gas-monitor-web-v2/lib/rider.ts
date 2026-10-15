@@ -46,7 +46,7 @@ export function nextRiderAction(status: OrderStatus) {
   return null;
 }
 
-export const orderRef = (o: RiderOrder) => '#' + o.id.slice(0, 8).toUpperCase();
+export const orderRef = (o: { id: string }) => '#' + o.id.slice(0, 8).toUpperCase();
 
 export const supplierLabel = (o: RiderOrder) => o.vendor?.businessName ?? o.supplierName ?? 'Supplier';
 

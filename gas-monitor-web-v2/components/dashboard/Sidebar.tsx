@@ -17,7 +17,9 @@ import {
   User,
   FileText,
   Bike,
-  Clock
+  Clock,
+  Truck,
+  ClipboardList
 } from 'lucide-react';
 
 const CONSUMER_NAV_ITEMS = [
@@ -34,6 +36,7 @@ const VENDOR_NAV_ITEMS = [
   { href: '/dashboard', label: 'Overview', icon: Grid3x3, exact: true },
   { href: '/dashboard/orders', label: 'Incoming orders', icon: Package, exact: false },
   { href: '/dashboard/listings', label: 'Listings', icon: Store, exact: false },
+  { href: '/dashboard/branches', label: 'Branches', icon: MapPin, exact: false },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3, exact: false },
   { href: '/dashboard/profile', label: 'Profile', icon: User, exact: false },
   { href: '/dashboard/documents', label: 'Documents', icon: FileText, exact: false },
@@ -44,6 +47,18 @@ const RIDER_NAV_ITEMS = [
   { href: '/dashboard', label: 'Deliveries', icon: Bike, exact: true },
   { href: '/dashboard/history', label: 'History', icon: Clock, exact: false },
   { href: '/dashboard/profile', label: 'Profile', icon: User, exact: false }
+];
+
+const MANAGER_NAV_ITEMS = [
+  { href: '/dashboard', label: 'Orders', icon: Package, exact: true },
+  { href: '/dashboard/stock', label: 'Stock', icon: ClipboardList, exact: false },
+  { href: '/dashboard/profile', label: 'Account', icon: User, exact: false }
+];
+
+const COMPANY_NAV_ITEMS = [
+  { href: '/dashboard', label: 'Fleet', icon: Truck, exact: true },
+  { href: '/dashboard/deliveries', label: 'Deliveries', icon: Package, exact: true },
+  { href: '/dashboard/profile', label: 'Company', icon: User, exact: false }
 ];
 
 function initials(name: string) {
@@ -60,7 +75,15 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
   const router = useRouter();
   const { user, logout } = useAuth();
   const NAV_ITEMS =
-    user?.role === 'VENDOR' ? VENDOR_NAV_ITEMS : user?.role === 'RIDER' ? RIDER_NAV_ITEMS : CONSUMER_NAV_ITEMS;
+    user?.role === 'VENDOR'
+      ? VENDOR_NAV_ITEMS
+      : user?.role === 'RIDER'
+        ? RIDER_NAV_ITEMS
+        : user?.role === 'LOGISTICS_COMPANY'
+          ? COMPANY_NAV_ITEMS
+          : user?.role === 'BRANCH_MANAGER'
+            ? MANAGER_NAV_ITEMS
+            : CONSUMER_NAV_ITEMS;
 
   const handleLogout = async () => {
     await logout();
