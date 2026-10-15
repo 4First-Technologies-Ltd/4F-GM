@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ordersApi } from '@/lib/api';
+import { ordersApi, marketplaceApi, type MarketplaceListing } from '@/lib/api';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -31,10 +31,16 @@ const cardShadow = Platform.select({
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type GasType = 'cooking' | 'medical' | 'industrial' | 'bulk';
+type GasType = 'cooking' | 'medical' | 'industrial' | 'bulk' | 'other';
+
+/** Flat delivery fee the server adds to every vendor order, in naira. */
+const DELIVERY_FEE = 2000;
+
+interface CylinderOpt { size: string; price: number; label: string; sub: string }
 
 interface Supplier {
   id: string;
+  options: CylinderOpt[];
   name: string;
   types: GasType[];
   address: string;
@@ -42,8 +48,8 @@ interface Supplier {
   lng: number;
   sizes: string[];
   isOpen: boolean;
-  hours: string;
-  rating: number;
+  hours: string | null;
+  rating: number | null;
   initials: string;
   color: string;
 }
@@ -83,80 +89,44 @@ const TYPE_META: Record<GasType, { color: string; label: string }> = {
   medical:    { color: '#1565C0', label: 'Medical O₂'  },
   industrial: { color: '#E65100', label: 'Industrial'   },
   bulk:       { color: '#6A1B9A', label: 'Bulk LPG'    },
+  other:      { color: '#546E7A', label: 'Other'       },
 };
 
-// ── Mock supplier data ────────────────────────────────────────────────────────
-const SUPPLIERS: Supplier[] = [
-  {
-    id: '1', name: 'Ardova Gas Ltd', initials: 'AG', color: '#2D7450',
-    types: ['cooking'], address: '14 Admiralty Way, Lekki Phase 1',
-    lat: 6.5280, lng: 3.3810,
-    sizes: ['6 kg', '12.5 kg', '50 kg'], isOpen: true, hours: '7am – 9pm', rating: 4.8,
-  },
-  {
-    id: '2', name: 'MedGas Nigeria', initials: 'MG', color: '#1565C0',
-    types: ['medical'],
-    address: '22 Adeola Odeku St, Victoria Island',
-    lat: 6.5190, lng: 3.4020,
-    sizes: ['Medical O₂', 'N₂', 'CO₂'], isOpen: true, hours: '24 hrs', rating: 4.9,
-  },
-  {
-    id: '3', name: 'Total Gas Depot', initials: 'TG', color: '#E65100',
-    types: ['cooking', 'bulk'],
-    address: '5 Kingsway Rd, Ikoyi',
-    lat: 6.5300, lng: 3.3900,
-    sizes: ['12.5 kg', '50 kg'], isOpen: true, hours: '6am – 8pm', rating: 4.5,
-  },
-  {
-    id: '4', name: 'HomeGas Express', initials: 'HG', color: '#2D7450',
-    types: ['cooking'],
-    address: '18 Bode Thomas St, Surulere',
-    lat: 6.5150, lng: 3.3650,
-    sizes: ['6 kg', '12.5 kg'], isOpen: true, hours: '8am – 7pm', rating: 4.3,
-  },
-  {
-    id: '5', name: 'ProMed Gases', initials: 'PM', color: '#1565C0',
-    types: ['medical', 'industrial'],
-    address: '3 Broad St, Lagos Marina',
-    lat: 6.5230, lng: 3.3940,
-    sizes: ['Medical O₂', 'Argon', 'CO₂', 'N₂'], isOpen: true, hours: '8am – 6pm', rating: 4.7,
-  },
-  {
-    id: '6', name: 'Industrial Gas Co.', initials: 'IG', color: '#E65100',
-    types: ['industrial', 'bulk'],
-    address: '11 Creek Rd, Apapa',
-    lat: 6.4980, lng: 3.3590,
-    sizes: ['50 kg', '100 kg', 'Bulk Tank'], isOpen: false, hours: 'Opens 6am', rating: 4.6,
-  },
-  {
-    id: '7', name: 'GreenEnergy LPG', initials: 'GE', color: '#2D7450',
-    types: ['cooking', 'bulk'],
-    address: '7 Obafemi Awolowo Way, Ikeja',
-    lat: 6.5900, lng: 3.3400,
-    sizes: ['6 kg', '12.5 kg', '50 kg'], isOpen: true, hours: '7am – 8pm', rating: 4.4,
-  },
-  {
-    id: '8', name: 'QuickGas Delivery', initials: 'QG', color: '#2D7450',
-    types: ['cooking'],
-    address: '29 Herbert Macaulay Way, Yaba',
-    lat: 6.5100, lng: 3.3790,
-    sizes: ['6 kg', '12.5 kg'], isOpen: true, hours: '8am – 9pm', rating: 4.6,
-  },
-  {
-    id: '9', name: 'NatGas Industrial', initials: 'NI', color: '#6A1B9A',
-    types: ['industrial', 'bulk'],
-    address: '45 Tin Can Island Rd, Apapa',
-    lat: 6.4920, lng: 3.3470,
-    sizes: ['50 kg', '100 kg', 'Bulk LPG'], isOpen: true, hours: '24 hrs', rating: 4.2,
-  },
-  {
-    id: '10', name: 'OilServ Gas Depot', initials: 'OS', color: '#6A1B9A',
-    types: ['bulk', 'industrial'],
-    address: '2 Wharf Rd, Apapa',
-    lat: 6.4850, lng: 3.3320,
-    sizes: ['50 kg', 'Bulk Tank'], isOpen: false, hours: 'Opens 7am', rating: 4.3,
-  },
-];
+// ── Live marketplace listings → supplier cards ───────────────────────────────
+const TYPE_BY_GAS: Record<MarketplaceListing['gasType'], GasType> = {
+  COOKING: 'cooking', MEDICAL: 'medical', INDUSTRIAL: 'industrial', BULK: 'bulk', OTHER: 'other',
+};
+const AVATAR_COLORS = ['#2D7450', '#1565C0', '#E65100', '#6A1B9A', '#00838F', '#AD1457'];
+
+function kgOf(size: string): number | null {
+  const m = /(\d+(?:\.\d+)?)\s*kg/i.exec(size);
+  return m ? Number(m[1]) : null;
+}
+
+/** Mirrors the server's pricing so the screen shows what will be charged. */
+function toSupplier(l: MarketplaceListing, i: number): Supplier {
+  const sizes = [...l.cylinderSizes, ...(l.otherSizes ?? '').split(',').map((x) => x.trim())]
+    .filter((x) => kgOf(x) != null);
+  const options: CylinderOpt[] = sizes.length
+    ? sizes.map((size) => ({ size, price: Math.round(l.pricePerKg * kgOf(size)!), label: size, sub: '' }))
+    : [{ size: 'Per kg', price: Math.round(l.pricePerKg), label: 'Per kg', sub: 'Sold by weight' }];
+  const name = l.vendor.businessName;
+  return {
+    id: l.id,
+    options,
+    name,
+    types: [TYPE_BY_GAS[l.gasType] ?? 'other'],
+    address: l.vendor.businessAddress,
+    lat: l.vendor.lat ?? NaN,
+    lng: l.vendor.lng ?? NaN,
+    sizes: options.map((o) => o.size),
+    isOpen: l.inStock,
+    hours: null,
+    rating: null,
+    initials: name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
+    color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+  };
+}
 
 // ── Saved address type ────────────────────────────────────────────────────────
 interface SavedAddress {
@@ -170,12 +140,6 @@ const DEFAULT_ADDRESSES: SavedAddress[] = [
   { id: '2', label: 'Office', full: '3 Broad St, Lagos Marina, Lagos Island'   },
 ];
 
-// ── Cylinder options (for order form) ─────────────────────────────────────────
-const CYLINDER_OPTS = [
-  { size: '6 kg',    price: 4500,  label: 'Small',    sub: 'Solo use'        },
-  { size: '12.5 kg', price: 8500,  label: 'Standard', sub: 'Most popular'    },
-  { size: '50 kg',   price: 32000, label: 'Large',    sub: 'Commercial use'  },
-];
 
 // ── Supplier Card ─────────────────────────────────────────────────────────────
 function SupplierCard({
@@ -219,7 +183,7 @@ function SupplierCard({
               {supplier.isOpen ? 'Open' : 'Closed'}
             </Text>
           </View>
-          <Text style={s.hoursText}>{supplier.hours}</Text>
+          {supplier.hours ? <Text style={s.hoursText}>{supplier.hours}</Text> : null}
         </View>
       </View>
 
@@ -235,7 +199,7 @@ function SupplierCard({
           )}
         </View>
         <View style={s.cardBottomRight}>
-          <Text style={s.ratingText}>⭐ {supplier.rating}</Text>
+          {supplier.rating != null ? <Text style={s.ratingText}>⭐ {supplier.rating}</Text> : <View />}
           <View style={[s.orderArrow, !supplier.isOpen && s.orderArrowClosed]}>
             <IconSymbol name="arrow.right" size={15} color={supplier.isOpen ? '#fff' : C.dim} />
           </View>
@@ -255,6 +219,20 @@ export default function SuppliersScreen() {
   const [locationStatus, setLocationStatus] = useState<'loading' | 'ok' | 'denied'>('loading');
 
   const [activeFilter, setActiveFilter] = useState('all');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [listState, setListState] = useState<'loading' | 'ok' | 'error'>('loading');
+
+  async function loadSuppliers() {
+    setListState('loading');
+    try {
+      const { listings } = await marketplaceApi.listings();
+      setSuppliers(listings.map(toSupplier));
+      setListState('ok');
+    } catch {
+      setListState('error');
+    }
+  }
+  useEffect(() => { void loadSuppliers(); }, []);
 
   const [activeTab, setActiveTab] = useState<'new' | 'orders'>('new');
   const [selectedSize, setSelectedSize] = useState(1);
@@ -293,9 +271,9 @@ export default function SuppliersScreen() {
     })();
   }, []);
 
-  const suppliersWithDist = SUPPLIERS.map((sup) => ({
+  const suppliersWithDist = suppliers.map((sup) => ({
     ...sup,
-    distance: userCoords ? haversineKm(userCoords.lat, userCoords.lng, sup.lat, sup.lng) : null,
+    distance: userCoords && Number.isFinite(sup.lat) && Number.isFinite(sup.lng) ? haversineKm(userCoords.lat, userCoords.lng, sup.lat, sup.lng) : null,
   }));
 
   const filtered = suppliersWithDist
@@ -310,6 +288,7 @@ export default function SuppliersScreen() {
     setScreen('order');
     setActiveTab('new');
     setQuantity(1);
+    setSelectedSize(0);
     setSelectedAddressId(null);
   }
 
@@ -339,10 +318,9 @@ export default function SuppliersScreen() {
     setPlacing(true);
     try {
       const result = await ordersApi.initialize({
-        supplierName: selectedSupplier.name,
+        listingId: selectedSupplier.id,
         cylinderSize: cylinder.size,
         quantity,
-        totalAmount: total,
         deliveryAddress: selectedAddress.full,
       });
       router.push({
@@ -362,8 +340,9 @@ export default function SuppliersScreen() {
     }
   }
 
-  const cylinder = CYLINDER_OPTS[selectedSize];
-  const total = cylinder.price * quantity;
+  const options = selectedSupplier?.options ?? [];
+  const cylinder = options[selectedSize] ?? options[0] ?? { size: '', price: 0, label: '', sub: '' };
+  const total = cylinder.price * quantity + DELIVERY_FEE;
 
   // ── Supplier List ───────────────────────────────────────────────────────────
   if (screen === 'suppliers') {
@@ -378,7 +357,7 @@ export default function SuppliersScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>Find a Supplier</Text>
-            <Text style={s.headerSub}>{filtered.length} supplier{filtered.length !== 1 ? 's' : ''} near you</Text>
+            <Text style={s.headerSub}>{listState === 'loading' ? 'Loading suppliers…' : `${filtered.length} supplier${filtered.length !== 1 ? 's' : ''} available`}</Text>
           </View>
           <View style={s.headerBadge}>
             <IconSymbol name="location.fill" size={18} color={C.accent} />
@@ -422,8 +401,13 @@ export default function SuppliersScreen() {
               <View style={s.emptyIconCircle}>
                 <IconSymbol name="location.fill" size={32} color={C.dim} />
               </View>
-              <Text style={s.emptyTitle}>No suppliers found</Text>
-              <Text style={s.emptySubtitle}>Try selecting a different category</Text>
+              <Text style={s.emptyTitle}>{listState === 'loading' ? 'Loading…' : listState === 'error' ? 'Could not load suppliers' : 'No suppliers found'}</Text>
+              <Text style={s.emptySubtitle}>{listState === 'error' ? 'Check your connection and tap to retry' : 'Try selecting a different category'}</Text>
+              {listState === 'error' && (
+                <TouchableOpacity onPress={loadSuppliers} style={{ marginTop: 12 }}>
+                  <Text style={{ color: C.accent, fontWeight: '600' }}>Retry</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             filtered.map((sup) => (
@@ -493,7 +477,7 @@ export default function SuppliersScreen() {
           <View style={[s.card, cardShadow]}>
             <Text style={s.cardTitle}>Select Cylinder Size</Text>
             <View style={s.sizeGrid}>
-              {CYLINDER_OPTS.map((c, i) => (
+              {options.map((c, i) => (
                 <TouchableOpacity key={c.size}
                   style={[s.sizeCard, selectedSize === i && s.sizeCardActive]}
                   onPress={() => setSelectedSize(i)} activeOpacity={0.7}>
@@ -555,7 +539,7 @@ export default function SuppliersScreen() {
             </View>
             <View style={s.summaryRow}>
               <Text style={s.summaryLabel}>Delivery fee</Text>
-              <Text style={[s.summaryValue, { color: C.accent }]}>Free</Text>
+              <Text style={s.summaryValue}>{fmtPrice(DELIVERY_FEE)}</Text>
             </View>
             <View style={[s.summaryRow, s.summaryTotal]}>
               <Text style={s.summaryTotalLabel}>Total</Text>

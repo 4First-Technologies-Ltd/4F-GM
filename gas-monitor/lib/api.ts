@@ -15,7 +15,8 @@ export const API_BASE_URL = __DEV__
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER';
+export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER' | 'BRANCH_MANAGER' | 'LOGISTICS_COMPANY';
+export type CompanyStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
@@ -32,6 +33,7 @@ export interface ApiUser {
   role: UserRole;
   vendorStatus?: VendorStatus;
   riderStatus?: RiderStatus;
+  companyStatus?: CompanyStatus;
   pushEnabled: boolean;
   emailNotifEnabled: boolean;
   smsAlertsEnabled: boolean;
@@ -41,9 +43,73 @@ export interface ApiUser {
 
 export interface VendorDocument {
   id: string;
-  url: string;
+  /** Short-lived signed link, or null for files that never reached storage. */
+  url: string | null;
   fileName: string;
   createdAt: string;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  address: string;
+  state?: string | null;
+  city?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  phone: string;
+  isMain: boolean;
+  isActive: boolean;
+  /** Set when an admin suspended the branch; the vendor cannot undo it. */
+  suspendedAt?: string | null;
+  suspendedReason?: string | null;
+}
+
+export type BranchInput = {
+  name: string;
+  address: string;
+  state?: string;
+  city?: string;
+  phone: string;
+  lat?: number;
+  lng?: number;
+};
+
+/** A branch a manager was invited to run. */
+export interface StaffBranch {
+  id: string;
+  name: string;
+  address: string;
+  city?: string | null;
+  state?: string | null;
+  phone: string;
+  isActive: boolean;
+  suspendedAt?: string | null;
+  vendor: { businessName: string };
+}
+
+/** Order as a branch manager sees it — customer name and phone, never email. */
+export interface ManagerOrder {
+  id: string;
+  consumer: { id: string; name: string; phone?: string | null };
+  listing: { id: string; gasType: GasType; customName?: string | null } | null;
+  branch: { id: string; name: string } | null;
+  assignedAt?: string | null;
+  rider?: { id: string; phone: string; user: { name: string } } | null;
+  cylinderSize: string;
+  quantity: number;
+  totalAmount: number;
+  deliveryAddress: string;
+  status: OrderStatus;
+  createdAt: string;
+}
+
+export interface StaffMember {
+  id: string;
+  email: string;
+  status: 'INVITED' | 'ACTIVE';
+  expiresAt: string;
+  user?: { name: string } | null;
 }
 
 export interface VendorProfile {
@@ -57,12 +123,14 @@ export interface VendorProfile {
   phone: string;
   status: VendorStatus;
   documents?: VendorDocument[];
+  branches?: Branch[];
   createdAt: string;
   updatedAt: string;
 }
 
 export interface GasListing {
   id: string;
+  branchId?: string | null;
   gasType: GasType;
   customName?: string;
   pricePerKg: number;
@@ -79,6 +147,47 @@ export interface AssignableRider {
   phone: string;
   vehicleType?: string | null;
   user: { name: string };
+  /** Set when the rider rides for a logistics company. */
+  company?: { companyName: string } | null;
+}
+
+export interface CompanyProfile {
+  id: string;
+  companyName: string;
+  address: string;
+  state?: string | null;
+  city?: string | null;
+  phone: string;
+  status: CompanyStatus;
+}
+
+export interface FleetRider {
+  id: string;
+  phone: string;
+  vehicleType?: string | null;
+  plateNumber?: string | null;
+  status: RiderStatus;
+  user: { name: string; email: string };
+  activeOrders: number;
+}
+
+export interface FleetInvite {
+  id: string;
+  email: string;
+  expiresAt: string;
+}
+
+export interface FleetDelivery {
+  id: string;
+  status: OrderStatus;
+  cylinderSize: string;
+  quantity: number;
+  deliveryAddress: string;
+  assignedAt?: string | null;
+  createdAt: string;
+  consumer: { name: string };
+  vendor?: { businessName: string } | null;
+  rider?: { id: string; user: { name: string } } | null;
 }
 
 export interface VendorOrder {
@@ -311,6 +420,8 @@ export const vendorApi = {
     phone: string;
     lat?: number;
     lng?: number;
+    /** Extra branches besides the main one, which is seeded from the business address. */
+    branches?: BranchInput[];
   }): Promise<VendorProfile> {
     const res = await request<{ profile: VendorProfile }>('/api/vendor/profile', {
       method: 'POST',
@@ -342,20 +453,82 @@ export const vendorApi = {
     return res.profile;
   },
 
-  async uploadDocuments(documents: { url: string; fileName: string }[]): Promise<void> {
+  /**
+   * Uploads a picked file to private storage, then records it. The file goes
+   * straight to the storage provider on a short-lived link; the API only ever
+   * sees its name and the key it issued.
+   */
+  async uploadDocument(file: { uri: string; fileName: string; mimeType?: string | null }): Promise<void> {
+    const blob = await (await fetch(file.uri)).blob();
+    const contentType = blob.type || file.mimeType || 'image/jpeg';
+
+    const { key, uploadUrl } = await request<{ key: string; uploadUrl: string }>(
+      '/api/vendor/documents/upload-url',
+      {
+        method: 'POST',
+        auth: true,
+        body: JSON.stringify({ fileName: file.fileName, contentType, size: blob.size }),
+      },
+    );
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    if (!put.ok) throw new Error('Upload failed. Please try again.');
+
     await request('/api/vendor/documents', {
       method: 'POST',
       auth: true,
-      body: JSON.stringify({ documents }),
+      body: JSON.stringify({ documents: [{ key, fileName: file.fileName }] }),
     });
   },
 
-  async getListings(): Promise<GasListing[]> {
-    const res = await request<{ listings: GasListing[] }>('/api/vendor/listings', { auth: true });
+  async getListings(branchId?: string): Promise<GasListing[]> {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    const res = await request<{ listings: GasListing[] }>(`/api/vendor/listings${qs}`, { auth: true });
     return res.listings;
   },
 
+  async getBranchStaff(branchId: string): Promise<StaffMember[]> {
+    const res = await request<{ staff: StaffMember[] }>(`/api/vendor/branches/${branchId}/staff`, { auth: true });
+    return res.staff;
+  },
+
+  async inviteStaff(branchId: string, email: string): Promise<void> {
+    await request(`/api/vendor/branches/${branchId}/staff`, {
+      method: 'POST', auth: true, body: JSON.stringify({ email }),
+    });
+  },
+
+  async revokeStaff(branchId: string, staffId: string): Promise<void> {
+    await request(`/api/vendor/branches/${branchId}/staff/${staffId}`, { method: 'DELETE', auth: true });
+  },
+
+  async getBranches(): Promise<{ branches: Branch[]; maxBranches: number }> {
+    return request('/api/vendor/branches', { auth: true });
+  },
+
+  async createBranch(data: BranchInput): Promise<Branch> {
+    const res = await request<{ branch: Branch }>('/api/vendor/branches', {
+      method: 'POST', auth: true, body: JSON.stringify(data),
+    });
+    return res.branch;
+  },
+
+  async updateBranch(id: string, data: Partial<BranchInput>): Promise<Branch> {
+    const res = await request<{ branch: Branch }>(`/api/vendor/branches/${id}`, {
+      method: 'PATCH', auth: true, body: JSON.stringify(data),
+    });
+    return res.branch;
+  },
+
+  async branchAction(id: string, action: 'make-main' | 'deactivate' | 'reactivate'): Promise<Branch> {
+    const res = await request<{ branch: Branch }>(`/api/vendor/branches/${id}/${action}`, {
+      method: 'POST', auth: true,
+    });
+    return res.branch;
+  },
+
   async createListing(data: {
+    branchId?: string;
     gasType: GasType;
     customName?: string;
     pricePerKg: number;
@@ -488,12 +661,38 @@ export const riderApi = {
 // ── Orders API ────────────────────────────────────────────────────────────────
 
 export interface InitializeOrderPayload {
-  supplierName: string;
+  /** Marketplace listing being bought. The server prices the order from it. */
+  listingId: string;
   cylinderSize: string;
   quantity: number;
-  totalAmount: number;
   deliveryAddress: string;
 }
+
+export interface MarketplaceListing {
+  id: string;
+  gasType: 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
+  customName: string | null;
+  pricePerKg: number;
+  cylinderSizes: string[];
+  otherSizes: string | null;
+  inStock: boolean;
+  vendor: {
+    id: string;
+    businessName: string;
+    businessAddress: string;
+    state: string | null;
+    city: string | null;
+    lat: number | null;
+    lng: number | null;
+    phone: string | null;
+  };
+}
+
+export const marketplaceApi = {
+  async listings(): Promise<{ listings: MarketplaceListing[] }> {
+    return request('/api/marketplace/listings');
+  },
+};
 
 export interface InitializeOrderResult {
   orderId: string;
@@ -730,5 +929,91 @@ export const deviceApi = {
       auth: true,
       body: JSON.stringify(config),
     });
+  },
+};
+
+// ── Branch manager API ────────────────────────────────────────────────────────
+
+export const staffApi = {
+  async me(): Promise<StaffBranch[]> {
+    const res = await request<{ branches: StaffBranch[] }>('/api/staff/me', { auth: true });
+    return res.branches;
+  },
+
+  async getOrders(branchId?: string): Promise<ManagerOrder[]> {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    const res = await request<{ orders: ManagerOrder[] }>(`/api/staff/orders${qs}`, { auth: true });
+    return res.orders;
+  },
+
+  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED'): Promise<void> {
+    await request(`/api/staff/orders/${id}`, { method: 'PATCH', auth: true, body: JSON.stringify({ status }) });
+  },
+
+  async getRiders(): Promise<AssignableRider[]> {
+    const res = await request<{ riders: AssignableRider[] }>('/api/staff/riders', { auth: true });
+    return res.riders;
+  },
+
+  async assignRider(orderId: string, riderId: string | null): Promise<void> {
+    await request(`/api/staff/orders/${orderId}/rider`, {
+      method: 'PATCH', auth: true, body: JSON.stringify({ riderId }),
+    });
+  },
+
+  async getListings(branchId?: string): Promise<GasListing[]> {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    const res = await request<{ listings: GasListing[] }>(`/api/staff/listings${qs}`, { auth: true });
+    return res.listings;
+  },
+
+  async setStock(id: string, inStock: boolean): Promise<GasListing> {
+    const res = await request<{ listing: GasListing }>(`/api/staff/listings/${id}`, {
+      method: 'PATCH', auth: true, body: JSON.stringify({ inStock }),
+    });
+    return res.listing;
+  },
+};
+
+// ── Logistics company API ─────────────────────────────────────────────────────
+
+export const companyApi = {
+  async createProfile(data: {
+    companyName: string;
+    address: string;
+    phone: string;
+    state?: string;
+    city?: string;
+  }): Promise<CompanyProfile> {
+    const res = await request<{ company: CompanyProfile }>('/api/company/profile', {
+      method: 'POST', auth: true, body: JSON.stringify(data),
+    });
+    return res.company;
+  },
+
+  async getProfile(): Promise<CompanyProfile> {
+    const res = await request<{ company: CompanyProfile }>('/api/company/me', { auth: true });
+    return res.company;
+  },
+
+  async getFleet(): Promise<{ riders: FleetRider[]; invites: FleetInvite[] }> {
+    return request('/api/company/riders', { auth: true });
+  },
+
+  async inviteRider(email: string): Promise<void> {
+    await request('/api/company/riders/invite', { method: 'POST', auth: true, body: JSON.stringify({ email }) });
+  },
+
+  async withdrawInvite(id: string): Promise<void> {
+    await request(`/api/company/invites/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  async removeRider(id: string): Promise<void> {
+    await request(`/api/company/riders/${id}`, { method: 'DELETE', auth: true });
+  },
+
+  async getDeliveries(): Promise<FleetDelivery[]> {
+    const res = await request<{ orders: FleetDelivery[] }>('/api/company/deliveries', { auth: true });
+    return res.orders;
   },
 };

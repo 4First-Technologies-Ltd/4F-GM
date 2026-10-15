@@ -11,6 +11,9 @@ export interface AdminSession {
   canChangePassword: boolean;
   /** Set by whoever created/reset the account; blocks everything but /dashboard/account. */
   mustChangePassword: boolean;
+  mfaEnabled: boolean;
+  /** Policy requires a second factor and none is set up; blocks everything but /dashboard/account. */
+  mfaEnrollRequired: boolean;
 }
 
 const AdminSessionContext = createContext<AdminSession | null>(null);

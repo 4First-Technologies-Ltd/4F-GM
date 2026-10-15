@@ -82,23 +82,23 @@ const steps = [
 const comparisonRows = [
   {
     feature: "Real-time level tracking",
-    oldWay: "Only when someone checks it",
-    fourFg: "Live percentage updated automatically",
+    oldWay: "Only when someone checks it.",
+    fourFg: "Live percentage updated automatically.",
   },
   {
     feature: "Refill planning",
-    oldWay: "Based on memory or last-minute panic",
-    fourFg: "Forecasts from your actual usage pattern",
+    oldWay: "Based on memory or last-minute panic.",
+    fourFg: "Forecasts from your actual usage pattern.",
   },
   {
     feature: "Low-gas warning",
-    oldWay: "Usually after the flame goes out",
-    fourFg: "Push alerts before you run empty",
+    oldWay: "Usually after the flame goes out.",
+    fourFg: "Push alerts before you run empty.",
   },
   {
     feature: "Ordering",
-    oldWay: "Call around and ask for prices",
-    fourFg: "Order from vetted vendors in one flow",
+    oldWay: "Call around and ask for prices.",
+    fourFg: "Order from vetted vendors in one flow.",
   },
 ];
 

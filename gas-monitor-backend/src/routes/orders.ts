@@ -76,8 +76,14 @@ type OrderItem = z.infer<z.ZodObject<typeof orderItemShape>>;
 function checkOrderItem(item: OrderItem, ctx: z.RefinementCtx) {
   if (item.listingId && item.product) {
     ctx.addIssue({ code: 'custom', message: 'Order either a listing or a product, not both' });
-  } else if (!item.listingId && !item.product && (!item.supplierName || item.totalAmount == null)) {
-    ctx.addIssue({ code: 'custom', message: 'supplierName and totalAmount are required' });
+  } else if (!item.listingId && !item.product) {
+    // Client-priced orders let a modified app pay any amount it likes. Kept only
+    // as an explicit, temporary escape hatch for old builds.
+    if (process.env.ALLOW_CLIENT_PRICED_ORDERS !== 'true') {
+      ctx.addIssue({ code: 'custom', message: 'Please update the app to place orders' });
+    } else if (!item.supplierName || item.totalAmount == null) {
+      ctx.addIssue({ code: 'custom', message: 'supplierName and totalAmount are required' });
+    }
   }
 }
 
@@ -100,6 +106,24 @@ async function priceOrRespond(item: OrderItem, res: Response): Promise<PricedOrd
   }
 }
 
+/**
+ * Marks an order paid after Paystack reports success. Only a PENDING order
+ * moves to CONFIRMED (a later verify call can no longer drag a delivered or
+ * cancelled order backwards), the amount Paystack collected must match the
+ * order, and a signed-in caller may only confirm their own order.
+ */
+async function confirmPaidOrder(reference: string, paidKobo: number, consumerId?: string) {
+  const order = await prisma.order.findFirst({ where: { paystackRef: reference, ...(consumerId ? { consumerId } : {}) } });
+  if (!order || Math.round(order.totalAmount * 100) !== paidKobo) return null;
+  if (order.status === 'PENDING') {
+    await prisma.order.updateMany({
+      where: { id: order.id, status: 'PENDING' },
+      data: { status: 'CONFIRMED', paystackStatus: 'success' }
+    });
+  }
+  return prisma.order.findUnique({ where: { id: order.id } });
+}
+
 const initSchema = z.object(orderItemShape).superRefine(checkOrderItem);
 
 router.post(
@@ -115,7 +139,7 @@ router.post(
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
-    const { supplierName, totalAmount, listingId, vendorId } = priced;
+    const { supplierName, totalAmount, listingId, vendorId, branchId } = priced;
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) {
@@ -128,6 +152,7 @@ router.post(
         consumerId: req.user!.sub,
         listingId,
         vendorId,
+        branchId,
         supplierName,
         cylinderSize,
         quantity,
@@ -201,10 +226,10 @@ router.post(
         return res.status(400).json({ error: 'Payment was not successful', paystackStatus: ps.data.status });
       }
 
-      const order = await prisma.order.update({
-        where: { paystackRef: reference },
-        data: { status: 'CONFIRMED', paystackStatus: ps.data.status }
-      });
+      const order = await confirmPaidOrder(reference, ps.data.amount, req.user!.sub);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found or amount mismatch' });
+      }
 
       return res.json({ success: true, orderId: order.id, status: order.status });
     } catch (err: any) {
@@ -234,7 +259,7 @@ router.post(
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
-    const { supplierName, totalAmount, listingId, vendorId } = priced;
+    const { supplierName, totalAmount, listingId, vendorId, branchId } = priced;
 
     // Attach the order to an existing account with this email, or create a
     // lightweight guest account (unverified, random password) to own the order.
@@ -256,6 +281,7 @@ router.post(
         consumerId: user.id,
         listingId,
         vendorId,
+        branchId,
         supplierName,
         cylinderSize,
         quantity,
@@ -330,10 +356,10 @@ router.post(
         return res.status(400).json({ error: 'Payment was not successful', paystackStatus: ps.data.status });
       }
 
-      const order = await prisma.order.update({
-        where: { paystackRef: reference },
-        data: { status: 'CONFIRMED', paystackStatus: ps.data.status }
-      });
+      const order = await confirmPaidOrder(reference, ps.data.amount);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found or amount mismatch' });
+      }
 
       return res.json({ success: true, orderId: order.id, status: order.status });
     } catch (err: any) {

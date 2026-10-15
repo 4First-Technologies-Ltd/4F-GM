@@ -1,9 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 
 import authRoutes from './routes/auth';
 import vendorRoutes from './routes/vendor';
+import vendorBranchesRoutes from './routes/vendorBranches';
+import staffRoutes from './routes/staff';
+import companyRoutes from './routes/company';
 import riderRoutes from './routes/rider';
 import ordersRoutes from './routes/orders';
 import cylindersRoutes from './routes/cylinders';
@@ -15,11 +19,13 @@ import marketplaceRoutes from './routes/marketplace';
 import { paystackWebhookHandler } from './routes/ordersWebhook';
 import { sentryWebhookHandler } from './routes/internalSentryWebhook';
 import { Sentry } from './lib/sentry';
+import { contactLimiter, guestOrderLimiter } from './lib/security';
 
 import adminAuthRoutes from './routes/admin/auth';
 import adminAdminUsersRoutes from './routes/admin/adminUsers';
 import adminBriefingRoutes from './routes/admin/briefing';
 import adminLogsRoutes from './routes/admin/logs';
+import adminWaitlistRoutes from './routes/admin/waitlist';
 import adminUsageRoutes from './routes/admin/usage';
 import eventsRoutes from './routes/events';
 import { recordHttpError } from './lib/serverLog';
@@ -32,12 +38,14 @@ import marketingPublicRoutes from './routes/marketing';
 import adminListingsRoutes from './routes/admin/listings';
 import adminOrdersRoutes from './routes/admin/orders';
 import adminRidersRoutes from './routes/admin/riders';
+import adminCompaniesRoutes from './routes/admin/companies';
 import adminSettingsRoutes from './routes/admin/settings';
 import adminPayoutsRoutes from './routes/admin/payouts';
 import adminSupportRoutes from './routes/admin/support';
 import adminStatsRoutes from './routes/admin/stats';
 import adminUsersRoutes from './routes/admin/users';
 import adminVendorsRoutes from './routes/admin/vendors';
+import adminBranchStaffRoutes from './routes/admin/branchStaff';
 
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
   .split(',')
@@ -47,6 +55,15 @@ const corsOrigins = (process.env.CORS_ORIGINS ?? '')
 export function createApp() {
   const app = express();
 
+  // Behind Render's proxy: without this every client shares the proxy's IP,
+  // which breaks per-IP rate limits and records the wrong IP in the audit log.
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+  app.use(helmet());
+
+  // Credentialed CORS must never reflect arbitrary origins in production.
+  if (process.env.NODE_ENV === 'production' && corsOrigins.length === 0) {
+    throw new Error('CORS_ORIGINS must be set in production');
+  }
   app.use(
     cors({
       origin: corsOrigins.length > 0 ? corsOrigins : true,
@@ -68,8 +85,13 @@ export function createApp() {
 
   // Consumer / vendor API — paths unchanged from gas-monitor-web so the
   // mobile app only needs to repoint API_BASE_URL.
+  app.use('/api/contact', contactLimiter);
+  app.use('/api/orders/guest', guestOrderLimiter);
   app.use('/api/auth', authRoutes);
+  app.use('/api/vendor/branches', vendorBranchesRoutes);
   app.use('/api/vendor', vendorRoutes);
+  app.use('/api/staff', staffRoutes);
+  app.use('/api/company', companyRoutes);
   app.use('/api/rider', riderRoutes);
   app.use('/api/orders', ordersRoutes);
   app.use('/api/cylinders', cylindersRoutes);
@@ -89,6 +111,7 @@ export function createApp() {
   app.use('/api/admin/audit', adminAuditRoutes);
   app.use('/api/admin/briefing', adminBriefingRoutes);
   app.use('/api/admin/logs', adminLogsRoutes);
+  app.use('/api/admin/waitlist', adminWaitlistRoutes);
   app.use('/api/admin/usage', adminUsageRoutes);
   app.use('/api/admin/crm', adminCrmRoutes);
   app.use('/api/admin/customers', adminCustomersRoutes);
@@ -97,11 +120,13 @@ export function createApp() {
   app.use('/api/admin/orders', adminOrdersRoutes);
   app.use('/api/admin/payouts', adminPayoutsRoutes);
   app.use('/api/admin/riders', adminRidersRoutes);
+  app.use('/api/admin/companies', adminCompaniesRoutes);
   app.use('/api/admin/support', adminSupportRoutes);
   app.use('/api/admin/settings', adminSettingsRoutes);
   app.use('/api/admin/stats', adminStatsRoutes);
   app.use('/api/admin/users', adminUsersRoutes);
   app.use('/api/admin/vendors', adminVendorsRoutes);
+  app.use('/api/admin/branch-staff', adminBranchStaffRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });

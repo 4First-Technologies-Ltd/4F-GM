@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { issueOtp, issueTokenPair, devOtp } from '../lib/auth';
@@ -8,14 +9,17 @@ import { verifyRefreshToken } from '../lib/jwt';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
 import { LEGAL_VERSION } from '../lib/legal';
+import { loginLimiter, otpSendLimiter, otpVerifyLimiter, registerLimiter, sha256 } from '../lib/security';
+import { validatePassword } from '../lib/password';
+import { claimFleetInvite, effectiveRiderStatus, RIDER_STATUS_SELECT } from '../lib/fleet';
 
 const router = Router();
 
 const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER']).optional().default('CONSUMER'),
+  password: z.string().superRefine(validatePassword),
+  role: z.enum(['CONSUMER', 'VENDOR', 'RIDER', 'BRANCH_MANAGER', 'LOGISTICS_COMPANY']).optional().default('CONSUMER'),
   acceptedTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the Terms and Privacy Policy' }) }),
   legalVersion: z.string().refine((v) => v === LEGAL_VERSION, {
     message: 'The Terms have been updated. Please reload and review them again.'
@@ -24,6 +28,7 @@ const registerSchema = z.object({
 
 router.post(
   '/register',
+  registerLimiter,
   asyncHandler(async (req, res) => {
     const result = registerSchema.safeParse(req.body);
     if (!result.success) {
@@ -71,6 +76,7 @@ const verifyOtpSchema = z.object({
 
 router.post(
   '/verify-otp',
+  otpVerifyLimiter,
   asyncHandler(async (req, res) => {
     const result = verifyOtpSchema.safeParse(req.body);
     if (!result.success) {
@@ -82,7 +88,8 @@ router.post(
       where: { email },
       include: {
         vendorProfile: { select: { status: true } },
-        riderProfile: { select: { status: true } }
+        riderProfile: { select: RIDER_STATUS_SELECT },
+        logisticsCompany: { select: { status: true } }
       }
     });
 
@@ -114,7 +121,8 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
-        riderStatus: user.riderProfile?.status ?? undefined,
+        riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
+        companyStatus: user.logisticsCompany?.status ?? undefined,
         createdAt: user.createdAt
       },
       ...tokens
@@ -129,6 +137,7 @@ const resendOtpSchema = z.object({
 
 router.post(
   '/resend-otp',
+  otpSendLimiter,
   asyncHandler(async (req, res) => {
     const result = resendOtpSchema.safeParse(req.body);
     if (!result.success) {
@@ -173,18 +182,18 @@ router.post(
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
-    const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
+    const stored = await prisma.refreshToken.findUnique({ where: { token: sha256(refreshToken) } });
     if (!stored || stored.expiresAt < new Date()) {
       return res.status(401).json({ error: 'Refresh token revoked or expired' });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, email: true } });
-    if (!user) {
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, email: true, isSuspended: true } });
+    if (!user || user.isSuspended) {
       return res.status(401).json({ error: 'User not found' });
     }
 
     // Rotate: delete old token, issue new pair
-    await prisma.refreshToken.delete({ where: { token: refreshToken } });
+    await prisma.refreshToken.delete({ where: { token: sha256(refreshToken) } });
     const tokens = await issueTokenPair(user.id, user.email);
 
     return res.json(tokens);
@@ -197,7 +206,7 @@ router.post(
     const { refreshToken } = (req.body ?? {}) as { refreshToken?: string };
 
     if (refreshToken) {
-      await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+      await prisma.refreshToken.deleteMany({ where: { token: sha256(refreshToken) } });
     }
 
     return res.json({ message: 'Logged out successfully' });
@@ -210,6 +219,7 @@ const forgotPasswordSchema = z.object({
 
 router.post(
   '/forgot-password',
+  otpSendLimiter,
   asyncHandler(async (req, res) => {
     const result = forgotPasswordSchema.safeParse(req.body);
     if (!result.success) {
@@ -233,11 +243,12 @@ router.post(
 const resetPasswordSchema = z.object({
   email: z.string().email(),
   otp: z.string().length(6, 'Enter the 6-digit code'),
-  password: z.string().min(6, 'Password must be at least 6 characters')
+  password: z.string().superRefine(validatePassword)
 });
 
 router.post(
   '/reset-password',
+  otpVerifyLimiter,
   asyncHandler(async (req, res) => {
     const result = resetPasswordSchema.safeParse(req.body);
     if (!result.success) {
@@ -287,6 +298,7 @@ const loginSchema = z.object({
 
 router.post(
   '/login',
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
@@ -299,7 +311,8 @@ router.post(
       where: { email },
       include: {
         vendorProfile: { select: { status: true } },
-        riderProfile: { select: { status: true } }
+        riderProfile: { select: RIDER_STATUS_SELECT },
+        logisticsCompany: { select: { status: true } }
       }
     });
     if (!user) {
@@ -328,7 +341,8 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
-        riderStatus: user.riderProfile?.status ?? undefined,
+        riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
+        companyStatus: user.logisticsCompany?.status ?? undefined,
         createdAt: user.createdAt
       },
       ...tokens
@@ -350,17 +364,23 @@ const SELECT = {
   createdAt: true,
   updatedAt: true,
   vendorProfile: { select: { status: true } },
-  riderProfile: { select: { status: true } }
+  riderProfile: { select: RIDER_STATUS_SELECT },
+  logisticsCompany: { select: { status: true } }
 } as const;
 
-function serialize<T extends { vendorProfile: { status: string } | null; riderProfile: { status: string } | null }>(
-  user: T
-) {
-  const { vendorProfile, riderProfile, ...userData } = user;
+function serialize<
+  T extends {
+    vendorProfile: { status: string } | null;
+    riderProfile: Parameters<typeof effectiveRiderStatus>[0] | null;
+    logisticsCompany: { status: string } | null;
+  }
+>(user: T) {
+  const { vendorProfile, riderProfile, logisticsCompany, ...userData } = user;
   return {
     ...userData,
     vendorStatus: vendorProfile?.status ?? undefined,
-    riderStatus: riderProfile?.status ?? undefined
+    riderStatus: riderProfile ? effectiveRiderStatus(riderProfile) : undefined,
+    companyStatus: logisticsCompany?.status ?? undefined
   };
 }
 
@@ -368,10 +388,18 @@ router.get(
   '/me',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT });
+    let user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // A rider invited to a fleet after signing up joins here, so the approval
+    // the invite grants shows on their very next status check.
+    if (user.role === 'RIDER' && user.riderProfile) {
+      const v = await prisma.user.findUnique({ where: { id: user.id }, select: { emailVerified: true } });
+      const joined = await claimFleetInvite({ id: user.id, email: user.email, emailVerified: !!v?.emailVerified });
+      if (joined) user = (await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT })) ?? user;
     }
 
     return res.json({ user: serialize(user) });
@@ -404,6 +432,108 @@ router.patch(
     });
 
     return res.json({ user: serialize(user) });
+  })
+);
+
+// ── Data rights: export and erasure (Nigeria Data Protection Act 2023) ─────────
+
+/** A copy of everything we hold about the signed-in user. */
+router.get(
+  '/me/export',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const id = req.user!.sub;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true, email: true, name: true, phone: true, devicePhone: true, avatarUrl: true, role: true,
+        emailVerified: true, pushEnabled: true, emailNotifEnabled: true, smsAlertsEnabled: true,
+        unitPreference: true, createdAt: true,
+        addresses: true,
+        cylinderProfiles: true,
+        legalAcceptances: true,
+        orders: {
+          select: {
+            id: true, supplierName: true, cylinderSize: true, quantity: true, totalAmount: true,
+            deliveryAddress: true, status: true, createdAt: true
+          }
+        },
+        tickets: { include: { messages: true } }
+      }
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.setHeader('Content-Disposition', 'attachment; filename="4fg-monitor-my-data.json"');
+    return res.json({ exportedAt: new Date().toISOString(), data: user });
+  })
+);
+
+const deleteAccountSchema = z.object({ password: z.string().min(1, 'Enter your password to confirm') });
+
+/**
+ * Self-service erasure. Orders are financial records we must keep, so the
+ * account is anonymised in place rather than deleted: personal details, saved
+ * addresses, devices and sessions are removed and the email can no longer sign
+ * in or be marketed to. Vendors and riders hold payout records and are handled
+ * by support.
+ */
+router.delete(
+  '/me',
+  requireAuth,
+  loginLimiter,
+  asyncHandler(async (req, res) => {
+    const result = deleteAccountSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+
+    const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!(await bcrypt.compare(result.data.password, user.password))) {
+      return res.status(403).json({ error: 'Incorrect password' });
+    }
+    if (user.role !== 'CONSUMER') {
+      return res.status(409).json({
+        error: 'Vendor and rider accounts hold payout records. Contact support to close this account.',
+        code: 'CONTACT_SUPPORT'
+      });
+    }
+    const open = await prisma.order.count({
+      where: { consumerId: user.id, status: { in: ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY'] } }
+    });
+    if (open > 0) {
+      return res.status(409).json({ error: 'You have an order in progress. Delete your account once it is complete.' });
+    }
+
+    const randomPassword = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+    await prisma.$transaction([
+      prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+      prisma.address.deleteMany({ where: { userId: user.id } }),
+      prisma.cylinderProfile.deleteMany({ where: { userId: user.id } }),
+      prisma.marketingSuppression.upsert({
+        where: { email: user.email.toLowerCase() },
+        create: { email: user.email.toLowerCase(), reason: 'account_deleted' },
+        update: {}
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          email: `deleted-${user.id}@deleted.invalid`,
+          name: 'Deleted user',
+          phone: null,
+          devicePhone: null,
+          avatarUrl: null,
+          password: randomPassword,
+          isSuspended: true,
+          emailVerified: false,
+          otpCodeHash: null,
+          otpPurpose: null,
+          otpExpiresAt: null,
+          pushEnabled: false,
+          emailNotifEnabled: false,
+          smsAlertsEnabled: false
+        }
+      })
+    ]);
+
+    return res.json({ message: 'Your account has been deleted.' });
   })
 );
 

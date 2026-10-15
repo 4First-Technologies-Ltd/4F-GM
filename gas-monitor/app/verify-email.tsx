@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi, vendorApi, riderApi } from '@/lib/api';
+import { authApi, vendorApi, riderApi, companyApi } from '@/lib/api';
 import { takePendingVendorProfile } from '@/lib/pendingVendorProfile';
+import { takePendingCompanyProfile } from '@/lib/pendingCompanyProfile';
 import { takePendingRiderProfile } from '@/lib/pendingRiderProfile';
 
 const C = {
@@ -48,12 +49,31 @@ export default function VerifyEmailScreen() {
             phone: pending.phone,
             lat: pending.lat,
             lng: pending.lng,
+            branches: pending.branches?.length ? pending.branches : undefined,
           });
-          if (pending.documents.length > 0) {
-            await vendorApi.uploadDocuments(pending.documents.map((d) => ({ url: d.uri, fileName: d.fileName })));
+          // The account already exists at this point, so a failed upload must not
+          // block sign-up; the vendor can add the file again from Documents.
+          for (const d of pending.documents) {
+            try {
+              await vendorApi.uploadDocument({ uri: d.uri, fileName: d.fileName });
+            } catch {
+              /* retry later from the Documents screen */
+            }
           }
         }
         router.replace('/vendor-pending');
+        return;
+      }
+
+      if (role === 'LOGISTICS_COMPANY') {
+        const pending = takePendingCompanyProfile();
+        if (pending) await companyApi.createProfile(pending);
+        router.replace('/company-pending');
+        return;
+      }
+
+      if (role === 'BRANCH_MANAGER') {
+        router.replace('/(manager)');
         return;
       }
 

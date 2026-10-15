@@ -58,7 +58,7 @@ export async function writeAuditLog(
 export async function writeAuthAudit(
   req: Request,
   entry: {
-    action: 'ADMIN_LOGIN' | 'ADMIN_LOGIN_FAILED';
+    action: 'ADMIN_LOGIN' | 'ADMIN_LOGIN_FAILED' | 'ADMIN_MFA_FAILED';
     actorId: string;
     actorName: string;
     actorEmail: string;

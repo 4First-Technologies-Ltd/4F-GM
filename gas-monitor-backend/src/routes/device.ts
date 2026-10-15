@@ -10,6 +10,14 @@ const router = Router();
 // Middleware
 router.use(requireAuth);
 
+// Manufacturer/diagnostic commands. A factory reset wipes the device's logs and
+// the SMS test endpoints spend billable credit, so no customer account may
+// reach them in production.
+const nonProduction = (_req: Request, res: Response, next: () => void) => {
+  if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
+  next();
+};
+
 // Store device configs in memory for now (TODO: persist to DB)
 const deviceConfigs = new Map<string, any>();
 
@@ -458,11 +466,10 @@ router.post('/config/password', async (req: Request, res: Response) => {
  * Factory reset device (manufacturer only)
  * WARNING: Clears all logs and resets to default password
  */
-router.post('/factory-reset', async (req: Request, res: Response) => {
+router.post('/factory-reset', nonProduction, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.sub;
 
-    // TODO: Add permission check - only admins
     const command = '*F-MODE*F-MODE#';
 
     // Try to send via Termii if API key is configured
@@ -537,7 +544,7 @@ router.post('/config', async (req: Request, res: Response) => {
  * GET /api/device/test-termii
  * Test if Termii API key is configured and working
  */
-router.get('/test-termii', async (req: Request, res: Response) => {
+router.get('/test-termii', nonProduction, async (req: Request, res: Response) => {
   try {
     if (!process.env.TERMII_API_KEY) {
       return res.json({
@@ -575,7 +582,7 @@ router.get('/test-termii', async (req: Request, res: Response) => {
  * POST /api/device/test-sms
  * Test sending a simple SMS (not USSD) to diagnose Termii issues
  */
-router.post('/test-sms', async (req: Request, res: Response) => {
+router.post('/test-sms', nonProduction, async (req: Request, res: Response) => {
   try {
     const schema = z.object({
       phoneNumber: z.string().min(10),

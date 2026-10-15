@@ -5,7 +5,20 @@ import { requireAuth } from '../middleware/requireAuth';
 import { VendorPlan } from '@prisma/client';
 import { listingSchema } from '../lib/vendorSchemas';
 import { recordEarningSafe } from '../lib/earnings';
+import { ASSIGNABLE_RIDER } from '../lib/fleet';
+import { branchSchema, findMainBranch, findOwnBranch, isSellable } from '../lib/branches';
 import { asyncHandler } from '../lib/asyncHandler';
+import {
+  ALLOWED_DOC_TYPES,
+  isStorageKey,
+  MAX_DOC_BYTES,
+  newDocumentKey,
+  objectExists,
+  presignUpload,
+  storageConfigured,
+  withViewUrls
+} from '../lib/storage';
+import { documentUploadLimiter } from '../lib/security';
 import {
   cooldownExpiry,
   daysRemaining,
@@ -26,6 +39,7 @@ router.get(
       include: {
         documents: true,
         listings: true,
+        branches: { orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] },
         planChanges: { orderBy: { createdAt: 'desc' }, take: 10 }
       }
     });
@@ -34,7 +48,7 @@ router.get(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
-    return res.json({ profile });
+    return res.json({ profile: { ...profile, documents: await withViewUrls(profile.documents) } });
   })
 );
 
@@ -53,7 +67,10 @@ const profileSchema = z.object({
     .refine(isOfferedPlan, { message: 'That partner plan is not available' })
     .optional(),
   lat: z.number().optional(),
-  lng: z.number().optional()
+  lng: z.number().optional(),
+  // Additional branches created at sign-up, besides the main one that is
+  // seeded from the business location above.
+  branches: z.array(branchSchema).max(19).optional()
 });
 
 router.post(
@@ -65,7 +82,15 @@ router.post(
       return res.status(400).json({ error: result.error.errors[0].message });
     }
 
-    const { plan, ...details } = result.data;
+    const { plan, branches: extraBranches = [], ...details } = result.data;
+
+    const effectivePlan = plan ?? DEFAULT_PLAN;
+    if (1 + extraBranches.length > PLANS[effectivePlan].maxBranches) {
+      return res.status(400).json({
+        error: `The ${PLANS[effectivePlan].name} plan allows up to ${PLANS[effectivePlan].maxBranches} branches`,
+        code: 'BRANCH_LIMIT'
+      });
+    }
 
     const profile = await prisma.vendorProfile.upsert({
       where: { userId: req.user!.sub },
@@ -74,6 +99,31 @@ router.post(
       // cooldown — switching plans goes through PATCH /plan only.
       update: details
     });
+
+    // Every vendor has a main branch from day one, seeded from the business
+    // location. Skipped when one exists so re-posting the profile is harmless.
+    if (!(await findMainBranch(profile.id))) {
+      await prisma.$transaction([
+        prisma.branch.create({
+          data: {
+            vendorId: profile.id,
+            name: 'Main branch',
+            address: profile.businessAddress,
+            state: profile.state,
+            city: profile.city,
+            lat: profile.lat,
+            lng: profile.lng,
+            phone: profile.phone,
+            isMain: true
+          }
+        }),
+        ...extraBranches.map(({ openingHours, ...b }) =>
+          prisma.branch.create({
+            data: { ...b, ...(openingHours ? { openingHours: openingHours as object } : {}), vendorId: profile.id }
+          })
+        )
+      ]);
+    }
 
     return res.status(201).json({ profile });
   })
@@ -187,15 +237,56 @@ router.patch(
   })
 );
 
+const uploadUrlSchema = z.object({
+  fileName: z.string().trim().min(1).max(120),
+  contentType: z.string(),
+  size: z.number().int().positive()
+});
+
+/** Step 1: validate the file and hand back a short-lived upload link to R2. */
+router.post(
+  '/documents/upload-url',
+  requireAuth,
+  documentUploadLimiter,
+  asyncHandler(async (req, res) => {
+    if (!storageConfigured()) {
+      return res.status(503).json({ error: 'Document upload is not available right now. Please try again later.' });
+    }
+    const result = uploadUrlSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: 'Invalid file details' });
+    const { contentType, size } = result.data;
+    if (!ALLOWED_DOC_TYPES[contentType]) {
+      return res.status(400).json({ error: 'Only JPG, PNG, WebP or PDF files are accepted.' });
+    }
+    if (size > MAX_DOC_BYTES) {
+      return res.status(400).json({ error: 'File is too large. The limit is 8 MB.' });
+    }
+
+    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
+    if (!profile) {
+      return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
+    }
+    if ((await prisma.vendorDocument.count({ where: { vendorId: profile.id } })) >= 20) {
+      return res.status(400).json({ error: 'Document limit reached. Contact support if you need to add more.' });
+    }
+
+    const key = newDocumentKey(profile.id, contentType);
+    const uploadUrl = await presignUpload(key, contentType, size);
+    return res.json({ key, uploadUrl, contentType, expiresInSeconds: 300 });
+  })
+);
+
+/** Step 2: after the upload, record the document. Only keys we issued are accepted. */
 const documentSchema = z.object({
   documents: z
     .array(
       z.object({
-        url: z.string().min(1),
-        fileName: z.string().min(1)
+        key: z.string().min(1),
+        fileName: z.string().trim().min(1).max(120)
       })
     )
     .min(1)
+    .max(5)
 });
 
 router.post(
@@ -204,7 +295,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = documentSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: 'Please update the app to upload documents.' });
     }
 
     const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
@@ -212,8 +303,19 @@ router.post(
       return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
     }
 
+    const prefix = `vendor-docs/${profile.id}/`;
+    for (const d of result.data.documents) {
+      if (!isStorageKey(d.key) || !d.key.startsWith(prefix) || d.key.includes('..')) {
+        return res.status(400).json({ error: 'Invalid document reference.' });
+      }
+      if (!(await objectExists(d.key))) {
+        return res.status(400).json({ error: 'Upload was not completed. Please try again.' });
+      }
+    }
+
     const count = await prisma.vendorDocument.createMany({
-      data: result.data.documents.map((d) => ({ vendorId: profile.id, ...d }))
+      data: result.data.documents.map((d) => ({ vendorId: profile.id, url: d.key, fileName: d.fileName })),
+      skipDuplicates: true
     });
 
     return res.status(201).json({ count: count.count });
@@ -229,8 +331,9 @@ router.get(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
+    const branchId = typeof req.query.branchId === 'string' ? req.query.branchId : undefined;
     const listings = await prisma.gasListing.findMany({
-      where: { vendorId: profile.id },
+      where: { vendorId: profile.id, ...(branchId ? { branchId } : {}) },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -256,8 +359,18 @@ router.post(
       return res.status(403).json({ error: 'Vendor account must be approved to create listings' });
     }
 
+    // Omitted branchId means the main branch. A named one must be this
+    // vendor's own and still open.
+    const { branchId: requestedBranchId, ...listingData } = result.data;
+    const branch = requestedBranchId
+      ? await findOwnBranch(profile.id, requestedBranchId)
+      : await findMainBranch(profile.id);
+    if (!branch || !isSellable(branch)) {
+      return res.status(400).json({ error: 'Choose one of your open branches' });
+    }
+
     const listing = await prisma.gasListing.create({
-      data: { ...result.data, vendorId: profile.id }
+      data: { ...listingData, vendorId: profile.id, branchId: branch.id }
     });
 
     return res.status(201).json({ listing });
@@ -283,6 +396,14 @@ router.patch(
     const exists = await prisma.gasListing.findFirst({ where: { id, vendorId: profile.id } });
     if (!exists) {
       return res.status(404).json({ error: 'Listing not found' });
+    }
+
+    // Moving a listing to another branch needs the same ownership check.
+    if (result.data.branchId) {
+      const branch = await findOwnBranch(profile.id, result.data.branchId);
+      if (!branch || !isSellable(branch)) {
+        return res.status(400).json({ error: 'Choose one of your open branches' });
+      }
     }
 
     const listing = await prisma.gasListing.update({ where: { id }, data: result.data });
@@ -394,8 +515,8 @@ router.patch(
     }
 
     if (riderId) {
-      const rider = await prisma.riderProfile.findUnique({ where: { id: riderId } });
-      if (!rider || rider.status !== 'APPROVED') {
+      const rider = await prisma.riderProfile.findFirst({ where: { id: riderId, ...ASSIGNABLE_RIDER } });
+      if (!rider) {
         return res.status(400).json({ error: 'Rider not found or not approved' });
       }
     }
@@ -420,8 +541,14 @@ router.get(
     }
 
     const riders = await prisma.riderProfile.findMany({
-      where: { status: 'APPROVED' },
-      select: { id: true, phone: true, vehicleType: true, user: { select: { name: true } } },
+      where: ASSIGNABLE_RIDER,
+      select: {
+        id: true,
+        phone: true,
+        vehicleType: true,
+        user: { select: { name: true } },
+        company: { select: { companyName: true } }
+      },
       orderBy: { createdAt: 'desc' }
     });
 

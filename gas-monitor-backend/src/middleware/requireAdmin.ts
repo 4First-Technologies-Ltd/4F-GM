@@ -22,6 +22,9 @@ const ROLE_RANK = {
   SUPER_ADMIN: 2
 } as const;
 
+/** Every named admin needs a second factor unless explicitly switched off. */
+export const mfaRequired = () => process.env.ADMIN_MFA_REQUIRED !== 'false';
+
 export function getAdminSession(req: Request): AdminSessionPayload | null {
   const token = req.cookies?.[ADMIN_SESSION_COOKIE];
   if (!token) return null;
@@ -41,19 +44,32 @@ export function getAdminSession(req: Request): AdminSessionPayload | null {
  */
 export async function resolveAdminSession(
   req: Request
-): Promise<{ session: AdminSessionPayload; mustChangePassword: boolean } | null> {
+): Promise<{
+  session: AdminSessionPayload;
+  mustChangePassword: boolean;
+  mfaEnabled: boolean;
+  /** Policy says this admin needs a second factor and has not set one up yet. */
+  mfaEnrollRequired: boolean;
+} | null> {
   const session = getAdminSession(req);
   if (!session) return null;
-  if (session.adminId === 'root') return { session, mustChangePassword: false };
+  if (session.adminId === 'root') {
+    return { session, mustChangePassword: false, mfaEnabled: false, mfaEnrollRequired: false };
+  }
 
   const admin = await prisma.adminUser.findUnique({
     where: { id: session.adminId },
-    select: { isActive: true, tokenVersion: true, mustChangePassword: true, role: true }
+    select: { isActive: true, tokenVersion: true, mustChangePassword: true, role: true, mfaEnabled: true }
   });
   if (!admin || !admin.isActive || admin.tokenVersion !== (session.tv ?? 0)) return null;
 
   // Role comes from the database, so a role change is also immediate.
-  return { session: { ...session, role: admin.role }, mustChangePassword: admin.mustChangePassword };
+  return {
+    session: { ...session, role: admin.role },
+    mustChangePassword: admin.mustChangePassword,
+    mfaEnabled: admin.mfaEnabled,
+    mfaEnrollRequired: mfaRequired() && !admin.mfaEnabled
+  };
 }
 
 function guard(minRole: keyof typeof ROLE_RANK, message: string) {
@@ -67,6 +83,11 @@ function guard(minRole: keyof typeof ROLE_RANK, message: string) {
         return res
           .status(403)
           .json({ error: 'You must change your password before continuing', code: 'PASSWORD_CHANGE_REQUIRED' });
+      }
+      if (resolved.mfaEnrollRequired) {
+        return res
+          .status(403)
+          .json({ error: 'Set up two-factor authentication to continue', code: 'MFA_ENROLLMENT_REQUIRED' });
       }
       if ((ROLE_RANK[resolved.session.role] ?? -1) < ROLE_RANK[minRole]) {
         return res.status(403).json({ error: message });

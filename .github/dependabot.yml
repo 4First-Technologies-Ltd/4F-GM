@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /gas-monitor-backend
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: /gas-monitor
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: /gas-monitor-admin
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: /gas-monitor-web-v2
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

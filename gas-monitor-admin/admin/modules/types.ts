@@ -13,6 +13,50 @@ export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER';
 export type AdminRoleValue = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
 
+export interface BranchRow {
+  id: string;
+  name: string;
+  address: string;
+  state: string | null;
+  city: string | null;
+  phone: string;
+  isMain: boolean;
+  isActive: boolean;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+  /** Revoked access is omitted. Present on detail reads only. */
+  staff?: BranchStaffBrief[];
+}
+
+export interface BranchStaffBrief {
+  id: string;
+  email: string;
+  status: 'INVITED' | 'ACTIVE' | 'REVOKED';
+  expiresAt: string;
+  user?: { name: string } | null;
+}
+
+export interface BranchStaffRow {
+  id: string;
+  email: string;
+  status: 'INVITED' | 'ACTIVE' | 'REVOKED';
+  /** `INVITED` past its expiry reads as `EXPIRED`. */
+  displayStatus: 'INVITED' | 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; name: string; isSuspended: boolean; emailVerified: boolean } | null;
+  branch: {
+    id: string;
+    name: string;
+    city: string | null;
+    state: string | null;
+    isActive: boolean;
+    suspendedAt: string | null;
+    vendor: { id: string; businessName: string };
+  };
+}
+
 export interface VendorRow {
   id: string;
   businessName: string;
@@ -30,6 +74,8 @@ export interface VendorRow {
   documents: { id: string; url: string; fileName: string }[];
   /** Newest first, capped server-side. Present on detail reads only. */
   planChanges?: VendorPlanChangeRow[];
+  /** Main branch first. Present on detail reads only. */
+  branches?: BranchRow[];
   _count: { listings: number; orders: number };
 }
 
@@ -60,6 +106,31 @@ export interface OrderRow {
   rider: { id: string; phone: string; user: { name: string } } | null;
 }
 
+export type CompanyStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface CompanyRow {
+  id: string;
+  companyName: string;
+  address: string;
+  state: string | null;
+  city: string | null;
+  phone: string;
+  status: CompanyStatus;
+  createdAt: string;
+  user: { id: string; name: string; email: string; createdAt: string };
+  /** Present on detail reads only. */
+  riders?: {
+    id: string;
+    phone: string;
+    vehicleType: string | null;
+    plateNumber: string | null;
+    status: RiderStatus;
+    user: { name: string; email: string };
+  }[];
+  invites?: { id: string; email: string; expiresAt: string }[];
+  _count: { riders: number };
+}
+
 export interface RiderRow {
   id: string;
   phone: string;
@@ -70,6 +141,8 @@ export interface RiderRow {
   status: RiderStatus;
   createdAt: string;
   user: { id: string; name: string; email: string; createdAt: string };
+  /** The fleet this rider rides for, if any. */
+  company?: { id: string; companyName: string; status: CompanyStatus } | null;
   /** Present on detail reads only. */
   orders?: {
     id: string;
@@ -143,6 +216,7 @@ export interface UserDetail {
     planLockedUntil: string | null;
     createdAt: string;
     documents: { id: string; url: string; fileName: string; createdAt: string }[];
+    branches: BranchRow[];
     planChanges: VendorPlanChangeRow[];
     _count: { listings: number; orders: number; documents: number };
   } | null;
@@ -205,6 +279,7 @@ export interface AdminUserRow {
   email: string;
   role: AdminRoleValue;
   isActive: boolean;
+  mfaEnabled: boolean;
   createdAt: string;
 }
 
@@ -644,4 +719,21 @@ export interface Briefing extends BriefingDay {
   flags: OpsFlag[];
   createdAt: string;
   updatedAt: string;
+}
+
+/* ------------------------------------------------------------- waitlist --- */
+
+export interface WaitlistRow {
+  id: string;
+  name: string | null;
+  email: string;
+  city: string | null;
+  created_at: string;
+}
+
+export interface WaitlistSummary {
+  total: number;
+  last7d: number;
+  cityCount: number;
+  cities: { city: string; signups: number }[];
 }

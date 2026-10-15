@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { vendorApi, GasListing, GasType } from '@/lib/api';
+import { vendorApi, Branch, GasListing, GasType } from '@/lib/api';
 import { useDrawer } from './_layout';
 
 const C = {
@@ -40,6 +40,8 @@ const GAS_TYPES: { id: GasType; label: string; color: string }[] = [
 const FIXED_SIZES = ['6 kg', '12.5 kg', '25 kg', '50 kg'];
 
 interface ListingForm {
+  /** Empty means "the main branch" — the server picks it. */
+  branchId: string;
   gasType: GasType;
   customName: string;
   pricePerKg: string;
@@ -49,18 +51,21 @@ interface ListingForm {
 }
 
 function emptyForm(): ListingForm {
-  return { gasType: 'COOKING', customName: '', pricePerKg: '', cylinderSizes: [], otherSizes: '', inStock: true };
+  return { branchId: '', gasType: 'COOKING', customName: '', pricePerKg: '', cylinderSizes: [], otherSizes: '', inStock: true };
 }
 
 // ── Listing card ──────────────────────────────────────────────────────────────
 
 function ListingCard({
   listing,
+  branchName,
   onEdit,
   onDelete,
   onToggleStock,
 }: {
   listing: GasListing;
+  /** Shown only when the vendor has more than one branch. */
+  branchName?: string;
   onEdit: () => void;
   onDelete: () => void;
   onToggleStock: () => void;
@@ -75,6 +80,7 @@ function ListingCard({
         <View style={[lc.typeDot, { backgroundColor: color + '18', borderColor: color + '44' }]}>
           <Text style={[lc.typeText, { color }]}>{label}</Text>
         </View>
+        {!!branchName && <Text style={{ color: C.muted, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>{branchName}</Text>}
         <View style={[lc.stockBadge, { backgroundColor: listing.inStock ? C.accentLight : '#FFF0F0' }]}>
           <Text style={[lc.stockText, { color: listing.inStock ? C.accent : C.red }]}>
             {listing.inStock ? 'In Stock' : 'Out of Stock'}
@@ -119,12 +125,14 @@ function ListingCard({
 
 function ListingFormView({
   initial,
+  branches,
   onSubmit,
   onCancel,
   loading,
   apiErr,
 }: {
   initial: ListingForm;
+  branches: Branch[];
   onSubmit: (form: ListingForm) => void;
   onCancel: () => void;
   loading: boolean;
@@ -158,6 +166,27 @@ function ListingFormView({
 
   return (
     <ScrollView contentContainerStyle={f.container} keyboardShouldPersistTaps="handled">
+      {branches.length > 1 && (
+        <>
+          <Text style={f.sectionLabel}>Branch</Text>
+          <View style={f.typeGrid}>
+            {branches.map((b) => {
+              const selected = (form.branchId || branches.find((x) => x.isMain)?.id) === b.id;
+              return (
+                <TouchableOpacity
+                  key={b.id}
+                  style={[f.typeBtn, selected && { borderColor: C.accent, backgroundColor: C.accentLight }]}
+                  onPress={() => set('branchId', b.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[f.typeBtnText, selected && { color: C.accent, fontWeight: '700' }]}>{b.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </>
+      )}
+
       <Text style={f.sectionLabel}>Gas Type</Text>
       <View style={f.typeGrid}>
         {GAS_TYPES.map((g) => (
@@ -271,6 +300,8 @@ function ListingFormView({
 export default function ListingsScreen() {
   const { openDrawer } = useDrawer();
   const [listings, setListings] = useState<GasListing[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string>('all');
   const [view, setView] = useState<'list' | 'form'>('list');
   const [editTarget, setEditTarget] = useState<GasListing | null>(null);
   const [formLoading, setFormLoading] = useState(false);
@@ -278,8 +309,9 @@ export default function ListingsScreen() {
 
   async function loadListings() {
     try {
-      const data = await vendorApi.getListings();
+      const [data, b] = await Promise.all([vendorApi.getListings(), vendorApi.getBranches()]);
       setListings(data);
+      setBranches(b.branches.filter((x) => x.isActive && !x.suspendedAt));
     } catch {
       // empty state handles this
     }
@@ -292,6 +324,7 @@ export default function ListingsScreen() {
     setFormApiErr('');
     try {
       const payload = {
+        ...(form.branchId ? { branchId: form.branchId } : {}),
         gasType: form.gasType,
         customName: form.gasType === 'OTHER' ? form.customName : undefined,
         pricePerKg: Number(form.pricePerKg),
@@ -358,6 +391,7 @@ export default function ListingsScreen() {
 
   const initialForm: ListingForm = editTarget
     ? {
+        branchId: editTarget.branchId ?? '',
         gasType: editTarget.gasType,
         customName: editTarget.customName ?? '',
         pricePerKg: String(editTarget.pricePerKg),
@@ -393,6 +427,7 @@ export default function ListingsScreen() {
         <ListingFormView
           key={editTarget?.id ?? 'new'}
           initial={initialForm}
+          branches={branches}
           onSubmit={handleSubmit}
           onCancel={() => { setView('list'); setEditTarget(null); }}
           loading={formLoading}
@@ -401,6 +436,26 @@ export default function ListingsScreen() {
       ) : (
         <>
           <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
+            {branches.length > 1 && listings.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                {[{ id: 'all', name: 'All branches' }, ...branches].map((b) => {
+                  const on = branchFilter === b.id;
+                  return (
+                    <TouchableOpacity
+                      key={b.id}
+                      onPress={() => setBranchFilter(b.id)}
+                      activeOpacity={0.8}
+                      style={{
+                        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1,
+                        borderColor: on ? C.accent : C.border, backgroundColor: on ? C.accentLight : C.card,
+                      }}
+                    >
+                      <Text style={{ color: on ? C.accent : C.muted, fontSize: 13, fontWeight: '700' }}>{b.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
             {listings.length === 0 ? (
               <View style={s.emptyState}>
                 <View style={s.emptyIconCircle}>
@@ -413,10 +468,13 @@ export default function ListingsScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              listings.map((listing) => (
+              listings
+                .filter((l) => branchFilter === 'all' || l.branchId === branchFilter)
+                .map((listing) => (
                 <ListingCard
                   key={listing.id}
                   listing={listing}
+                  branchName={branches.length > 1 ? branches.find((b) => b.id === listing.branchId)?.name : undefined}
                   onEdit={() => openEdit(listing)}
                   onDelete={() => handleDelete(listing.id)}
                   onToggleStock={() => handleToggleStock(listing)}

@@ -22,5 +22,26 @@ export function signAdminSession(payload: Omit<AdminSessionPayload, 'admin'>): s
 }
 
 export function verifyAdminSession(token: string): AdminSessionPayload {
-  return jwt.verify(token, ADMIN_SECRET) as AdminSessionPayload;
+  const payload = jwt.verify(token, ADMIN_SECRET) as AdminSessionPayload & { mfa?: boolean };
+  // A password-only MFA challenge is signed with the same key; it must never
+  // be accepted as a session.
+  if (payload.admin !== true || payload.mfa) throw new Error('Not an admin session');
+  return payload;
+}
+
+/** Proof that the password step passed; exchanged for a session after the code. */
+export interface MfaChallengePayload {
+  mfa: true;
+  adminId: string;
+  tv?: number;
+}
+
+export function signMfaChallenge(payload: Omit<MfaChallengePayload, 'mfa'>): string {
+  return jwt.sign({ mfa: true, ...payload }, ADMIN_SECRET, { expiresIn: '5m' });
+}
+
+export function verifyMfaChallenge(token: string): MfaChallengePayload {
+  const payload = jwt.verify(token, ADMIN_SECRET) as MfaChallengePayload & { admin?: boolean };
+  if (payload.mfa !== true || payload.admin) throw new Error('Not an MFA challenge');
+  return payload;
 }

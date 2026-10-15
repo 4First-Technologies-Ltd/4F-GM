@@ -2,6 +2,7 @@ import {
   IconBike,
   IconBug,
   IconChecklist,
+  IconClipboardList,
   IconActivity,
   IconBriefing,
   IconTerminal,
@@ -69,6 +70,13 @@ export const NAVIGATION: NavSection[] = [
         permission: 'riders.read',
         badge: { key: 'pendingRiders', tone: 'warning' }
       },
+      { label: 'Logistics companies', route: '/dashboard/companies', icon: IconPackage, permission: 'companies.read' },
+      {
+        label: 'Branch staff',
+        route: '/dashboard/branch-staff',
+        icon: IconUsers,
+        permission: 'branchStaff.read'
+      },
       { label: 'Customers', route: '/dashboard/customers', icon: IconUserCircle, permission: 'customers.read' },
       { label: 'All users', route: '/dashboard/users', icon: IconUsers, permission: 'users.read' }
     ]
@@ -112,7 +120,8 @@ export const NAVIGATION: NavSection[] = [
         badge: { key: 'followUps', tone: 'warning' }
       },
       { label: 'Tasks', route: '/dashboard/tasks', icon: IconChecklist, permission: 'crm.read' },
-      { label: 'Marketing', route: '/dashboard/marketing', icon: IconMegaphone, permission: 'marketing.read' }
+      { label: 'Marketing', route: '/dashboard/marketing', icon: IconMegaphone, permission: 'marketing.read' },
+      { label: 'Waitlist', route: '/dashboard/waitlist', icon: IconClipboardList, permission: 'waitlist.read' }
     ]
   },
   {

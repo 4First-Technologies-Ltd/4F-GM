@@ -7,6 +7,7 @@ import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 import { writeAuditLog } from '../../lib/audit';
+import { withViewUrls } from '../../lib/storage';
 
 const router = Router();
 
@@ -157,6 +158,16 @@ router.get(
             planLockedUntil: true,
             createdAt: true,
             documents: { select: { id: true, url: true, fileName: true, createdAt: true } },
+            branches: {
+              orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+              select: { id: true, name: true, address: true, state: true, city: true, phone: true, isMain: true, isActive: true, suspendedAt: true, suspendedReason: true,
+                staff: {
+              where: { status: { not: 'REVOKED' } },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true, email: true, status: true, expiresAt: true, user: { select: { name: true } } }
+            }
+              }
+            },
             planChanges: {
               orderBy: { createdAt: 'desc' },
               take: 20,
@@ -226,7 +237,11 @@ router.get(
       _sum: { totalAmount: true }
     });
 
-    return res.json({ user: { ...user, totalSpend: spend._sum.totalAmount ?? 0 } });
+    const vendorProfile = user.vendorProfile
+      ? { ...user.vendorProfile, documents: await withViewUrls(user.vendorProfile.documents) }
+      : user.vendorProfile;
+
+    return res.json({ user: { ...user, vendorProfile, totalSpend: spend._sum.totalAmount ?? 0 } });
   })
 );
 

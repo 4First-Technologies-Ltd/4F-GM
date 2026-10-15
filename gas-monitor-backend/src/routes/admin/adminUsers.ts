@@ -12,7 +12,7 @@ const router = Router();
 
 const SORTABLE = ['createdAt', 'name', 'email', 'role'] as const;
 
-const SELECT = { id: true, name: true, email: true, role: true, isActive: true, createdAt: true } as const;
+const SELECT = { id: true, name: true, email: true, role: true, isActive: true, mfaEnabled: true, createdAt: true } as const;
 
 // Operations may view the list; every write below stays super admin only.
 router.get(
@@ -227,6 +227,47 @@ router.delete(
       resourceId: id,
       summary: `Deleted ${existing.role} admin ${existing.name} (${existing.email})`,
       metadata: { email: existing.email, role: existing.role }
+    });
+
+    return res.json({ ok: true });
+  })
+);
+
+/**
+ * Lost phone and no recovery codes. Clears the second factor and signs the
+ * admin out everywhere; they enrol again on next sign-in. Super admin only, and
+ * never on yourself (a stolen session must not be able to strip its own MFA).
+ */
+router.post(
+  '/:id/mfa-reset',
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const existing = await prisma.adminUser.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Admin not found' });
+    }
+    if (req.admin?.adminId === id) {
+      return res.status(409).json({ error: 'Ask another super admin to reset your two-factor authentication' });
+    }
+
+    await prisma.adminUser.update({
+      where: { id },
+      data: {
+        mfaEnabled: false,
+        mfaSecret: null,
+        mfaLastStep: null,
+        mfaRecoveryHashes: [],
+        tokenVersion: { increment: 1 }
+      }
+    });
+
+    await writeAuditLog(req, {
+      action: 'ADMIN_MFA_RESET',
+      resource: 'admin',
+      resourceId: id,
+      summary: `Reset two-factor authentication for ${existing.name} (${existing.email})`,
+      metadata: { email: existing.email }
     });
 
     return res.json({ ok: true });

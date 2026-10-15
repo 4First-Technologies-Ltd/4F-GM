@@ -12,6 +12,8 @@ enum Role {
   CONSUMER
   VENDOR
   RIDER
+  BRANCH_MANAGER
+  LOGISTICS_COMPANY
 }
 
 enum VendorStatus {
@@ -92,6 +94,8 @@ model User {
   refreshTokens     RefreshToken[]
   vendorProfile     VendorProfile?
   riderProfile      RiderProfile?
+  branchStaff       BranchStaff[]
+  logisticsCompany  LogisticsCompany?
   orders            Order[]           @relation("ConsumerOrders")
   cylinderProfiles  CylinderProfile[]
   addresses         Address[]
@@ -162,6 +166,7 @@ model VendorProfile {
   bankAccount     VendorBankAccount?
   earnings        Earning[]
   payouts         Payout[]
+  branches        Branch[]
 
   @@map("vendor_profiles")
 }
@@ -218,11 +223,131 @@ model RiderProfile {
   lat         Float?
   lng         Float?
   status      RiderStatus @default(PENDING)
+  /// The fleet this rider rides for, if any. A rider in a fleet is only
+  /// assignable while the company is APPROVED (see lib/fleet.ts).
+  companyId   String?
+  company     LogisticsCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  /// True when joining the fleet is what approved this rider. Leaving the fleet
+  /// then puts them back to PENDING instead of leaving an unvetted rider live.
+  approvedViaCompany Boolean @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orders      Order[]     @relation("RiderOrders")
 
+  @@index([companyId])
   @@map("rider_profiles")
+}
+
+enum CompanyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A logistics company that runs several riders. Approved once by an admin;
+/// riders it invites are approved by joining (RiderProfile.approvedViaCompany).
+/// Like a vendor, the company account is separate from its riders' accounts.
+model LogisticsCompany {
+  id          String        @id @default(uuid())
+  userId      String        @unique
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  address     String
+  state       String?
+  city        String?
+  phone       String
+  status      CompanyStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  riders      RiderProfile[]
+  invites     FleetInvite[]
+
+  @@map("logistics_companies")
+}
+
+/// An email-keyed invitation to join a fleet, claimed when a rider with that
+/// verified email has a profile (lib/fleet.ts). Revoked rows are kept as history.
+model FleetInvite {
+  id        String           @id @default(uuid())
+  companyId String
+  company   LogisticsCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Lower-cased invite target.
+  email     String
+  userId    String?
+  status    StaffStatus      @default(INVITED)
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([companyId, email])
+  @@index([userId])
+  @@map("fleet_invites")
+}
+
+/// A physical location a vendor sells from. The vendor stays the business,
+/// KYC, plan and payout entity; a branch owns address, listings and orders.
+/// Never hard-deleted (orders reference it): close it with `isActive=false`.
+/// Exactly one branch per vendor has `isMain` (partial unique index in the
+/// migration, which Prisma cannot express).
+model Branch {
+  id           String        @id @default(uuid())
+  vendorId     String
+  vendor       VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name         String
+  address      String
+  /// Nullable because legacy vendors may have no state/city (see VendorProfile).
+  state        String?
+  city         String?
+  lat          Float?
+  lng          Float?
+  phone        String
+  isMain       Boolean       @default(false)
+  isActive     Boolean       @default(true)
+  /// Set by an admin: the vendor cannot sell from, reopen or promote the branch
+  /// until an operator restores it. Distinct from `isActive`, which the vendor controls.
+  suspendedAt     DateTime?
+  suspendedReason String?
+  openingHours Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  listings     GasListing[]
+  orders       Order[]
+  staff        BranchStaff[]
+
+  @@index([vendorId])
+  @@index([state, city])
+  @@map("branches")
+}
+
+/// A branch manager's access to one branch. Created as an invite by the vendor
+/// (INVITED, keyed by email) and claimed when a BRANCH_MANAGER account with that
+/// verified email signs in — email verification is the proof of ownership, so
+/// there is no invite token. Managers run orders and stock for their branch
+/// only; they never see earnings, documents, plan or other branches.
+/// Revoked rows are kept as history and can be re-invited.
+model BranchStaff {
+  id        String      @id @default(uuid())
+  branchId  String
+  branch    Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  /// Lower-cased invite target.
+  email     String
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    StaffStatus @default(INVITED)
+  /// Unclaimed invites stop working after this; ignored once ACTIVE.
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([branchId, email])
+  @@index([userId])
+  @@map("branch_staff")
+}
+
+enum StaffStatus {
+  INVITED
+  ACTIVE
+  REVOKED
 }
 
 model GasListing {
@@ -235,10 +360,15 @@ model GasListing {
   cylinderSizes String[]
   otherSizes    String?
   inStock       Boolean       @default(true)
+  /// Which branch sells this listing. Nullable only until every writer sets it;
+  /// the migration backfills existing rows to the vendor's main branch.
+  branchId      String?
+  branch        Branch?       @relation(fields: [branchId], references: [id])
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   orders        Order[]
 
+  @@index([branchId])
   @@map("gas_listings")
 }
 
@@ -263,6 +393,9 @@ model Order {
   consumer        User           @relation("ConsumerOrders", fields: [consumerId], references: [id])
   vendorId        String?
   vendor          VendorProfile? @relation("VendorOrders", fields: [vendorId], references: [id])
+  /// Fulfilling branch. Derived server-side from the listing, never from the client.
+  branchId        String?
+  branch          Branch?        @relation(fields: [branchId], references: [id])
   listingId       String?
   listing         GasListing?    @relation(fields: [listingId], references: [id])
   riderId         String?
@@ -283,6 +416,7 @@ model Order {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  @@index([branchId])
   @@map("orders")
 }
 
@@ -297,6 +431,14 @@ model AdminUser {
   // issued with, so bumping it signs out every other session immediately.
   tokenVersion       Int       @default(0)
   mustChangePassword Boolean   @default(false)
+  // TOTP second factor. The secret is AES-GCM encrypted (lib/totp.ts); it is
+  // set at setup and only trusted once mfaEnabled flips after a valid code.
+  mfaSecret          String?
+  mfaEnabled         Boolean   @default(false)
+  // Last accepted 30 s time step, so a code cannot be replayed.
+  mfaLastStep        Int?
+  // SHA-256 of unused single-use recovery codes.
+  mfaRecoveryHashes  String[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -343,6 +485,9 @@ enum AuditAction {
   ADMIN_LOGIN
   ADMIN_LOGIN_FAILED
   ADMIN_PASSWORD_CHANGED
+  ADMIN_MFA_ENABLED
+  ADMIN_MFA_RESET
+  ADMIN_MFA_FAILED
   EARNINGS_SYNCED
   PAYOUT_INITIATED
   PAYOUT_RETRIED
@@ -366,6 +511,11 @@ enum AuditAction {
   CAMPAIGN_CANCELLED
   SUPPRESSION_CHANGED
   BRIEFING_GENERATED
+  BRANCH_SUSPENDED
+  BRANCH_RESTORED
+  COMPANY_APPROVED
+  COMPANY_REJECTED
+  COMPANY_STATUS_RESET
 }
 
 // Append-only record of every mutating admin action.
