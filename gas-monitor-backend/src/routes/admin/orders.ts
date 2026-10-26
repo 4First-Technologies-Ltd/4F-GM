@@ -98,7 +98,7 @@ router.patch(
     const { id } = req.params;
     const result = assignRiderSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const order = await prisma.order.findUnique({ where: { id } });

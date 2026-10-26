@@ -125,7 +125,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = z.object({ ...leadFields, type: leadFields.type.default('VENDOR'), source: leadFields.source.default('OUTREACH') }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const d = parsed.data;
     const me = actor(req);
 
@@ -170,7 +170,7 @@ router.patch(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = leadPatchSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const d = parsed.data;
 
     const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
@@ -268,7 +268,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = activitySchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const lead = await prisma.lead.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
@@ -328,7 +328,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = taskCreateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const d = parsed.data;
     const me = actor(req);
 
@@ -374,7 +374,7 @@ router.patch(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = taskPatchSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const d = parsed.data;
     const task = await prisma.crmTask.findUnique({ where: { id: req.params.id } });
     if (!task) return res.status(404).json({ error: 'Task not found' });
@@ -459,7 +459,7 @@ router.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = noteSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const user = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true, name: true } });
     if (!user) return res.status(404).json({ error: 'Account not found' });
     const me = actor(req);
@@ -501,7 +501,7 @@ router.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = tagSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const user = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true, name: true } });
     if (!user) return res.status(404).json({ error: 'Account not found' });
 

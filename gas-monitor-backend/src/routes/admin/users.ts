@@ -83,7 +83,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = createSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const email = result.data.email.toLowerCase();
@@ -261,7 +261,7 @@ router.patch(
     const { id } = req.params;
     const result = patchSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const existing = await prisma.user.findUnique({ where: { id } });

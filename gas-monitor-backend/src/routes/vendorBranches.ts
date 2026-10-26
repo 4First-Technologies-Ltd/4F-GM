@@ -44,7 +44,7 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const result = branchSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const vendor = await vendorOf(req.user!.sub);
     if (!vendor) return res.status(404).json({ error: 'Vendor profile not found' });
@@ -93,7 +93,7 @@ router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
     const result = branchPatchSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const vendor = await vendorOf(req.user!.sub);
     if (!vendor) return res.status(404).json({ error: 'Vendor profile not found' });
@@ -226,7 +226,7 @@ router.post(
   inviteSendLimiter,
   asyncHandler(async (req, res) => {
     const result = inviteSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const vendor = await vendorOf(req.user!.sub);
     if (!vendor) return res.status(404).json({ error: 'Vendor profile not found' });

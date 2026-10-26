@@ -58,7 +58,7 @@ router.get(
 const acceptSchema = z.object({
   name: z.string().trim().min(1, 'Your name is required').max(100),
   password: z.string().superRefine(validatePassword),
-  acceptedTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the Terms and Privacy Policy' }) }),
+  acceptedTerms: z.literal(true, { error: 'You must accept the Terms and Privacy Policy' }),
   legalVersion: z.string().refine((v) => v === LEGAL_VERSION, {
     message: 'The Terms have been updated. Please reload and review them again.'
   })
@@ -97,7 +97,7 @@ router.post(
     }
 
     const result = acceptSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
     const { name, password } = result.data;
 
     const hashed = await bcrypt.hash(password, 10);

@@ -9,4 +9,5 @@ export const createCylinderSchema = z.object({
   imageKey: z.enum(IMAGE_KEYS).default('12.5kg')
 });
 
-export const updateCylinderSchema = createCylinderSchema.partial();
+// Redeclared without the default: Zod 4 would otherwise reset imageKey on every partial update.
+export const updateCylinderSchema = createCylinderSchema.partial().extend({ imageKey: z.enum(IMAGE_KEYS).optional() });

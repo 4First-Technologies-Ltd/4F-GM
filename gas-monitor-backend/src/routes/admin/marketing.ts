@@ -69,7 +69,7 @@ router.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = segmentFilterSchema.safeParse(req.body?.filter ?? {});
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const audience = await resolveAudience(parsed.data);
     return res.json({ count: audience.length, sample: audience.slice(0, 5).map((a) => ({ name: a.name, email: a.email })) });
   })
@@ -86,7 +86,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = segmentSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const { filter, description, name } = parsed.data;
     const segment = await prisma.segment.create({
       data: { name, description: description || null, filter: filter as Prisma.InputJsonValue, createdByName: authorName(req) }
@@ -101,7 +101,7 @@ router.patch(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = segmentSchema.partial().safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const existing = await prisma.segment.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Segment not found' });
     const { filter, description, name } = parsed.data;
@@ -158,7 +158,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = z.object({ email: z.string().trim().toLowerCase().email(), reason: z.string().trim().max(200).optional() }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const row = await prisma.marketingSuppression.upsert({
       where: { email: parsed.data.email },
       create: { email: parsed.data.email, reason: parsed.data.reason || `Added by ${authorName(req)}` },
@@ -286,7 +286,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = campaignSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     if (!(await checkSegment(parsed.data.segmentId))) return res.status(400).json({ error: 'Segment not found' });
     const newsletter = parsed.data.newsletter ?? false;
     const campaign = await prisma.campaign.create({
@@ -302,7 +302,7 @@ router.patch(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = campaignSchema.partial().safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const existing = await prisma.campaign.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Campaign not found' });
     if (existing.status !== 'DRAFT') return res.status(409).json({ error: 'Only drafts can be edited' });

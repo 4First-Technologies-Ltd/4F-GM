@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { VendorPlan } from '@prisma/client';
-import { listingSchema } from '../lib/vendorSchemas';
+import { listingPatchSchema, listingSchema } from '../lib/vendorSchemas';
 import { recordEarningSafe } from '../lib/earnings';
 import { ASSIGNABLE_RIDER } from '../lib/fleet';
 import { branchSchema, findMainBranch, findOwnBranch, isSellable } from '../lib/branches';
@@ -79,7 +79,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = profileSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { plan, branches: extraBranches = [], ...details } = result.data;
@@ -149,7 +149,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = patchSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const existing = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
@@ -168,9 +168,7 @@ router.patch(
 
 const planSchema = z.object({
   plan: z
-    .nativeEnum(VendorPlan, {
-      errorMap: () => ({ message: 'Choose a partner plan' })
-    })
+    .nativeEnum(VendorPlan, { error: 'Choose a partner plan' })
     .refine(isOfferedPlan, { message: 'That partner plan is not available' })
 });
 
@@ -186,7 +184,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = planSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const existing = await prisma.vendorProfile.findUnique({
@@ -347,7 +345,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = listingSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
@@ -381,9 +379,9 @@ router.patch(
   '/listings/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = listingSchema.partial().safeParse(req.body);
+    const result = listingPatchSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { id } = req.params;
@@ -465,7 +463,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = orderStatusSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { id } = req.params;
@@ -498,7 +496,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = assignRiderSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { id } = req.params;

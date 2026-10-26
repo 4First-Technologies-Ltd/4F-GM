@@ -10,3 +10,9 @@ export const listingSchema = z.object({
   otherSizes: z.string().optional(),
   inStock: z.boolean().optional().default(true)
 });
+
+/**
+ * Partial update. Zod 4 applies `.default()` inside `.partial()`, which would reset `inStock` to true
+ * whenever a vendor edits anything else, so the patch schema redeclares it without the default.
+ */
+export const listingPatchSchema = listingSchema.partial().extend({ inStock: z.boolean().optional() });

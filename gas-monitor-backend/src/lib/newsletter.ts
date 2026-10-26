@@ -1,12 +1,18 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from './prisma';
-import { EMAIL_FROM, getClient } from './email';
+import { getClient } from './email';
 
 /**
  * Newsletter sign-ups. Double opt-in: a sign-up is PENDING until the person opens the
  * link we email them, so nobody can subscribe an address they do not own. Issues
  * themselves are `Campaign` rows with `newsletter = true` (see marketing.ts).
  */
+
+/** Newsletter mail has its own sender; account and order mail keep using EMAIL_FROM. */
+export const NEWSLETTER_FROM = process.env.NEWSLETTER_FROM ?? '4FG Smart Gas Monitor <newsletters@notifications.4fgmonitor.com>';
+
+/** Replies land in a real inbox; the sending address has none. */
+export const NEWSLETTER_REPLY_TO = process.env.NEWSLETTER_REPLY_TO ?? '4fgmonitor@gmail.com';
 
 const CONFIRM_TTL_MS = 7 * 86_400_000;
 const RESEND_GAP_MS = 2 * 60_000;
@@ -73,7 +79,8 @@ async function sendConfirmationEmail(to: string, link: string): Promise<void> {
     return;
   }
   const { error } = await resend.emails.send({
-    from: EMAIL_FROM,
+    from: NEWSLETTER_FROM,
+    replyTo: NEWSLETTER_REPLY_TO,
     to,
     subject: 'Confirm your subscription — 4FG Smart Gas Monitor',
     html: `
