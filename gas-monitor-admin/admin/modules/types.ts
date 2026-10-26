@@ -604,6 +604,8 @@ export interface CampaignRow {
   subject: string;
   body: string;
   segmentId: string | null;
+  /** A newsletter issue: sent to confirmed subscribers, no segment. */
+  newsletter: boolean;
   status: CampaignStatus;
   audienceSize: number;
   sentCount: number;
@@ -638,6 +640,18 @@ export interface MarketingOverview {
   failed30: number;
   suppressed: number;
   segments: number;
+  subscribers: number;
+  pendingSubscribers: number;
+}
+
+export interface NewsletterSubscriberRow {
+  id: string;
+  email: string;
+  name: string | null;
+  status: 'PENDING' | 'ACTIVE' | 'UNSUBSCRIBED';
+  confirmedAt: string | null;
+  unsubscribedAt: string | null;
+  createdAt: string;
 }
 
 /* --------------------------------------- server logs, usage, briefing --- */

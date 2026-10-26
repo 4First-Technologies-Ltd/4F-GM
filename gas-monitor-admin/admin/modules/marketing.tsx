@@ -2,7 +2,7 @@ import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
 import { sendJson } from '@/lib/post';
 import { formatDateTime, formatNumber, formatRelative } from '@/admin/primitives/format';
-import type { CampaignRow, SuppressionRow } from './types';
+import type { CampaignRow, NewsletterSubscriberRow, SuppressionRow } from './types';
 
 /**
  * Marketing email. Campaigns open in a page-owned modal (the editor needs form
@@ -37,12 +37,12 @@ export const campaignsModule: ResourceConfig<CampaignRow> = {
     {
       key: 'audience',
       header: 'Audience',
-      accessor: (c) => c.segment?.name ?? '—',
+      accessor: (c) => (c.newsletter ? 'Newsletter subscribers' : (c.segment?.name ?? '—')),
       priority: 2,
       render: (c) =>
-        c.segment ? (
+        c.newsletter || c.segment ? (
           <>
-            {c.segment.name}
+            {c.newsletter ? 'Newsletter subscribers' : c.segment?.name}
             {c.status !== 'DRAFT' && <span className="adm-td-sub">{formatNumber(c.audienceSize)} recipients</span>}
           </>
         ) : (
@@ -100,6 +100,65 @@ export const campaignsModule: ResourceConfig<CampaignRow> = {
   emptyState: {
     title: 'No campaigns yet',
     description: 'Draft an email, pick who should get it, and send. Recipients can always unsubscribe.'
+  }
+};
+
+/* ------------------------------------------------------------ subscribers --- */
+
+const subscriberData = createDataSource<NewsletterSubscriberRow>({ path: '/marketing/subscribers' });
+
+/** Read-only: people join on the website and leave with the link in each issue. */
+export const subscribersModule: ResourceConfig<NewsletterSubscriberRow> = {
+  resource: 'subscribers',
+  label: 'Newsletter subscribers',
+  labelSingular: 'Subscriber',
+  readOnly: true,
+
+  primaryKey: 'id',
+  displayField: 'email',
+
+  columns: [
+    { key: 'email', header: 'Email', accessor: (s) => s.email, sortable: true, priority: 1 },
+    { key: 'status', header: 'Status', accessor: (s) => s.status, type: 'status', priority: 1 },
+    {
+      key: 'createdAt',
+      header: 'Signed up',
+      accessor: (s) => s.createdAt,
+      type: 'relative-date',
+      sortable: true,
+      priority: 2,
+      render: (s) => <span title={formatDateTime(s.createdAt)}>{formatRelative(s.createdAt)}</span>
+    },
+    {
+      key: 'confirmedAt',
+      header: 'Confirmed',
+      accessor: (s) => s.confirmedAt,
+      priority: 3,
+      render: (s) =>
+        s.confirmedAt ? <span title={formatDateTime(s.confirmedAt)}>{formatRelative(s.confirmedAt)}</span> : <span className="adm-muted">—</span>
+    }
+  ],
+
+  filters: [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'segmented',
+      options: [
+        { value: 'ACTIVE', label: 'Active' },
+        { value: 'PENDING', label: 'Awaiting confirmation' },
+        { value: 'UNSUBSCRIBED', label: 'Unsubscribed' }
+      ]
+    }
+  ],
+
+  search: { placeholder: 'Search email or name…' },
+  defaultSort: { field: 'createdAt', direction: 'desc' },
+  permissions: { read: 'marketing.read' },
+  data: subscriberData,
+  emptyState: {
+    title: 'No subscribers yet',
+    description: 'People who sign up on the website Newsletter page appear here once they confirm by email.'
   }
 };
 

@@ -115,6 +115,14 @@ Migration `20261009100000_crm_and_pipeline` (backend-owned). Routes: `src/routes
 - **Account notes and tags** appear in the user detail modal (`admin/primitives/crm-panel.tsx`), so every list that opens an account has them. Notes and tags are open to every admin role (`crm.note`); leads and tasks are OPERATIONS (`crm.manage`).
 - Not built from GoBuyMe: automations.
 
+## Newsletter
+
+Migration `20261018000000_newsletter`. Website-only sign-up (no mobile UI: it is a public-site feature). Logic in `src/lib/newsletter.ts`, public routes `src/routes/newsletter.ts` at `/api/newsletter`.
+- **Double opt-in:** `POST /subscribe` stores a `NewsletterSubscriber` as PENDING and emails a confirm link to the website's `/newsletter/confirm?t=…` (base `WEB_APP_URL`). That page POSTs `/confirm` on a button click, so a mail scanner following the link cannot subscribe anyone. Tokens are stateless HMACs (`UNSUBSCRIBE_SECRET`, falling back to `ADMIN_JWT_SECRET`) with the **purpose signed in**, so a confirm link cannot unsubscribe, and the marketing unsubscribe link cannot touch the newsletter. Confirm links expire after 7 days. Subscribe never reveals whether an address is known, throttles resends per address (2 min), has a honeypot field and `newsletterLimiter`.
+- **Separate list from marketing:** subscribers are *not* `User`s and the newsletter does not consult `MarketingSuppression` (and vice versa). Unsubscribing sets `UNSUBSCRIBED` (the row is kept); signing up again goes back to PENDING and needs a fresh confirmation.
+- **Sending reuses campaigns:** an issue is a `Campaign` with `newsletter=true` and no segment (admin Marketing → New campaign → audience "Newsletter subscribers"). `startCampaign` freezes the ACTIVE subscribers into `CampaignRecipient` (`userId` null); `runCampaign` re-checks each batch against subscriber status and uses the newsletter unsubscribe link and footer. The admin Newsletter tab lists subscribers read-only.
+- **Public archive:** `GET /issues` and `/issues/:id` expose only `newsletter=true` campaigns with status SENT (so sending an issue publishes it on `/newsletter`; drafts and cancelled sends never appear). `{{name}}` becomes "there" there. The web pages revalidate every 5 minutes.
+
 ## Server logs, app usage, ops briefing
 
 Migration `20261009300000_logs_usage_briefing`.

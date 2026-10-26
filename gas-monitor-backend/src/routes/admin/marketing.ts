@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { CampaignStatus, Prisma, RecipientStatus } from '@prisma/client';
+import { CampaignStatus, NewsletterStatus, Prisma, RecipientStatus } from '@prisma/client';
 import { z } from 'zod';
 import { requireAdmin, requireOperations, requireSuperAdmin } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
@@ -36,15 +36,17 @@ router.get(
   requireAdmin,
   asyncHandler(async (_req, res) => {
     const since = new Date(Date.now() - 30 * 86_400_000);
-    const [campaigns, sending, sent30, failed30, suppressed, segments] = await Promise.all([
+    const [campaigns, sending, sent30, failed30, suppressed, segments, subscribers, pendingSubscribers] = await Promise.all([
       prisma.campaign.count(),
       prisma.campaign.count({ where: { status: 'SENDING' } }),
       prisma.campaignRecipient.count({ where: { status: 'SENT', sentAt: { gte: since } } }),
       prisma.campaignRecipient.count({ where: { status: 'FAILED', campaign: { startedAt: { gte: since } } } }),
       prisma.marketingSuppression.count(),
-      prisma.segment.count()
+      prisma.segment.count(),
+      prisma.newsletterSubscriber.count({ where: { status: 'ACTIVE' } }),
+      prisma.newsletterSubscriber.count({ where: { status: 'PENDING' } })
     ]);
-    return res.json({ campaigns, sending, sent30, failed30, suppressed, segments });
+    return res.json({ campaigns, sending, sent30, failed30, suppressed, segments, subscribers, pendingSubscribers });
   })
 );
 
@@ -180,6 +182,32 @@ router.delete(
   })
 );
 
+// ── Newsletter subscribers ──────────────────────────────────────────────────
+// Read-only: people join on the website (double opt-in) and leave with the link in
+// each issue. Admins never add or confirm an address on someone's behalf.
+
+router.get(
+  '/subscribers',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const query = parseListQuery(req);
+    const where: Prisma.NewsletterSubscriberWhereInput = {};
+    const { status } = req.query;
+    if (typeof status === 'string' && status in NewsletterStatus) where.status = status as NewsletterStatus;
+    if (query.q) where.OR = [{ email: { contains: query.q.toLowerCase() } }, { name: { contains: query.q, mode: 'insensitive' } }];
+    const [data, total] = await Promise.all([
+      prisma.newsletterSubscriber.findMany({
+        where,
+        orderBy: orderBy(query, ['createdAt', 'confirmedAt', 'email'] as const, 'createdAt'),
+        skip: query.skip,
+        take: query.take
+      }),
+      prisma.newsletterSubscriber.count({ where })
+    ]);
+    return res.json(paginated(data, total, query));
+  })
+);
+
 // ── Campaigns ───────────────────────────────────────────────────────────────
 
 router.get(
@@ -190,6 +218,8 @@ router.get(
     const { status } = req.query;
     const where: Prisma.CampaignWhereInput = {};
     if (typeof status === 'string' && status in CampaignStatus) where.status = status as CampaignStatus;
+    if (req.query.kind === 'newsletter') where.newsletter = true;
+    if (req.query.kind === 'campaign') where.newsletter = false;
     if (query.q) where.OR = [{ name: { contains: query.q, mode: 'insensitive' } }, { subject: { contains: query.q, mode: 'insensitive' } }];
 
     const [data, total] = await Promise.all([
@@ -241,7 +271,9 @@ const campaignSchema = z.object({
   name: z.string().trim().min(2).max(100),
   subject: z.string().trim().min(2).max(160),
   body: z.string().trim().min(5).max(10000),
-  segmentId: z.string().min(1).nullish()
+  segmentId: z.string().min(1).nullish(),
+  /** A newsletter issue: sent to confirmed subscribers, so it has no segment. */
+  newsletter: z.boolean().optional()
 });
 
 async function checkSegment(segmentId: string | null | undefined) {
@@ -256,8 +288,9 @@ router.post(
     const parsed = campaignSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
     if (!(await checkSegment(parsed.data.segmentId))) return res.status(400).json({ error: 'Segment not found' });
+    const newsletter = parsed.data.newsletter ?? false;
     const campaign = await prisma.campaign.create({
-      data: { ...parsed.data, segmentId: parsed.data.segmentId ?? null, createdByName: authorName(req) }
+      data: { ...parsed.data, newsletter, segmentId: newsletter ? null : parsed.data.segmentId ?? null, createdByName: authorName(req) }
     });
     await writeAuditLog(req, { action: 'CAMPAIGN_CREATED', resource: 'campaign', resourceId: campaign.id, summary: `Drafted campaign "${campaign.name}"` });
     return res.status(201).json({ campaign });
@@ -274,7 +307,9 @@ router.patch(
     if (!existing) return res.status(404).json({ error: 'Campaign not found' });
     if (existing.status !== 'DRAFT') return res.status(409).json({ error: 'Only drafts can be edited' });
     if (!(await checkSegment(parsed.data.segmentId))) return res.status(400).json({ error: 'Segment not found' });
-    const campaign = await prisma.campaign.update({ where: { id: existing.id }, data: parsed.data });
+    // Switching to a newsletter drops the segment; the audience is now the subscriber list.
+    const data = parsed.data.newsletter ? { ...parsed.data, segmentId: null } : parsed.data;
+    const campaign = await prisma.campaign.update({ where: { id: existing.id }, data });
     await writeAuditLog(req, { action: 'CAMPAIGN_UPDATED', resource: 'campaign', resourceId: campaign.id, summary: `Edited campaign "${campaign.name}"` });
     return res.json({ campaign });
   })

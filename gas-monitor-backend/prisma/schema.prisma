@@ -936,9 +936,38 @@ model Campaign {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   recipients    CampaignRecipient[]
+  /// True for a newsletter issue: goes to confirmed NewsletterSubscribers instead of a
+  /// segment, and once SENT it is shown on the public /newsletter page.
+  newsletter    Boolean             @default(false)
 
   @@index([status])
+  @@index([newsletter, status])
   @@map("campaigns")
+}
+
+enum NewsletterStatus {
+  PENDING
+  ACTIVE
+  UNSUBSCRIBED
+}
+
+/// A newsletter sign-up from the website. Double opt-in: PENDING until the person
+/// opens the link we email them, so nobody can subscribe someone else's address.
+/// Separate from User and from MarketingSuppression (a different opt-in list).
+model NewsletterSubscriber {
+  id             String           @id @default(uuid())
+  email          String           @unique
+  name           String?
+  status         NewsletterStatus @default(PENDING)
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  /// When the last confirmation email went out (resend throttle).
+  lastEmailedAt  DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status])
+  @@map("newsletter_subscribers")
 }
 
 enum RecipientStatus {

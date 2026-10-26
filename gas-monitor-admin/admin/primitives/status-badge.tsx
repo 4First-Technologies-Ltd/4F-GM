@@ -52,6 +52,9 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   LOST: { tone: 'neutral', label: 'Lost' },
   DONE: { tone: 'success', label: 'Done' },
 
+  // NewsletterStatus (PENDING and ACTIVE are shared)
+  UNSUBSCRIBED: { tone: 'neutral', label: 'Unsubscribed' },
+
   // CampaignStatus (SENT, PENDING, FAILED, CANCELLED shared above)
   DRAFT: { tone: 'neutral', label: 'Draft' },
   SENDING: { tone: 'info', label: 'Sending' },

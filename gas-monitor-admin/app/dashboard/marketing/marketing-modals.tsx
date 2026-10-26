@@ -202,15 +202,24 @@ export function SegmentModal({
 
 /* -------------------------------------------------------------- campaign --- */
 
+/** The audience select value for a campaign (a segment id, NEWSLETTER, or none). */
+const audienceOf = (c: CampaignRow) => (c.newsletter ? NEWSLETTER : (c.segmentId ?? ''));
+
+/** Audience choice meaning "confirmed newsletter subscribers" rather than a saved segment. */
+const NEWSLETTER = 'newsletter';
+
 export function CampaignModal({
   campaignId,
   segments,
+  subscribers,
   onClose,
   onChanged
 }: {
   /** null = a new campaign. */
   campaignId: string | null;
   segments: SegmentRow[];
+  /** Confirmed newsletter subscribers right now. */
+  subscribers: number;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -233,7 +242,7 @@ export function CampaignModal({
     getJson<{ campaign: CampaignRow }>(`/marketing/campaigns/${id}`)
       .then(({ campaign: c }) => {
         setCampaign(c);
-        setForm((f) => (c.status === 'DRAFT' && f.name ? f : { name: c.name, subject: c.subject, body: c.body, segmentId: c.segmentId ?? '' }));
+        setForm((f) => (c.status === 'DRAFT' && f.name ? f : { name: c.name, subject: c.subject, body: c.body, segmentId: audienceOf(c) }));
         setLoadError(null);
         if (c.failedCount > 0) {
           getJson<{ data: CampaignRecipientRow[] }>(`/marketing/campaigns/${c.id}/recipients?status=FAILED&limit=10`)
@@ -259,11 +268,15 @@ export function CampaignModal({
   }, [sending, load, onChanged]);
 
   const editable = canManage && (!campaign || campaign.status === 'DRAFT');
+  const isNewsletter = form.segmentId === NEWSLETTER;
   const segment = segments.find((s) => s.id === form.segmentId) ?? null;
   const { preview, error: previewError } = usePreview(editable && segment ? segment.filter : null);
+  /** How many people this would reach right now, once an audience is chosen. */
+  const reach = isNewsletter ? subscribers : (preview?.count ?? null);
+  const audienceName = isNewsletter ? 'newsletter subscribers' : (segment?.name ?? '');
   const dirty = !campaign
     ? form.name !== '' || form.subject !== '' || form.body !== ''
-    : form.name !== campaign.name || form.subject !== campaign.subject || form.body !== campaign.body || form.segmentId !== (campaign.segmentId ?? '');
+    : form.name !== campaign.name || form.subject !== campaign.subject || form.body !== campaign.body || form.segmentId !== audienceOf(campaign);
   const complete = form.name.trim().length >= 2 && form.subject.trim().length >= 2 && form.body.trim().length >= 5;
 
   async function act(fn: () => Promise<void>) {
@@ -281,7 +294,13 @@ export function CampaignModal({
 
   const save = () =>
     act(async () => {
-      const body = { name: form.name, subject: form.subject, body: form.body, segmentId: form.segmentId || null };
+      const body = {
+        name: form.name,
+        subject: form.subject,
+        body: form.body,
+        newsletter: isNewsletter,
+        segmentId: isNewsletter ? null : form.segmentId || null
+      };
       if (id) {
         await sendJson('PATCH', `/marketing/campaigns/${id}`, body);
       } else {
@@ -365,6 +384,7 @@ export function CampaignModal({
             <span className="adm-field-label">Audience</span>
             <select className="adm-input" value={form.segmentId} disabled={!editable} onChange={(e) => setForm({ ...form, segmentId: e.target.value })}>
               <option value="">Choose an audience…</option>
+              <option value={NEWSLETTER}>Newsletter subscribers ({formatNumber(subscribers)})</option>
               {segments.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -372,7 +392,13 @@ export function CampaignModal({
               ))}
             </select>
             {editable && segment && <PreviewLine preview={preview} error={previewError} />}
-            {editable && segments.length === 0 && <span className="adm-field-help">Create an audience in the Audiences tab first.</span>}
+            {editable && isNewsletter && (
+              <span className="adm-field-help">
+                <strong>{formatNumber(subscribers)}</strong> confirmed subscriber{subscribers === 1 ? '' : 's'} — people who signed up on the website and
+                confirmed by email. Sent issues also appear on the public Newsletter page.
+              </span>
+            )}
+            {editable && segments.length === 0 && <span className="adm-field-help">Create an audience in the Audiences tab first, or send to newsletter subscribers.</span>}
           </label>
 
           {canManage && campaign && campaign.status !== 'SENDING' && (
@@ -417,7 +443,7 @@ export function CampaignModal({
                 <button
                   type="button"
                   className="adm-btn adm-btn--primary"
-                  disabled={busy || !campaign || dirty || !form.segmentId || !preview || preview.count === 0}
+                  disabled={busy || !campaign || dirty || !form.segmentId || !reach}
                   title={!campaign || dirty ? 'Save the draft before sending' : !form.segmentId ? 'Choose an audience' : undefined}
                   onClick={() => setConfirmSend(true)}
                 >
@@ -429,11 +455,11 @@ export function CampaignModal({
         </div>
       )}
 
-      {confirmSend && campaign && preview && (
+      {confirmSend && campaign && reach ? (
         <ConfirmDialog
-          title={`Send to ${formatNumber(preview.count)} people?`}
-          body={`“${campaign.subject}” will go to everyone in “${segment?.name}” right now. The recipient list is fixed at the moment you send, and a sent email cannot be recalled. You can cancel a send in progress, but emails already delivered stay delivered.`}
-          confirmLabel={`Send to ${formatNumber(preview.count)}`}
+          title={`Send to ${formatNumber(reach)} people?`}
+          body={`“${campaign.subject}” will go to everyone in “${audienceName}” right now. The recipient list is fixed at the moment you send, and a sent email cannot be recalled. You can cancel a send in progress, but emails already delivered stay delivered.`}
+          confirmLabel={`Send to ${formatNumber(reach)}`}
           onCancel={() => setConfirmSend(false)}
           onConfirm={async () => {
             await sendJson('POST', `/marketing/campaigns/${campaign.id}/send`);
@@ -442,7 +468,7 @@ export function CampaignModal({
             load();
           }}
         />
-      )}
+      ) : null}
       {confirmCancel && campaign && (
         <ConfirmDialog
           title="Stop sending?"
