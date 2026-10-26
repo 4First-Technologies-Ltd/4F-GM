@@ -99,7 +99,7 @@ router.patch(
   requireOperations,
   asyncHandler(async (req, res) => {
     const result = patchSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const company = await prisma.logisticsCompany.findUnique({
       where: { id: req.params.id },

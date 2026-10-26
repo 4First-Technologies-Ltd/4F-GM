@@ -62,7 +62,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = cannedSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const reply = await prisma.cannedReply.create({ data: parsed.data });
     await writeAuditLog(req, {
       action: 'CANNED_REPLY_CHANGED',
@@ -79,7 +79,7 @@ router.patch(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = cannedSchema.partial().safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const existing = await prisma.cannedReply.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Canned reply not found' });
     const reply = await prisma.cannedReply.update({ where: { id: existing.id }, data: parsed.data });
@@ -190,7 +190,7 @@ router.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = createSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
     if (parsed.data.orderId) {
       const order = await prisma.order.findUnique({ where: { id: parsed.data.orderId }, select: { id: true } });
@@ -221,7 +221,7 @@ router.patch(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = patchSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
     const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
@@ -294,7 +294,7 @@ router.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const parsed = messageSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
     const { body, kind } = parsed.data;
 
     const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });

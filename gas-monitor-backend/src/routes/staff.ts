@@ -101,7 +101,7 @@ router.patch(
   '/orders/:id',
   asyncHandler(async (req, res) => {
     const result = statusSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, branchId: { in: req.managerBranchIds ?? [] } }
@@ -136,7 +136,7 @@ router.patch(
   '/orders/:id/rider',
   asyncHandler(async (req, res) => {
     const result = riderSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, branchId: { in: req.managerBranchIds ?? [] } }
@@ -200,7 +200,7 @@ router.patch(
   '/listings/:id',
   asyncHandler(async (req, res) => {
     const result = stockSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const listing = await prisma.gasListing.findFirst({
       where: { id: req.params.id, branchId: { in: req.managerBranchIds ?? [] } }

@@ -132,7 +132,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = initSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { cylinderSize, quantity, deliveryAddress } = result.data;
@@ -252,7 +252,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = guestInitSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { email, name, cylinderSize, quantity, deliveryAddress } = result.data;

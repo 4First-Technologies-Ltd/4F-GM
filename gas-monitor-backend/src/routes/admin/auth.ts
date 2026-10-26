@@ -257,7 +257,7 @@ router.post(
 
     const result = changePasswordSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
     const { currentPassword, newPassword } = result.data;
     if (currentPassword === newPassword) {
@@ -340,7 +340,7 @@ router.post(
     if (mfaEnabled) return res.status(409).json({ error: 'Two-factor authentication is already on for this account' });
 
     const parsed = mfaEnableSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
     const admin = await prisma.adminUser.findUnique({ where: { id: session.adminId } });
     if (!admin?.mfaSecret) return res.status(400).json({ error: 'Start setup first to get a QR code' });

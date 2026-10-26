@@ -65,7 +65,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = profileSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const profile = await prisma.riderProfile.upsert({
@@ -90,7 +90,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = patchSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const existing = await prisma.riderProfile.findUnique({ where: { userId: req.user!.sub } });
@@ -148,7 +148,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = orderStatusSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { id } = req.params;

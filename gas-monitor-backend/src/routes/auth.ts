@@ -21,7 +21,7 @@ const registerSchema = z.object({
   password: z.string().superRefine(validatePassword),
   // BRANCH_MANAGER is deliberately absent: managers only join through a vendor's invite email.
   role: z.enum(['CONSUMER', 'VENDOR', 'RIDER', 'LOGISTICS_COMPANY']).optional().default('CONSUMER'),
-  acceptedTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the Terms and Privacy Policy' }) }),
+  acceptedTerms: z.literal(true, { error: 'You must accept the Terms and Privacy Policy' }),
   legalVersion: z.string().refine((v) => v === LEGAL_VERSION, {
     message: 'The Terms have been updated. Please reload and review them again.'
   })
@@ -33,7 +33,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = registerSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { name, email, password, role } = result.data;
@@ -81,7 +81,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = verifyOtpSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { email, otp } = result.data;
@@ -142,7 +142,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = resendOtpSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { email, purpose } = result.data;
@@ -171,7 +171,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = refreshSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { refreshToken } = result.data;
@@ -224,7 +224,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = forgotPasswordSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { email } = result.data;
@@ -253,7 +253,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = resetPasswordSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const { email, otp, password } = result.data;
@@ -423,7 +423,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const result = updateSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const user = await prisma.user.update({
@@ -483,7 +483,7 @@ router.delete(
   loginLimiter,
   asyncHandler(async (req, res) => {
     const result = deleteAccountSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) return res.status(404).json({ error: 'User not found' });

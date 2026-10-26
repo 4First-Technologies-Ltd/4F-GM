@@ -78,7 +78,7 @@ router.post(
   '/profile',
   asyncHandler(async (req, res) => {
     const result = profileSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     // `status` is deliberately not settable here: approval is an admin decision.
     const company = await prisma.logisticsCompany.upsert({
@@ -94,7 +94,7 @@ router.patch(
   '/profile',
   asyncHandler(async (req, res) => {
     const result = profileSchema.partial().safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const existing = await prisma.logisticsCompany.findUnique({ where: { userId: req.user!.sub } });
     if (!existing) return res.status(404).json({ error: 'Company profile not found' });
@@ -150,7 +150,7 @@ router.post(
   guard(requireApprovedCompany),
   asyncHandler(async (req, res) => {
     const result = inviteSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const companyId = req.company!.id;
     const { email } = result.data;

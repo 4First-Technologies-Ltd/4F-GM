@@ -36,7 +36,7 @@ const schema = z.object({
       z.object({
         name: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
         screen: z.string().max(100).optional(),
-        properties: z.record(z.unknown()).optional(),
+        properties: z.record(z.string(), z.unknown()).optional(),
         occurredAt: z.string().datetime().optional()
       })
     )

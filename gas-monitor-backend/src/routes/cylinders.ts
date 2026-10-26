@@ -24,7 +24,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const result = createCylinderSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const profile = await prisma.cylinderProfile.create({
@@ -47,7 +47,7 @@ router.patch(
 
     const result = updateCylinderSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const profile = await prisma.cylinderProfile.update({ where: { id }, data: result.data });

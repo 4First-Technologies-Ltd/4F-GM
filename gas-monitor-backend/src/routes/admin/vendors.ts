@@ -104,7 +104,7 @@ router.patch(
     const { id } = req.params;
     const result = patchSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const vendor = await prisma.vendorProfile.findUnique({ where: { id } });
@@ -143,7 +143,7 @@ router.patch(
     const { id } = req.params;
     const result = planSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({ error: result.error.errors[0].message });
+      return res.status(400).json({ error: result.error.issues[0].message });
     }
 
     const vendor = await prisma.vendorProfile.findUnique({ where: { id } });
@@ -213,7 +213,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const result = suspendSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.errors[0].message });
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
 
     const branch = await prisma.branch.findFirst({
       where: { id: req.params.branchId, vendorId: req.params.id },

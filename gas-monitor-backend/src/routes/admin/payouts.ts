@@ -176,7 +176,7 @@ router.put(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = bankAccountSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
     const vendor = await prisma.vendorProfile.findUnique({
       where: { id: req.params.vendorId },
@@ -275,7 +275,7 @@ router.post(
   requireOperations,
   asyncHandler(async (req, res) => {
     const parsed = initiateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
     try {
       const payout = await initiatePayout(parsed.data.vendorId, actorOf(req));
@@ -347,7 +347,7 @@ router.post(
   requireSuperAdmin,
   asyncHandler(async (req, res) => {
     const parsed = markPaidSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
     const existing = await prisma.payout.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Payout not found' });
