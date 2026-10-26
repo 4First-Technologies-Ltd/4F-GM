@@ -11,6 +11,7 @@ import { authApi, ApiUser, ApiRequestError, UserRole } from '@/lib/api';
 import { getSavedUser, clearSession } from '@/lib/storage';
 import { homeRouteFor } from '@/lib/homeRoute';
 import { NetworkStatusDot } from '@/components/network-status-dot';
+import { BadgeMark } from '@/components/badge-mark';
 
 const C = {
   bg: '#FFFFFF',
@@ -191,7 +192,7 @@ export default function SignInScreen() {
           {/* Header */}
           <View style={s.header}>
             <View style={s.badge}>
-              <Text style={s.badgeText}>4FG</Text>
+              <BadgeMark />
             </View>
             <Text style={s.title}>Welcome back</Text>
             <Text style={s.subtitle}>Sign in to your account</Text>
