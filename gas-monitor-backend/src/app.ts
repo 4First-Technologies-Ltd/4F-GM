@@ -36,6 +36,7 @@ import adminCrmRoutes from './routes/admin/crm';
 import adminCustomersRoutes from './routes/admin/customers';
 import adminMarketingRoutes from './routes/admin/marketing';
 import marketingPublicRoutes from './routes/marketing';
+import newsletterRoutes from './routes/newsletter';
 import adminListingsRoutes from './routes/admin/listings';
 import adminOrdersRoutes from './routes/admin/orders';
 import adminRidersRoutes from './routes/admin/riders';
@@ -103,6 +104,7 @@ export function createApp() {
   app.use('/api/contact', contactRoutes);
   app.use('/api/events', eventsRoutes);
   app.use('/api/marketing', marketingPublicRoutes);
+  app.use('/api/newsletter', newsletterRoutes);
   app.use('/api/device', deviceRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
 

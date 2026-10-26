@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ResourceList } from '@/admin/resource/resource-list';
-import { campaignsModule, suppressionsModule } from '@/admin/modules/marketing';
+import { campaignsModule, subscribersModule, suppressionsModule } from '@/admin/modules/marketing';
 import { getJson } from '@/admin/data/source';
 import { sendJson } from '@/lib/post';
 import { StatCard, StatGrid } from '@/admin/primitives/stat-card';
@@ -20,10 +20,11 @@ import { CampaignModal, SegmentModal } from './marketing-modals';
  * and unsubscribed addresses are excluded at send time.
  */
 
-type Tab = 'campaigns' | 'audiences' | 'suppressed';
+type Tab = 'campaigns' | 'audiences' | 'subscribers' | 'suppressed';
 const TABS: { value: Tab; label: string }[] = [
   { value: 'campaigns', label: 'Campaigns' },
   { value: 'audiences', label: 'Audiences' },
+  { value: 'subscribers', label: 'Newsletter' },
   { value: 'suppressed', label: 'Unsubscribed' }
 ];
 
@@ -75,7 +76,7 @@ function MarketingView() {
       <header className="adm-page-header">
         <div>
           <h1 className="adm-page-title">Marketing</h1>
-          <p className="adm-page-meta">Email campaigns to saved audiences. Every email carries an unsubscribe link.</p>
+          <p className="adm-page-meta">Email campaigns to saved audiences or newsletter subscribers. Every email carries an unsubscribe link.</p>
         </div>
         <div className="adm-page-actions">
           <Can permission="marketing.manage">
@@ -106,6 +107,13 @@ function MarketingView() {
           caption="Includes recipients who unsubscribed mid-send"
           loading={!overview}
         />
+        <StatCard
+          label="Newsletter subscribers"
+          value={formatNumber(overview?.subscribers ?? 0)}
+          caption={overview?.pendingSubscribers ? `${formatNumber(overview.pendingSubscribers)} awaiting confirmation` : undefined}
+          href="/dashboard/marketing?tab=subscribers"
+          loading={!overview}
+        />
         <StatCard label="Unsubscribed" value={formatNumber(overview?.suppressed ?? 0)} href="/dashboard/marketing?tab=suppressed" loading={!overview} />
       </StatGrid>
 
@@ -127,10 +135,11 @@ function MarketingView() {
 
       {tab === 'campaigns' && <ResourceList key={version} config={campaignsModule} onRowOpen={(c) => setCampaignModal({ id: c.id })} />}
       {tab === 'audiences' && <AudiencesPanel key={version} segments={segments} onEdit={(s) => setSegmentModal({ segment: s })} onChanged={reload} />}
+      {tab === 'subscribers' && <ResourceList key={version} config={subscribersModule} />}
       {tab === 'suppressed' && <ResourceList key={version} config={suppressionsModule} />}
 
       {campaignModal && (
-        <CampaignModal campaignId={campaignModal.id} segments={segments} onClose={() => setCampaignModal(null)} onChanged={reload} />
+        <CampaignModal campaignId={campaignModal.id} segments={segments} subscribers={overview?.subscribers ?? 0} onClose={() => setCampaignModal(null)} onChanged={reload} />
       )}
       {segmentModal && (
         <SegmentModal

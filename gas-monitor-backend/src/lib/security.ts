@@ -56,3 +56,5 @@ export const contactLimiter = limiter(60 * MIN, 5);
 export const guestOrderLimiter = limiter(15 * MIN, 20);
 /** Each call mints an upload link, so cap how many a vendor can request. */
 export const documentUploadLimiter = limiter(60 * MIN, 30);
+/** Each newsletter sign-up sends an email to an address the caller chose. */
+export const newsletterLimiter = limiter(60 * MIN, 8);

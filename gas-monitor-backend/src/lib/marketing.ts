@@ -3,6 +3,7 @@ import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from './prisma';
 import { EMAIL_FROM, getClient } from './email';
+import { newsletterUnsubscribeUrl, resolveNewsletterAudience } from './newsletter';
 
 /* ───────────────────────────── audience ───────────────────────────── */
 
@@ -108,7 +109,7 @@ export const unsubscribeUrl = (email: string) => `${apiPublicUrl()}/api/marketin
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export function renderCampaignHtml(body: string, recipientName: string, unsubUrl: string): string {
+export function renderCampaignHtml(body: string, recipientName: string, unsubUrl: string, newsletter = false): string {
   const first = esc(recipientName.trim().split(/\s+/)[0] || 'there');
   const paragraphs = body
     .split(/\n{2,}/)
@@ -122,7 +123,7 @@ export function renderCampaignHtml(body: string, recipientName: string, unsubUrl
       <p style="font-size:13px;font-weight:700;letter-spacing:.5px;color:#2d7450;text-transform:uppercase;margin:0 0 24px;">4FG Smart Gas Monitor</p>
       ${paragraphs}
       <hr style="border:none;border-top:1px solid #e3e6dc;margin:32px 0 16px;">
-      <p style="font-size:12px;color:#888;line-height:1.5;">You are receiving this because you have an account with 4FG Smart Gas Monitor.
+      <p style="font-size:12px;color:#888;line-height:1.5;">${newsletter ? 'You are receiving this because you subscribed to the 4FG Smart Gas Monitor newsletter.' : 'You are receiving this because you have an account with 4FG Smart Gas Monitor.'}
       <a href="${unsubUrl}" style="color:#888;">Unsubscribe</a></p>
     </div>`;
 }
@@ -152,11 +153,14 @@ export async function startCampaign(campaignId: string): Promise<{ audienceSize:
 
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, include: { segment: true } });
   if (!campaign) throw new CampaignError('Campaign not found', 404);
-  if (!campaign.segment) throw new CampaignError('Choose an audience before sending');
+  if (!campaign.newsletter && !campaign.segment) throw new CampaignError('Choose an audience before sending');
 
-  const filter = segmentFilterSchema.parse(campaign.segment.filter);
-  const audience = await resolveAudience(filter);
-  if (audience.length === 0) throw new CampaignError('This audience has no eligible recipients');
+  const audience = campaign.newsletter
+    ? await resolveNewsletterAudience()
+    : await resolveAudience(segmentFilterSchema.parse(campaign.segment!.filter));
+  if (audience.length === 0) {
+    throw new CampaignError(campaign.newsletter ? 'There are no confirmed subscribers yet' : 'This audience has no eligible recipients');
+  }
 
   const { count } = await prisma.campaign.updateMany({
     where: { id: campaignId, status: 'DRAFT' },
@@ -165,7 +169,8 @@ export async function startCampaign(campaignId: string): Promise<{ audienceSize:
   if (count === 0) throw new CampaignError('This campaign has already been sent', 409);
 
   await prisma.campaignRecipient.createMany({
-    data: audience.map((a) => ({ campaignId, userId: a.id, email: a.email, name: a.name })),
+    // A subscriber id is not a user id, so newsletter rows carry none.
+    data: audience.map((a) => ({ campaignId, userId: campaign.newsletter ? null : a.id, email: a.email, name: a.name })),
     skipDuplicates: true
   });
 
@@ -194,8 +199,11 @@ export async function runCampaign(campaignId: string): Promise<void> {
       if (batch.length === 0) break;
 
       // Someone may have unsubscribed since the audience was frozen.
+      const emails = batch.map((b) => b.email);
       const suppressed = new Set(
-        (await prisma.marketingSuppression.findMany({ where: { email: { in: batch.map((b) => b.email) } } })).map((s) => s.email)
+        campaign.newsletter
+          ? (await prisma.newsletterSubscriber.findMany({ where: { email: { in: emails }, status: { not: 'ACTIVE' } }, select: { email: true } })).map((s) => s.email)
+          : (await prisma.marketingSuppression.findMany({ where: { email: { in: emails } } })).map((s) => s.email)
       );
       const skip = batch.filter((b) => suppressed.has(b.email));
       const send = batch.filter((b) => !suppressed.has(b.email));
@@ -211,12 +219,12 @@ export async function runCampaign(campaignId: string): Promise<void> {
       if (send.length) {
         const { error: sendError } = await resend.batch.send(
           send.map((r) => {
-            const url = unsubscribeUrl(r.email);
+            const url = campaign.newsletter ? newsletterUnsubscribeUrl(r.email) : unsubscribeUrl(r.email);
             return {
               from: EMAIL_FROM,
               to: r.email,
               subject: campaign.subject,
-              html: renderCampaignHtml(campaign.body, r.name, url),
+              html: renderCampaignHtml(campaign.body, r.name, url, campaign.newsletter),
               headers: { 'List-Unsubscribe': `<${url}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
             };
           })
@@ -278,7 +286,12 @@ export async function sendTestEmail(campaignId: string, to: string): Promise<voi
     from: EMAIL_FROM,
     to,
     subject: `[Test] ${campaign.subject}`,
-    html: renderCampaignHtml(campaign.body, 'Test Recipient', unsubscribeUrl(to))
+    html: renderCampaignHtml(
+      campaign.body,
+      'Test Recipient',
+      campaign.newsletter ? newsletterUnsubscribeUrl(to) : unsubscribeUrl(to),
+      campaign.newsletter
+    )
   });
   if (error) throw new CampaignError(`Resend: ${error.message}`, 502);
 }
