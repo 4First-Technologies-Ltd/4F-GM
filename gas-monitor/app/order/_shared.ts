@@ -1,177 +1,72 @@
-export type OrderStatus = 'delivered' | 'processing' | 'cancelled';
-
-export interface TimelineStep {
-  label: string;
-  time: string;
-  done: boolean;
-}
-
-export interface HistoryOrder {
-  id: string;
-  orderId: string;
-  supplier: string;
-  supplierInitials: string;
-  supplierColor: string;
-  supplierAddress: string;
-  supplierRating: number;
-  gasType: string;
-  size: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  deliveryFee: number;
-  deliveryAddress: string;
-  paymentMethod: string;
-  date: string;
-  time: string;
-  status: OrderStatus;
-  timeline: TimelineStep[];
-  /** Delivery agent assigned to this order — absent until a rider is assigned. */
-  riderName?: string;
-  riderPhone?: string;
-}
+import type { ConsumerOrder, OrderStatus } from '@/lib/api';
 
 export const STATUS_META: Record<OrderStatus, { label: string; color: string; bg: string; border: string }> = {
-  delivered:  { label: 'Delivered',  color: '#2D7450', bg: '#E8F5E8', border: '#2D745040' },
-  processing: { label: 'Processing', color: '#E65100', bg: '#FFF3E0', border: '#E6510040' },
-  cancelled:  { label: 'Cancelled',  color: '#D32F2F', bg: '#FFEBEE', border: '#D32F2F40' },
+  PENDING:          { label: 'Awaiting payment', color: '#B45309', bg: '#FEF3E2', border: '#B4530940' },
+  CONFIRMED:        { label: 'Confirmed',        color: '#1D4ED8', bg: '#E8F0FE', border: '#1D4ED840' },
+  OUT_FOR_DELIVERY: { label: 'Out for delivery', color: '#E65100', bg: '#FFF3E0', border: '#E6510040' },
+  DELIVERED:        { label: 'Delivered',        color: '#2D7450', bg: '#E8F5E8', border: '#2D745040' },
+  CANCELLED:        { label: 'Cancelled',        color: '#D32F2F', bg: '#FFEBEE', border: '#D32F2F40' },
 };
 
+export const STATUS_CONTENT: Record<OrderStatus, { icon: string; headline: string; sub: string }> = {
+  PENDING: {
+    icon: 'hourglass',
+    headline: 'Awaiting Payment',
+    sub: 'We have not received payment for this order yet.',
+  },
+  CONFIRMED: {
+    icon: 'checkmark.circle.fill',
+    headline: 'Order Confirmed',
+    sub: 'Payment received. Your supplier is preparing the order.',
+  },
+  OUT_FOR_DELIVERY: {
+    icon: 'shippingbox.fill',
+    headline: 'Out for Delivery',
+    sub: 'Your gas is on its way.',
+  },
+  DELIVERED: {
+    icon: 'checkmark.circle.fill',
+    headline: 'Order Delivered',
+    sub: 'Your gas has been successfully delivered.',
+  },
+  CANCELLED: {
+    icon: 'xmark.circle.fill',
+    headline: 'Order Cancelled',
+    sub: 'This order was cancelled before delivery.',
+  },
+};
+
+/** Forward steps shown on the timeline, in the order an order moves through them. */
+export const TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
+  { status: 'PENDING', label: 'Order placed' },
+  { status: 'CONFIRMED', label: 'Confirmed' },
+  { status: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
+  { status: 'DELIVERED', label: 'Delivered' },
+];
+
 export function fmtPrice(n: number) {
-  return '₦' + n.toLocaleString();
+  return '₦' + Math.round(n).toLocaleString();
 }
 
-export const MOCK_ORDERS: HistoryOrder[] = [
-  {
-    id: '1',
-    orderId: 'ORD-0001',
-    supplier: 'Ardova Gas Ltd',
-    supplierInitials: 'AG',
-    supplierColor: '#2D7450',
-    supplierAddress: '14 Admiralty Way, Lekki Phase 1',
-    supplierRating: 4.8,
-    gasType: 'Cooking Gas',
-    size: '12.5 kg',
-    quantity: 2,
-    unitPrice: 8500,
-    total: 17000,
-    deliveryFee: 0,
-    deliveryAddress: '14 Admiralty Way, Lekki Phase 1, Lagos',
-    paymentMethod: 'Card — •••• 4242',
-    date: 'May 27, 2026',
-    time: '10:32 AM',
-    status: 'delivered',
-    timeline: [
-      { label: 'Order placed',      time: '10:32 AM', done: true  },
-      { label: 'Confirmed',         time: '10:35 AM', done: true  },
-      { label: 'Out for delivery',  time: '11:14 AM', done: true  },
-      { label: 'Delivered',         time: '11:58 AM', done: true  },
-    ],
-  },
-  {
-    id: '2',
-    orderId: 'ORD-0002',
-    supplier: 'HomeGas Express',
-    supplierInitials: 'HG',
-    supplierColor: '#2D7450',
-    supplierAddress: '18 Bode Thomas St, Surulere',
-    supplierRating: 4.3,
-    gasType: 'Cooking Gas',
-    size: '6 kg',
-    quantity: 1,
-    unitPrice: 4500,
-    total: 4500,
-    deliveryFee: 0,
-    deliveryAddress: '3 Broad St, Lagos Marina, Lagos Island',
-    paymentMethod: 'Cash on delivery',
-    date: 'May 20, 2026',
-    time: '2:15 PM',
-    status: 'delivered',
-    timeline: [
-      { label: 'Order placed',      time: '2:15 PM', done: true  },
-      { label: 'Confirmed',         time: '2:18 PM', done: true  },
-      { label: 'Out for delivery',  time: '3:02 PM', done: true  },
-      { label: 'Delivered',         time: '3:44 PM', done: true  },
-    ],
-  },
-  {
-    id: '3',
-    orderId: 'ORD-0003',
-    supplier: 'Total Gas Depot',
-    supplierInitials: 'TG',
-    supplierColor: '#E65100',
-    supplierAddress: '5 Kingsway Rd, Ikoyi',
-    supplierRating: 4.5,
-    gasType: 'Bulk LPG',
-    size: '50 kg',
-    quantity: 1,
-    unitPrice: 32000,
-    total: 32000,
-    deliveryFee: 0,
-    deliveryAddress: '14 Admiralty Way, Lekki Phase 1, Lagos',
-    paymentMethod: 'Card — •••• 4242',
-    date: 'May 15, 2026',
-    time: '9:05 AM',
-    status: 'cancelled',
-    timeline: [
-      { label: 'Order placed',      time: '9:05 AM',  done: true  },
-      { label: 'Confirmed',         time: '',         done: false },
-      { label: 'Out for delivery',  time: '',         done: false },
-      { label: 'Delivered',         time: '',         done: false },
-    ],
-  },
-  {
-    id: '4',
-    orderId: 'ORD-0004',
-    supplier: 'QuickGas Delivery',
-    supplierInitials: 'QG',
-    supplierColor: '#2D7450',
-    supplierAddress: '29 Herbert Macaulay Way, Yaba',
-    supplierRating: 4.6,
-    gasType: 'Cooking Gas',
-    size: '12.5 kg',
-    quantity: 1,
-    unitPrice: 8500,
-    total: 8500,
-    deliveryFee: 0,
-    deliveryAddress: '3 Broad St, Lagos Marina, Lagos Island',
-    paymentMethod: 'Card — •••• 9871',
-    date: 'May 10, 2026',
-    time: '4:48 PM',
-    status: 'delivered',
-    timeline: [
-      { label: 'Order placed',      time: '4:48 PM', done: true  },
-      { label: 'Confirmed',         time: '4:51 PM', done: true  },
-      { label: 'Out for delivery',  time: '5:30 PM', done: true  },
-      { label: 'Delivered',         time: '6:02 PM', done: true  },
-    ],
-  },
-  {
-    id: '5',
-    orderId: 'ORD-0005',
-    supplier: 'GreenEnergy LPG',
-    supplierInitials: 'GE',
-    supplierColor: '#2D7450',
-    supplierAddress: '7 Obafemi Awolowo Way, Ikeja',
-    supplierRating: 4.4,
-    gasType: 'Cooking Gas',
-    size: '6 kg',
-    quantity: 3,
-    unitPrice: 4500,
-    total: 13500,
-    deliveryFee: 0,
-    deliveryAddress: '14 Admiralty Way, Lekki Phase 1, Lagos',
-    paymentMethod: 'Cash on delivery',
-    date: 'Apr 30, 2026',
-    time: '11:20 AM',
-    status: 'processing',
-    timeline: [
-      { label: 'Order placed',      time: '11:20 AM', done: true  },
-      { label: 'Confirmed',         time: '11:23 AM', done: true  },
-      { label: 'Out for delivery',  time: '11:45 AM', done: true  },
-      { label: 'Delivered',         time: '',         done: false },
-    ],
-    riderName: 'Tunde Bakare',
-    riderPhone: '0803 555 0192',
-  },
-];
+export function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+export function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Who the order was bought from: the vendor's business, else the name saved on the order. */
+export function supplierOf(order: ConsumerOrder) {
+  return order.vendor?.businessName ?? order.supplierName ?? '4FG Monitor';
+}
+
+export function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '4F';
+}
+
+/** Short, human-friendly reference — the id is a long uuid. */
+export function shortRef(order: ConsumerOrder) {
+  return '#' + order.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+}

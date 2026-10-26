@@ -155,7 +155,7 @@ export default function VendorDocumentsScreen() {
                 ))}
               </View>
               <Text style={s.helperText}>
-                Documents are reviewed by our team and can't be removed once submitted.
+                Documents are reviewed by our team and can&apos;t be removed once submitted.
               </Text>
             </>
           )}

@@ -5,15 +5,6 @@ import { useAuth } from '@/lib/auth-context';
 import { vendorApi, VendorDocument, ApiRequestError } from '@/lib/api';
 import { AlertCircle, FileText } from 'lucide-react';
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function DocumentsPage() {
   const { user } = useAuth();
   const isVendor = user?.role === 'VENDOR';
@@ -49,8 +40,7 @@ export default function DocumentsPage() {
     setError(null);
     setUploading(true);
     try {
-      const url = await readFileAsDataUrl(file);
-      await vendorApi.uploadDocuments([{ url, fileName: file.name }]);
+      await vendorApi.uploadDocument(file);
       const profile = await vendorApi.getProfile();
       setDocuments(profile.documents ?? []);
     } catch (err) {

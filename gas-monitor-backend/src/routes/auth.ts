@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { issueOtp, issueTokenPair, devOtp } from '../lib/auth';
@@ -11,6 +10,7 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { LEGAL_VERSION } from '../lib/legal';
 import { loginLimiter, otpSendLimiter, otpVerifyLimiter, registerLimiter, sha256 } from '../lib/security';
 import { validatePassword } from '../lib/password';
+import { DeletionBlocked, eraseAccount } from '../lib/accountDeletion';
 import { claimFleetInvite, effectiveRiderStatus, RIDER_STATUS_SELECT } from '../lib/fleet';
 
 const router = Router();
@@ -471,11 +471,9 @@ router.get(
 const deleteAccountSchema = z.object({ password: z.string().min(1, 'Enter your password to confirm') });
 
 /**
- * Self-service erasure. Orders are financial records we must keep, so the
- * account is anonymised in place rather than deleted: personal details, saved
- * addresses, devices and sessions are removed and the email can no longer sign
- * in or be marketed to. Vendors and riders hold payout records and are handled
- * by support.
+ * Self-service erasure for every account type. What is removed, and what blocks
+ * it (open orders, unpaid earnings, deliveries in progress), lives in
+ * `lib/accountDeletion.ts`.
  */
 router.delete(
   '/me',
@@ -487,52 +485,13 @@ router.delete(
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (!(await bcrypt.compare(result.data.password, user.password))) {
-      return res.status(403).json({ error: 'Incorrect password' });
-    }
-    if (user.role !== 'CONSUMER') {
-      return res.status(409).json({
-        error: 'Vendor and rider accounts hold payout records. Contact support to close this account.',
-        code: 'CONTACT_SUPPORT'
-      });
-    }
-    const open = await prisma.order.count({
-      where: { consumerId: user.id, status: { in: ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY'] } }
-    });
-    if (open > 0) {
-      return res.status(409).json({ error: 'You have an order in progress. Delete your account once it is complete.' });
-    }
 
-    const randomPassword = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
-    await prisma.$transaction([
-      prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
-      prisma.address.deleteMany({ where: { userId: user.id } }),
-      prisma.cylinderProfile.deleteMany({ where: { userId: user.id } }),
-      prisma.marketingSuppression.upsert({
-        where: { email: user.email.toLowerCase() },
-        create: { email: user.email.toLowerCase(), reason: 'account_deleted' },
-        update: {}
-      }),
-      prisma.user.update({
-        where: { id: user.id },
-        data: {
-          email: `deleted-${user.id}@deleted.invalid`,
-          name: 'Deleted user',
-          phone: null,
-          devicePhone: null,
-          avatarUrl: null,
-          password: randomPassword,
-          isSuspended: true,
-          emailVerified: false,
-          otpCodeHash: null,
-          otpPurpose: null,
-          otpExpiresAt: null,
-          pushEnabled: false,
-          emailNotifEnabled: false,
-          smsAlertsEnabled: false
-        }
-      })
-    ]);
+    try {
+      await eraseAccount(user, result.data.password);
+    } catch (err) {
+      if (err instanceof DeletionBlocked) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
 
     return res.json({ message: 'Your account has been deleted.' });
   })

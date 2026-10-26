@@ -75,6 +75,15 @@ export default async function ListingPage({
 
           <h1 className="mt-4 text-4xl font-semibold">{listing.title}</h1>
 
+          {listing.image && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={listing.image}
+              alt={`${listing.title} from ${listing.vendor}`}
+              className="mt-4 aspect-[4/3] w-full max-w-xl rounded-2xl object-cover"
+            />
+          )}
+
           <div className="mt-4 flex items-center gap-2">
             <SellerMark listing={listing} size={48} className="h-12 w-12 rounded-lg" />
             <div>

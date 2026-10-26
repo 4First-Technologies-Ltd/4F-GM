@@ -108,10 +108,11 @@ Onboarding slide 3 and the sign-up/sign-in role tabs all have a Rider option →
 | `app/order/_layout.tsx` | — | Stack navigator for the entire order section |
 | `app/order/(tabs)/_layout.tsx` | — | Bottom tab bar: Suppliers / Order History / My Addresses |
 | `app/order/(tabs)/index.tsx` | `/order` | Supplier list + order form (inline screen state) |
-| `app/order/(tabs)/history.tsx` | `/order/history` | Tappable order history cards |
-| `app/order/(tabs)/addresses.tsx` | `/order/addresses` | Saved delivery addresses (add / remove / set default) |
-| `app/order/[id].tsx` | `/order/:id` | Order detail — status banner, timeline, items, payment info |
-| `app/order/_shared.ts` | — | Shared `HistoryOrder` type, `MOCK_ORDERS`, `STATUS_META`, `fmtPrice` |
+| `app/order/(tabs)/history.tsx` | `/order/history` | Real orders from `ordersApi.list()` (pull-to-refresh, loading/error/empty states) |
+| `app/order/(tabs)/addresses.tsx` | `/order/addresses` | Saved delivery addresses, stored server-side via `addressApi` (shared with the website) through `hooks/use-addresses.ts` |
+| `app/order/[id].tsx` | `/order/:id` | Order detail from `ordersApi.get(id)` — status banner, timeline, rider, items, payment. No cancel button: there is no consumer cancel endpoint |
+| `app/order/_shared.ts` | — | Status meta/copy, timeline steps and formatters for `ConsumerOrder` (no mock data) |
+| `app/analytics.tsx` | `/analytics` | Consumer spending analytics (linked from Settings); vendors use `app/(vendor)/analytics.tsx`. Both render `components/analytics-view.tsx` from `analyticsApi` |
 | `app/order/payment.tsx` | `/order/payment` | Full-screen Paystack WebView; intercepts callback URL |
 | `app/order/payment-success.tsx` | `/order/payment-success` | Animated success screen shown after verified payment |
 | `app/modal.tsx` | `/modal` | Generic modal |
@@ -157,7 +158,7 @@ Delivery address is a dropdown (tappable selector → bottom sheet modal) popula
 
 ### Order detail (`order/[id].tsx`)
 
-Looks up order by `id` param in `MOCK_ORDERS` from `_shared.ts`. Sections:
+Loads the order with `ordersApi.get(id)`. Sections:
 1. Status banner (color-coded: green = delivered, orange = processing, red = cancelled)
 2. Supplier card (avatar, name, address, gas type badge, rating)
 3. Order timeline (vertical stepper; hidden for cancelled)
@@ -562,3 +563,13 @@ PAYSTACK_SECRET_KEY=sk_test_...
 RESEND_API_KEY=re_...          # optional in dev — OTPs log to console if unset
 EMAIL_FROM="4FG Smart Gas Monitor <onboarding@resend.dev>"
 ```
+
+---
+
+## Parity with the website (Oct 2026 audit)
+
+Consumer orders, order detail, saved addresses, notification/unit preferences (`authApi.updateProfile`), profile editing and account deletion (`authApi.deleteAccount`, consumers only — the backend answers `CONTACT_SUPPORT` for vendors/riders) all read and write the real API, so they match the website. Analytics (`analyticsApi`) and the vendor partner plan card (`components/vendor-plan-card.tsx`, `vendorApi.changePlan`) were added to match the web dashboards. The plan table in the card mirrors `gas-monitor-backend/src/lib/plans.ts` and the web `lib/plans.ts` — keep all three in step.
+
+Still demo/placeholder on mobile (device work is parked): the hardcoded device id `FG-2024-0047` on the consumer home and Device tab, and the Simulate Drain control. The usage-history tab shows an empty state until real sensor readings exist. `hooks/use-device-config.ts` calls `deviceApi.setMinimumLevel`, which does not exist yet.
+
+Builds: `production` in `eas.json` produces an AAB (internal track on submit) and carries `SENTRY_DISABLE_AUTO_UPLOAD` and the public Sentry DSN, because `gas-monitor/.env` is git-ignored and never reaches EAS.

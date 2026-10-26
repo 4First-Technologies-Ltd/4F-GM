@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Platform, TextInput, Modal, KeyboardAvoidingView,
+  Platform, TextInput, Modal, KeyboardAvoidingView, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAddresses } from '@/hooks/use-addresses';
 
 const C = {
   bg: '#EDF7ED',
@@ -27,48 +28,43 @@ const cardShadow = Platform.select({
   default: {},
 });
 
-interface Address {
-  id: string;
-  label: string;
-  full: string;
-  isDefault: boolean;
-}
-
-const INITIAL_ADDRESSES: Address[] = [
-  { id: '1', label: 'Home',   full: '14 Admiralty Way, Lekki Phase 1, Lagos',   isDefault: true  },
-  { id: '2', label: 'Office', full: '3 Broad St, Lagos Marina, Lagos Island',    isDefault: false },
-];
-
 export default function MyAddressesScreen() {
-  const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
+  const { addresses, loading, error, reload, add, setDefault: makeDefault, remove: removeAddress } = useAddresses();
   const [showModal, setShowModal] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newFull, setNewFull] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true);
+    try {
+      await action();
+    } catch (err: any) {
+      Alert.alert('Something went wrong', err?.message ?? 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function setDefault(id: string) {
-    setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.id === id })));
+    void run(() => makeDefault(id));
   }
 
   function remove(id: string) {
-    setAddresses((prev) => {
-      const updated = prev.filter((a) => a.id !== id);
-      if (updated.length > 0 && !updated.some((a) => a.isDefault)) {
-        updated[0].isDefault = true;
-      }
-      return updated;
-    });
+    Alert.alert('Remove address?', 'This address will be deleted from your account.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void run(() => removeAddress(id)) },
+    ]);
   }
 
   function addAddress() {
-    if (!newLabel.trim() || !newFull.trim()) return;
-    const id = Date.now().toString();
-    setAddresses((prev) => [
-      ...prev,
-      { id, label: newLabel.trim(), full: newFull.trim(), isDefault: prev.length === 0 },
-    ]);
-    setNewLabel('');
-    setNewFull('');
-    setShowModal(false);
+    if (!newLabel.trim() || !newFull.trim() || busy) return;
+    void run(async () => {
+      await add(newLabel.trim(), newFull.trim());
+      setNewLabel('');
+      setNewFull('');
+      setShowModal(false);
+    });
   }
 
   return (
@@ -89,7 +85,19 @@ export default function MyAddressesScreen() {
         </TouchableOpacity>
       </View>
 
-      {addresses.length === 0 ? (
+      {loading ? (
+        <View style={s.emptyState}>
+          <ActivityIndicator color={C.accent} />
+        </View>
+      ) : error && addresses.length === 0 ? (
+        <View style={s.emptyState}>
+          <Text style={s.emptyTitle}>Couldn&apos;t load addresses</Text>
+          <Text style={s.emptySubtitle}>{error}</Text>
+          <TouchableOpacity onPress={() => void reload()} activeOpacity={0.8}>
+            <Text style={{ color: C.accent, fontWeight: '700', marginTop: 6 }}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : addresses.length === 0 ? (
         <View style={s.emptyState}>
           <View style={s.emptyIconCircle}>
             <IconSymbol name="mappin" size={32} color={C.dim} />
@@ -118,7 +126,7 @@ export default function MyAddressesScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={s.addrFull} numberOfLines={2}>{addr.full}</Text>
+                  <Text style={s.addrFull} numberOfLines={2}>{addr.fullAddress}</Text>
                 </View>
               </View>
 

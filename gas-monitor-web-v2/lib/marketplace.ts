@@ -29,6 +29,8 @@ export interface PublicListing {
   cylinderSizes: string[];
   otherSizes: string | null;
   inStock: boolean;
+  /** Product photo (public URL), if the vendor added one. */
+  imageUrl?: string | null;
   createdAt: string;
   /** The branch the listing is sold from; null for listings that predate branches. */
   branch: {
@@ -151,9 +153,10 @@ export function toCatalogListing(l: PublicListing): Listing {
     city,
     lat: (b ? b.lat : l.vendor.lat) ?? l.vendor.lat ?? undefined,
     lng: (b ? b.lng : l.vendor.lng) ?? l.vendor.lng ?? undefined,
-    // Uploaded logos are stored as data URLs. Anything else (a remote URL) is
-    // not an allowed next/image source, so those vendors keep their initials.
-    logo: l.vendor.logoUrl?.startsWith('data:image/') ? l.vendor.logoUrl : undefined,
+    // Logos and photos are public R2 URLs (older logos are data: URLs). SellerMark
+    // renders them unoptimised, so no next/image host allow-list is needed.
+    logo: l.vendor.logoUrl ?? undefined,
+    image: l.imageUrl ?? undefined,
     // "From" price: the smallest size on offer, or the per-kg rate if none parse.
     price: Math.round(l.pricePerKg * (weights.length > 0 ? Math.min(...weights) : 1)),
     pricePerKg: l.pricePerKg,

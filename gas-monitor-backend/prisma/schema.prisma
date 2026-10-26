@@ -363,6 +363,8 @@ model GasListing {
   cylinderSizes String[]
   otherSizes    String?
   inStock       Boolean       @default(true)
+  /// R2 key of the product photo (public bucket, see lib/storage.ts). Null = no photo.
+  imageKey      String?
   /// Which branch sells this listing. Nullable only until every writer sets it;
   /// the migration backfills existing rows to the vendor's main branch.
   branchId      String?

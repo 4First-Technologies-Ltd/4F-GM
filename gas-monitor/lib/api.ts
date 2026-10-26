@@ -122,10 +122,25 @@ export interface VendorProfile {
   lng?: number;
   phone: string;
   status: VendorStatus;
+  plan?: VendorPlan;
+  planChangedAt?: string | null;
+  planLockedUntil?: string | null;
+  /** Newest first, capped server-side. */
+  planChanges?: VendorPlanChange[];
   documents?: VendorDocument[];
   branches?: Branch[];
   createdAt: string;
   updatedAt: string;
+}
+
+export type VendorPlan = 'BASIC' | 'GROWTH' | 'PRO';
+
+export interface VendorPlanChange {
+  id: string;
+  fromPlan: VendorPlan;
+  toPlan: VendorPlan;
+  actor: 'VENDOR' | 'ADMIN';
+  createdAt: string;
 }
 
 export interface GasListing {
@@ -137,6 +152,8 @@ export interface GasListing {
   cylinderSizes: string[];
   otherSizes?: string;
   inStock: boolean;
+  /** Product photo as a public URL (null = none). Set via `imageKey` on create/update. */
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -411,6 +428,20 @@ export const authApi = {
     if (accessToken && refreshToken) await saveSession(accessToken, refreshToken, data.user);
     return data.user;
   },
+
+  /**
+   * Self-service erasure for every account type. The backend answers 409 while
+   * orders or deliveries are in flight (and `CONTACT_SUPPORT` for vendors with
+   * unpaid earnings). On success the account is anonymised, so the local session goes too.
+   */
+  async deleteAccount(password: string): Promise<void> {
+    await request('/api/auth/me', {
+      method: 'DELETE',
+      auth: true,
+      body: JSON.stringify({ password }),
+    });
+    await clearSession();
+  },
 };
 
 // ── Vendor API ────────────────────────────────────────────────────────────────
@@ -443,7 +474,8 @@ export const vendorApi = {
     businessAddress: string;
     phone: string;
     bio: string | null;
-    logoUrl: string | null;
+    /** Key from `vendorApi.uploadImage('logo', …)`; null removes the logo. */
+    logoKey: string | null;
     lat: number;
     lng: number;
   }>): Promise<VendorProfile> {
@@ -451,6 +483,16 @@ export const vendorApi = {
       method: 'PATCH',
       auth: true,
       body: JSON.stringify(data),
+    });
+    return res.profile;
+  },
+
+  /** Applies immediately and starts a cooldown; 409 `PLAN_LOCKED` while one is running. */
+  async changePlan(plan: VendorPlan): Promise<VendorProfile> {
+    const res = await request<{ profile: VendorProfile }>('/api/vendor/plan', {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ plan }),
     });
     return res.profile;
   },
@@ -481,6 +523,29 @@ export const vendorApi = {
       auth: true,
       body: JSON.stringify({ documents: [{ key, fileName: file.fileName }] }),
     });
+  },
+
+  /**
+   * Uploads a logo or listing photo to the public image bucket and returns the
+   * key to save (`logoKey` / `imageKey`) plus a URL to preview it with. Same steps
+   * as documents: ask for a link, PUT the bytes to R2, then the caller saves the
+   * key — the server checks that it exists and belongs to this vendor.
+   */
+  async uploadImage(
+    kind: 'logo' | 'listing',
+    file: { uri: string; mimeType?: string | null },
+  ): Promise<{ key: string; publicUrl: string | null }> {
+    const blob = await (await fetch(file.uri)).blob();
+    const contentType = blob.type || file.mimeType || 'image/jpeg';
+
+    const { key, uploadUrl, publicUrl } = await request<{ key: string; uploadUrl: string; publicUrl: string | null }>(
+      '/api/vendor/images/upload-url',
+      { method: 'POST', auth: true, body: JSON.stringify({ kind, contentType, size: blob.size }) },
+    );
+
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    if (!put.ok) throw new Error('Image upload failed. Please try again.');
+    return { key, publicUrl };
   },
 
   async getListings(branchId?: string): Promise<GasListing[]> {
@@ -538,6 +603,8 @@ export const vendorApi = {
     cylinderSizes: string[];
     otherSizes?: string;
     inStock?: boolean;
+    /** Key from `vendorApi.uploadImage('listing', …)`. */
+    imageKey?: string | null;
   }): Promise<GasListing> {
     const res = await request<{ listing: GasListing }>('/api/vendor/listings', {
       method: 'POST',
@@ -554,6 +621,8 @@ export const vendorApi = {
     cylinderSizes: string[];
     otherSizes: string;
     inStock: boolean;
+    /** Key from `vendorApi.uploadImage('listing', …)`; null removes the photo. */
+    imageKey: string | null;
   }>): Promise<GasListing> {
     const res = await request<{ listing: GasListing }>(`/api/vendor/listings/${id}`, {
       method: 'PATCH',
@@ -663,6 +732,22 @@ export const riderApi = {
 
 // ── Orders API ────────────────────────────────────────────────────────────────
 
+/** An order as the consumer's own list/detail endpoints return it. */
+export interface ConsumerOrder {
+  id: string;
+  supplierName?: string | null;
+  cylinderSize: string;
+  quantity: number;
+  totalAmount: number;
+  deliveryAddress: string;
+  status: OrderStatus;
+  paystackRef?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  vendor?: { businessName: string; businessAddress: string } | null;
+  rider?: { phone: string; user: { name: string } } | null;
+}
+
 export interface InitializeOrderPayload {
   /** Marketplace listing being bought. The server prices the order from it. */
   listingId: string;
@@ -679,8 +764,10 @@ export interface MarketplaceListing {
   cylinderSizes: string[];
   otherSizes: string | null;
   inStock: boolean;
+  imageUrl: string | null;
   vendor: {
     id: string;
+    logoUrl: string | null;
     businessName: string;
     businessAddress: string;
     state: string | null;
@@ -722,8 +809,91 @@ export const ordersApi = {
     });
   },
 
-  async list(): Promise<{ orders: any[] }> {
-    return request('/api/orders', { auth: true });
+  async list(): Promise<ConsumerOrder[]> {
+    const data = await request<{ orders: ConsumerOrder[] }>('/api/orders', { auth: true });
+    return data.orders;
+  },
+
+  async get(id: string): Promise<ConsumerOrder> {
+    const data = await request<{ order: ConsumerOrder }>(`/api/orders/${id}`, { auth: true });
+    return data.order;
+  },
+};
+
+// ── Saved addresses API ───────────────────────────────────────────────────────
+
+export interface SavedAddress {
+  id: string;
+  label: string;
+  fullAddress: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const addressApi = {
+  async list(): Promise<SavedAddress[]> {
+    const data = await request<{ addresses: SavedAddress[] }>('/api/addresses', { auth: true });
+    return data.addresses;
+  },
+
+  async create(payload: { label: string; fullAddress: string; isDefault?: boolean }): Promise<SavedAddress> {
+    const data = await request<{ address: SavedAddress }>('/api/addresses', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload),
+    });
+    return data.address;
+  },
+
+  async update(
+    id: string,
+    payload: Partial<{ label: string; fullAddress: string; isDefault: boolean }>,
+  ): Promise<SavedAddress> {
+    const data = await request<{ address: SavedAddress }>(`/api/addresses/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload),
+    });
+    return data.address;
+  },
+
+  async remove(id: string): Promise<void> {
+    await request(`/api/addresses/${id}`, { method: 'DELETE', auth: true });
+  },
+};
+
+// ── Analytics API ─────────────────────────────────────────────────────────────
+
+export interface StatusBreakdownEntry {
+  status: OrderStatus;
+  count: number;
+}
+
+export interface ConsumerAnalytics {
+  role: 'CONSUMER';
+  totalSpend: number;
+  totalOrders: number;
+  avgOrderValue: number;
+  statusBreakdown: StatusBreakdownEntry[];
+  monthly: { month: string; spend: number; orders: number }[];
+}
+
+export interface VendorAnalytics {
+  role: 'VENDOR';
+  totalRevenue: number;
+  totalOrders: number;
+  avgOrderValue: number;
+  statusBreakdown: StatusBreakdownEntry[];
+  monthly: { month: string; revenue: number; orders: number }[];
+  topListings: { id: string; name: string; orders: number; revenue: number }[];
+}
+
+export type Analytics = ConsumerAnalytics | VendorAnalytics;
+
+export const analyticsApi = {
+  async get(): Promise<Analytics> {
+    return request<Analytics>('/api/analytics', { auth: true });
   },
 };
 

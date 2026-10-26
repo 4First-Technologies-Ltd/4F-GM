@@ -6,6 +6,7 @@ import { vendorApi, Branch, GasListing, GasType } from '@/lib/api';
 import { formatNaira } from '@/lib/format';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
+import { ImageUpload } from '@/components/vendor/ImageUpload';
 import { AlertCircle } from 'lucide-react';
 
 const GAS_TYPES: GasType[] = ['COOKING', 'MEDICAL', 'INDUSTRIAL', 'BULK', 'OTHER'];
@@ -33,6 +34,9 @@ export default function ListingsPage() {
   const [branchFilter, setBranchFilter] = useState('all');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Photo for the listing being created: the uploaded key (sent on save) and a preview.
+  const [imageKey, setImageKey] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -81,16 +85,32 @@ export default function ListingsPage() {
         gasType,
         customName: customName.trim() || undefined,
         pricePerKg: price,
-        cylinderSizes: sizes
+        cylinderSizes: sizes,
+        ...(imageKey ? { imageKey } : {})
       });
       setListings((current) => [listing, ...current]);
       setCustomName('');
       setPricePerKg('');
       setSizes([]);
+      setImageKey(null);
+      setImagePreview(null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not create listing.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function changePhoto(listing: GasListing, key: string) {
+    setBusyId(listing.id);
+    setError(null);
+    try {
+      const updated = await vendorApi.updateListing(listing.id, { imageKey: key });
+      setListings((current) => current.map((l) => (l.id === listing.id ? updated : l)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the photo.');
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -221,6 +241,26 @@ export default function ListingsPage() {
                 </div>
               </div>
 
+              <div>
+                <p className="block text-sm font-medium text-foreground mb-2">Product photo (optional)</p>
+                <div className="flex items-center gap-4">
+                  {imagePreview && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imagePreview} alt="" className="h-16 w-20 rounded-lg object-cover" />
+                  )}
+                  <ImageUpload
+                    kind="listing"
+                    label={imagePreview ? 'Change photo' : 'Add photo'}
+                    disabled={submitting}
+                    onUploaded={({ key, previewUrl }) => {
+                      setImageKey(key);
+                      setImagePreview(previewUrl);
+                    }}
+                    onError={setFormError}
+                  />
+                </div>
+              </div>
+
               {formError && (
                 <div
                   className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive flex items-start gap-2"
@@ -285,7 +325,11 @@ export default function ListingsPage() {
               .map((listing) => (
               <li key={listing.id} className="py-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  {listing.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={listing.imageUrl} alt="" className="h-14 w-[4.5rem] flex-shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-foreground">{listing.customName || GAS_TYPE_LABEL[listing.gasType]}</p>
                     <p className="text-sm text-muted-foreground">
                       {formatNaira(listing.pricePerKg)}/kg · {listing.cylinderSizes.join(', ')}
@@ -314,6 +358,13 @@ export default function ListingsPage() {
                   >
                     {listing.inStock ? 'Mark out of stock' : 'Mark in stock'}
                   </Button>
+                  <ImageUpload
+                    kind="listing"
+                    label={listing.imageUrl ? 'Change photo' : 'Add photo'}
+                    disabled={busyId === listing.id}
+                    onUploaded={({ key }) => changePhoto(listing, key)}
+                    onError={setError}
+                  />
                   {confirmDeleteId === listing.id ? (
                     <>
                       <Button

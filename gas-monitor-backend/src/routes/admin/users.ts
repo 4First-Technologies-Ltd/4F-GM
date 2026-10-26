@@ -7,7 +7,7 @@ import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 import { writeAuditLog } from '../../lib/audit';
-import { withViewUrls } from '../../lib/storage';
+import { publicImageUrl, withViewUrls } from '../../lib/storage';
 
 const router = Router();
 
@@ -238,7 +238,7 @@ router.get(
     });
 
     const vendorProfile = user.vendorProfile
-      ? { ...user.vendorProfile, documents: await withViewUrls(user.vendorProfile.documents) }
+      ? { ...user.vendorProfile, logoUrl: publicImageUrl(user.vendorProfile.logoUrl), documents: await withViewUrls(user.vendorProfile.documents) }
       : user.vendorProfile;
 
     return res.json({ user: { ...user, vendorProfile, totalSpend: spend._sum.totalAmount ?? 0 } });
