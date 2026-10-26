@@ -25,6 +25,7 @@ const groups = [
       { href: "/contact", label: "Contact" },
       { href: "/terms", label: "Terms and Conditions" },
       { href: "/privacy", label: "Privacy Policy" },
+      { href: "/delete-account", label: "Delete your account" },
     ],
   },
 ];
