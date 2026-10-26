@@ -10,6 +10,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, vendorApi, ApiUser, VendorProfile, VendorStatus, UnitPreference } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
 import { useDrawer } from './_layout';
+import { DeleteAccountLink } from '@/components/delete-account';
 
 const C = {
   bg: '#EDF7ED',
@@ -369,6 +370,8 @@ export default function VendorSettingsScreen() {
           <IconSymbol name="arrow.left" size={18} color={C.red} />
           <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
+
+        <DeleteAccountLink businessAccount />
 
         <View style={{ height: 32 }} />
       </ScrollView>

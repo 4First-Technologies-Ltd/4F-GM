@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Switch, Platform, Alert, ActivityIndicator,
+  TextInput, Switch, Platform, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { vendorApi, Branch, GasListing, GasType } from '@/lib/api';
+import { pickVendorImage } from '@/lib/pickVendorImage';
 import { useDrawer } from './_layout';
 
 const C = {
@@ -48,10 +49,14 @@ interface ListingForm {
   cylinderSizes: string[];
   otherSizes: string;
   inStock: boolean;
+  /** Uploaded photo key to save. undefined = leave the photo as it is, null = remove it. */
+  imageKey?: string | null;
+  /** What the photo box shows: the saved photo, or the one just uploaded. */
+  imagePreview: string | null;
 }
 
 function emptyForm(): ListingForm {
-  return { branchId: '', gasType: 'COOKING', customName: '', pricePerKg: '', cylinderSizes: [], otherSizes: '', inStock: true };
+  return { branchId: '', gasType: 'COOKING', customName: '', pricePerKg: '', cylinderSizes: [], otherSizes: '', inStock: true, imagePreview: null };
 }
 
 // ── Listing card ──────────────────────────────────────────────────────────────
@@ -76,6 +81,7 @@ function ListingCard({
 
   return (
     <View style={[lc.card, cardShadow]}>
+      {listing.imageUrl ? <Image source={{ uri: listing.imageUrl }} style={lc.photo} resizeMode="cover" /> : null}
       <View style={lc.topRow}>
         <View style={[lc.typeDot, { backgroundColor: color + '18', borderColor: color + '44' }]}>
           <Text style={[lc.typeText, { color }]}>{label}</Text>
@@ -140,6 +146,17 @@ function ListingFormView({
 }) {
   const [form, setForm] = useState<ListingForm>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  async function choosePhoto() {
+    setUploadingPhoto(true);
+    try {
+      const picked = await pickVendorImage('listing');
+      if (picked) setForm((cur) => ({ ...cur, imageKey: picked.key, imagePreview: picked.previewUri }));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   function set<K extends keyof ListingForm>(key: K, value: ListingForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -186,6 +203,27 @@ function ListingFormView({
           </View>
         </>
       )}
+
+      <Text style={f.sectionLabel}>Product photo</Text>
+      <View style={f.photoRow}>
+        <TouchableOpacity style={f.photoBox} onPress={choosePhoto} disabled={uploadingPhoto} activeOpacity={0.8}>
+          {uploadingPhoto ? (
+            <ActivityIndicator color={C.accent} />
+          ) : form.imagePreview ? (
+            <Image source={{ uri: form.imagePreview }} style={f.photoImg} resizeMode="cover" />
+          ) : (
+            <>
+              <IconSymbol name="plus" size={20} color={C.accent} />
+              <Text style={f.photoHint}>Add photo</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {form.imagePreview ? (
+          <TouchableOpacity onPress={() => setForm((cur) => ({ ...cur, imageKey: null, imagePreview: null }))} activeOpacity={0.7}>
+            <Text style={{ color: C.red, fontSize: 13, fontWeight: '600' }}>Remove</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       <Text style={f.sectionLabel}>Gas Type</Text>
       <View style={f.typeGrid}>
@@ -331,6 +369,7 @@ export default function ListingsScreen() {
         cylinderSizes: form.cylinderSizes,
         otherSizes: form.otherSizes.trim() || undefined,
         inStock: form.inStock,
+        ...(form.imageKey !== undefined ? { imageKey: form.imageKey } : {}),
       };
 
       if (editTarget) {
@@ -398,6 +437,7 @@ export default function ListingsScreen() {
         cylinderSizes: editTarget.cylinderSizes,
         otherSizes: editTarget.otherSizes ?? '',
         inStock: editTarget.inStock,
+        imagePreview: editTarget.imageUrl ?? null,
       }
     : emptyForm();
 
@@ -491,6 +531,7 @@ export default function ListingsScreen() {
 
 // ── Listing card styles ───────────────────────────────────────────────────────
 const lc = StyleSheet.create({
+  photo: { width: '100%', height: 150, borderRadius: 12, backgroundColor: C.surface },
   card: {
     backgroundColor: C.card,
     borderRadius: 20,
@@ -556,6 +597,13 @@ const lc = StyleSheet.create({
 
 // ── Form styles ───────────────────────────────────────────────────────────────
 const f = StyleSheet.create({
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  photoBox: {
+    width: 120, height: 90, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.accent + '66',
+    backgroundColor: C.accentLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', gap: 4,
+  },
+  photoImg: { width: '100%', height: '100%' },
+  photoHint: { color: C.accent, fontSize: 12, fontWeight: '600' },
   container: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40, gap: 16 },
   sectionLabel: { color: C.text, fontSize: 13, fontWeight: '700', letterSpacing: 0.2, marginBottom: -8 },
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

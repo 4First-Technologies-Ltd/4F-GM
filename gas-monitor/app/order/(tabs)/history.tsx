@@ -1,10 +1,13 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, RefreshControl,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { MOCK_ORDERS, STATUS_META, fmtPrice } from '@/app/order/_shared';
+import { ordersApi, type ConsumerOrder } from '@/lib/api';
+import { STATUS_META, fmtPrice, fmtDate, initialsOf, shortRef, supplierOf } from '@/app/order/_shared';
 
 const C = {
   bg: '#EDF7ED',
@@ -25,6 +28,25 @@ const cardShadow = Platform.select({
 });
 
 export default function OrderHistoryScreen() {
+  const [orders, setOrders] = useState<ConsumerOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setOrders(await ordersApi.list());
+      setError('');
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not load your orders.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="dark" />
@@ -36,14 +58,26 @@ export default function OrderHistoryScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Order History</Text>
-          <Text style={s.headerSub}>{MOCK_ORDERS.length} orders total</Text>
+          <Text style={s.headerSub}>{orders.length} order{orders.length === 1 ? '' : 's'} total</Text>
         </View>
         <View style={s.headerBadge}>
           <IconSymbol name="clock.fill" size={18} color={C.accent} />
         </View>
       </View>
 
-      {MOCK_ORDERS.length === 0 ? (
+      {loading ? (
+        <View style={s.emptyState}>
+          <ActivityIndicator color={C.accent} />
+        </View>
+      ) : error && orders.length === 0 ? (
+        <View style={s.emptyState}>
+          <Text style={s.emptyTitle}>Couldn&apos;t load orders</Text>
+          <Text style={s.emptySubtitle}>{error}</Text>
+          <TouchableOpacity onPress={() => { setLoading(true); void load(); }} activeOpacity={0.8}>
+            <Text style={{ color: C.accent, fontWeight: '700', marginTop: 6 }}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : orders.length === 0 ? (
         <View style={s.emptyState}>
           <View style={s.emptyIconCircle}>
             <IconSymbol name="clock.fill" size={32} color={C.dim} />
@@ -52,9 +86,16 @@ export default function OrderHistoryScreen() {
           <Text style={s.emptySubtitle}>Your past orders will appear here</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={s.listContainer} showsVerticalScrollIndicator={false}>
-          {MOCK_ORDERS.map((order) => {
+        <ScrollView
+          contentContainerStyle={s.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} tintColor={C.accent} onRefresh={() => { setRefreshing(true); void load(); }} />
+          }
+        >
+          {orders.map((order) => {
             const meta = STATUS_META[order.status];
+            const supplier = supplierOf(order);
             return (
               <TouchableOpacity
                 key={order.id}
@@ -63,12 +104,12 @@ export default function OrderHistoryScreen() {
                 activeOpacity={0.82}
               >
                 <View style={s.orderTop}>
-                  <View style={[s.supplierAvatar, { backgroundColor: order.supplierColor + '1A', borderColor: order.supplierColor + '40' }]}>
-                    <Text style={[s.supplierInitials, { color: order.supplierColor }]}>{order.supplierInitials}</Text>
+                  <View style={[s.supplierAvatar, { backgroundColor: C.accent + '1A', borderColor: C.accent + '40' }]}>
+                    <Text style={[s.supplierInitials, { color: C.accent }]}>{initialsOf(supplier)}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.orderSupplier} numberOfLines={1}>{order.supplier}</Text>
-                    <Text style={s.orderMeta}>{order.size} × {order.quantity} · {order.date}</Text>
+                    <Text style={s.orderSupplier} numberOfLines={1}>{supplier}</Text>
+                    <Text style={s.orderMeta}>{order.cylinderSize} × {order.quantity} · {fmtDate(order.createdAt)}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 6 }}>
                     <View style={[s.statusBadge, { backgroundColor: meta.bg }]}>
@@ -81,9 +122,9 @@ export default function OrderHistoryScreen() {
                 <View style={s.orderBottom}>
                   <View style={s.orderIdRow}>
                     <IconSymbol name="doc.fill" size={11} color={C.dim} />
-                    <Text style={s.orderId}>{order.orderId}</Text>
+                    <Text style={s.orderId}>{shortRef(order)}</Text>
                   </View>
-                  <Text style={s.totalValue}>{fmtPrice(order.total)}</Text>
+                  <Text style={s.totalValue}>{fmtPrice(order.totalAmount)}</Text>
                 </View>
               </TouchableOpacity>
             );

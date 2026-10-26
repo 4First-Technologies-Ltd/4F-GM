@@ -24,6 +24,9 @@ export function SellerMark({ listing, className, textClassName = 'text-xs', size
         alt={`${listing.vendor} logo`}
         width={size}
         height={size}
+        // Remote (R2) and data: URLs are not on next/image's allow-list; they are
+        // already small, vendor-supplied logos, so serve them as they are.
+        unoptimized={!listing.logo.startsWith('/')}
         className={cn('shrink-0 object-contain', className)}
       />
     );

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { asyncHandler } from '../lib/asyncHandler';
 import { getMonitorTerms } from '../lib/pricing';
+import { publicImageUrl } from '../lib/storage';
 
 /**
  * Public, unauthenticated marketplace feed. Only listings from vendors who
@@ -18,6 +19,11 @@ const publicWhere: Prisma.GasListingWhereInput = {
 };
 
 // Explicit select: never leak plan, commission or account details publicly.
+/** Stored keys become URLs; the raw key is not part of the public shape. */
+function toPublic<T extends { imageKey: string | null; vendor: { logoUrl: string | null } }>({ imageKey, ...listing }: T) {
+  return { ...listing, imageUrl: publicImageUrl(imageKey), vendor: { ...listing.vendor, logoUrl: publicImageUrl(listing.vendor.logoUrl) } };
+}
+
 const publicSelect = {
   id: true,
   gasType: true,
@@ -26,6 +32,7 @@ const publicSelect = {
   cylinderSizes: true,
   otherSizes: true,
   inStock: true,
+  imageKey: true,
   createdAt: true,
   updatedAt: true,
   branch: {
@@ -65,7 +72,7 @@ router.get(
       select: publicSelect,
       orderBy: { createdAt: 'desc' }
     });
-    return res.json({ listings });
+    return res.json({ listings: listings.map(toPublic) });
   })
 );
 
@@ -79,7 +86,7 @@ router.get(
     if (!listing) {
       return res.status(404).json({ error: 'Listing not found' });
     }
-    return res.json({ listing });
+    return res.json({ listing: toPublic(listing) });
   })
 );
 

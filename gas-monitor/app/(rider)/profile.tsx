@@ -9,6 +9,7 @@ import { useFocusEffect, router } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, riderApi, ApiUser, RiderProfile } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
+import { DeleteAccountLink } from '@/components/delete-account';
 
 const C = {
   bg: '#EDF7ED',
@@ -193,6 +194,8 @@ export default function RiderProfileScreen() {
             <IconSymbol name="arrow.left" size={18} color={C.red} />
             <Text style={s.signOutText}>Sign Out</Text>
           </TouchableOpacity>
+
+          <DeleteAccountLink />
 
           <View style={{ height: 24 }} />
         </ScrollView>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Platform, ActivityIndicator, TextInput, Modal, KeyboardAvoidingView, Alert,
+  Platform, ActivityIndicator, TextInput, Modal, KeyboardAvoidingView, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ordersApi, marketplaceApi, type MarketplaceListing } from '@/lib/api';
+import { useAddresses } from '@/hooks/use-addresses';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -52,6 +53,9 @@ interface Supplier {
   rating: number | null;
   initials: string;
   color: string;
+  /** Vendor's business logo and this listing's product photo (public URLs). */
+  logoUrl: string | null;
+  imageUrl: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,21 +129,10 @@ function toSupplier(l: MarketplaceListing, i: number): Supplier {
     rating: null,
     initials: name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
     color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+    logoUrl: l.vendor.logoUrl,
+    imageUrl: l.imageUrl,
   };
 }
-
-// ── Saved address type ────────────────────────────────────────────────────────
-interface SavedAddress {
-  id: string;
-  label: string;
-  full: string;
-}
-
-const DEFAULT_ADDRESSES: SavedAddress[] = [
-  { id: '1', label: 'Home',   full: '14 Admiralty Way, Lekki Phase 1, Lagos'  },
-  { id: '2', label: 'Office', full: '3 Broad St, Lagos Marina, Lagos Island'   },
-];
-
 
 // ── Supplier Card ─────────────────────────────────────────────────────────────
 function SupplierCard({
@@ -158,8 +151,12 @@ function SupplierCard({
       onPress={onPress}
     >
       <View style={s.cardTop}>
-        <View style={[s.avatar, { backgroundColor: supplier.color + '1A', borderColor: supplier.color + '40' }]}>
-          <Text style={[s.avatarText, { color: supplier.color }]}>{supplier.initials}</Text>
+        <View style={[s.avatar, { backgroundColor: supplier.color + '1A', borderColor: supplier.color + '40', overflow: 'hidden' }]}>
+          {supplier.logoUrl ? (
+            <Image source={{ uri: supplier.logoUrl }} style={{ width: '100%', height: '100%' }} />
+          ) : (
+            <Text style={[s.avatarText, { color: supplier.color }]}>{supplier.initials}</Text>
+          )}
         </View>
 
         <View style={{ flex: 1 }}>
@@ -186,6 +183,10 @@ function SupplierCard({
           {supplier.hours ? <Text style={s.hoursText}>{supplier.hours}</Text> : null}
         </View>
       </View>
+
+      {supplier.imageUrl ? (
+        <Image source={{ uri: supplier.imageUrl }} style={{ width: '100%', height: 140, borderRadius: 12 }} resizeMode="cover" />
+      ) : null}
 
       <View style={s.cardBottom}>
         <View style={s.sizesRow}>
@@ -240,7 +241,7 @@ export default function SuppliersScreen() {
   const [placing, setPlacing] = useState(false);
 
   // Address picker state
-  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(DEFAULT_ADDRESSES);
+  const { addresses: savedAddresses, add: saveAddress } = useAddresses();
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showAddrModal, setShowAddrModal] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -289,7 +290,7 @@ export default function SuppliersScreen() {
     setActiveTab('new');
     setQuantity(1);
     setSelectedSize(0);
-    setSelectedAddressId(null);
+    setSelectedAddressId(savedAddresses.find((a) => a.isDefault)?.id ?? null);
   }
 
   function backToSuppliers() {
@@ -297,15 +298,18 @@ export default function SuppliersScreen() {
     setSelectedSupplier(null);
   }
 
-  function addAddress() {
+  async function addAddress() {
     if (!newAddrLabel.trim() || !newAddrFull.trim()) return;
-    const id = Date.now().toString();
-    setSavedAddresses((prev) => [...prev, { id, label: newAddrLabel.trim(), full: newAddrFull.trim() }]);
-    setSelectedAddressId(id);
-    setNewAddrLabel('');
-    setNewAddrFull('');
-    setShowAddForm(false);
-    setShowAddrModal(false);
+    try {
+      const created = await saveAddress(newAddrLabel.trim(), newAddrFull.trim());
+      setSelectedAddressId(created.id);
+      setNewAddrLabel('');
+      setNewAddrFull('');
+      setShowAddForm(false);
+      setShowAddrModal(false);
+    } catch (err: any) {
+      Alert.alert('Could not save address', err?.message ?? 'Please try again.');
+    }
   }
 
   function closeAddrModal() {
@@ -321,7 +325,7 @@ export default function SuppliersScreen() {
         listingId: selectedSupplier.id,
         cylinderSize: cylinder.size,
         quantity,
-        deliveryAddress: selectedAddress.full,
+        deliveryAddress: selectedAddress.fullAddress,
       });
       router.push({
         pathname: '/order/payment',
@@ -446,8 +450,12 @@ export default function SuppliersScreen() {
 
       {selectedSupplier && (
         <View style={[s.supplierStrip, cardShadow]}>
-          <View style={[s.stripAvatar, { backgroundColor: selectedSupplier.color + '1A' }]}>
-            <Text style={[s.stripAvatarText, { color: selectedSupplier.color }]}>{selectedSupplier.initials}</Text>
+          <View style={[s.stripAvatar, { backgroundColor: selectedSupplier.color + '1A', overflow: 'hidden' }]}>
+            {selectedSupplier.logoUrl ? (
+              <Image source={{ uri: selectedSupplier.logoUrl }} style={{ width: '100%', height: '100%' }} />
+            ) : (
+              <Text style={[s.stripAvatarText, { color: selectedSupplier.color }]}>{selectedSupplier.initials}</Text>
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.stripName}>{selectedSupplier.name}</Text>
@@ -522,7 +530,7 @@ export default function SuppliersScreen() {
               {selectedAddress ? (
                 <View style={{ flex: 1 }}>
                   <Text style={s.addrSelLabel}>{selectedAddress.label}</Text>
-                  <Text style={s.addrSelFull} numberOfLines={2}>{selectedAddress.full}</Text>
+                  <Text style={s.addrSelFull} numberOfLines={2}>{selectedAddress.fullAddress}</Text>
                 </View>
               ) : (
                 <Text style={s.addrSelPlaceholder}>Select a delivery address</Text>
@@ -610,7 +618,7 @@ export default function SuppliersScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.addrOptLabel}>{addr.label}</Text>
-                      <Text style={s.addrOptFull} numberOfLines={2}>{addr.full}</Text>
+                      <Text style={s.addrOptFull} numberOfLines={2}>{addr.fullAddress}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}

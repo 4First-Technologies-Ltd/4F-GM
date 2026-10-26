@@ -8,7 +8,9 @@ export const listingSchema = z.object({
   pricePerKg: z.number().positive('Price per kg must be positive'),
   cylinderSizes: z.array(z.string()).min(1, 'Select at least one cylinder size'),
   otherSizes: z.string().optional(),
-  inStock: z.boolean().optional().default(true)
+  inStock: z.boolean().optional().default(true),
+  // R2 key from POST /api/vendor/images/upload-url (kind "listing"); null clears the photo.
+  imageKey: z.string().min(1).nullable().optional()
 });
 
 /**

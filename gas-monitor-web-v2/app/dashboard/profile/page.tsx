@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, FormEvent, ChangeEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { vendorApi, VendorProfile, ApiRequestError } from '@/lib/api';
 import { Input } from '@/components/motion/input';
 import { Button } from '@/components/motion/button/base';
+import { ImageUpload } from '@/components/vendor/ImageUpload';
 import { PlanSection } from '@/components/vendor/PlanSection';
 import { RiderDetailsSection } from '@/components/rider/RiderDetailsSection';
 import { CompanyDetailsSection } from '@/components/company/CompanyDetailsSection';
@@ -17,15 +18,6 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   PENDING: 'bg-amber-100/50 text-amber-700',
   REJECTED: 'bg-red-100/50 text-red-700'
 };
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
@@ -44,6 +36,8 @@ export default function ProfilePage() {
   const [businessPhone, setBusinessPhone] = useState('');
   const [bio, setBio] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // Set only when the logo changed this session: the uploaded key, sent on save.
+  const [logoKey, setLogoKey] = useState<string | undefined>(undefined);
   const [savingBusiness, setSavingBusiness] = useState(false);
   const [businessSaved, setBusinessSaved] = useState(false);
   const [businessError, setBusinessError] = useState<string | null>(null);
@@ -87,13 +81,6 @@ export default function ProfilePage() {
     }
   }
 
-  async function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    setLogoUrl(dataUrl);
-  }
-
   async function handleBusinessSubmit(e: FormEvent) {
     e.preventDefault();
     setBusinessError(null);
@@ -111,9 +98,10 @@ export default function ProfilePage() {
         city: vendorCity.trim(),
         phone: businessPhone,
         bio: bio || null,
-        logoUrl: logoUrl || null
+        ...(logoKey ? { logoKey } : {})
       });
       setVendorProfile(updated);
+      setLogoKey(undefined);
       setBusinessSaved(true);
       setTimeout(() => setBusinessSaved(false), 3000);
     } catch (err) {
@@ -251,16 +239,16 @@ export default function ProfilePage() {
                 )}
               </div>
               <div>
-                <label htmlFor="logo" className="inline-block px-3 py-2 bg-muted text-muted-foreground text-sm font-medium rounded-lg hover:bg-muted/80 transition-colors cursor-pointer">
-                  Change logo
-                </label>
-                <input
-                  id="logo"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoChange}
-                  className="hidden"
+                <ImageUpload
+                  kind="logo"
+                  label="Change logo"
+                  onUploaded={({ key, previewUrl }) => {
+                    setLogoKey(key);
+                    setLogoUrl(previewUrl);
+                  }}
+                  onError={setBusinessError}
                 />
+                <p className="mt-1.5 text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB. Saved with your business profile.</p>
               </div>
             </div>
 

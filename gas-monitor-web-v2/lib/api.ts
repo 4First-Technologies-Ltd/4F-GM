@@ -233,6 +233,16 @@ export const authApi = {
     return data.user;
   },
 
+  /**
+   * Self-service erasure for every account type. The backend refuses (409) while
+   * orders or deliveries are in flight, and for vendors with unpaid earnings
+   * (`CONTACT_SUPPORT`); its message is meant to be shown as-is.
+   */
+  async deleteAccount(password: string): Promise<void> {
+    await request('/api/auth/me', { method: 'DELETE', auth: true, body: JSON.stringify({ password }) });
+    clearSession();
+  },
+
   async updateProfile(payload: UpdateProfilePayload): Promise<ApiUser> {
     const data = await request<{ user: ApiUser }>('/api/auth/me', {
       method: 'PATCH',
@@ -383,6 +393,8 @@ export interface GasListing {
   cylinderSizes: string[];
   otherSizes?: string;
   inStock: boolean;
+  /** Product photo as a public URL (null/absent = none). Set through `imageKey` on create/update. */
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -426,7 +438,8 @@ export interface UpdateVendorProfilePayload {
   city?: string;
   phone?: string;
   bio?: string | null;
-  logoUrl?: string | null;
+  /** Key from `vendorApi.uploadImage('logo', file)`; null removes the logo. */
+  logoKey?: string | null;
   lat?: number;
   lng?: number;
 }
@@ -472,6 +485,8 @@ export interface ListingPayload {
   cylinderSizes: string[];
   otherSizes?: string;
   inStock?: boolean;
+  /** Key from `vendorApi.uploadImage('listing', file)`; null removes the photo. */
+  imageKey?: string | null;
 }
 
 export const vendorApi = {
@@ -511,11 +526,34 @@ export const vendorApi = {
     return data.profile;
   },
 
-  async uploadDocuments(documents: { url: string; fileName: string }[]): Promise<{ count: number }> {
-    return request('/api/vendor/documents', {
+  /**
+   * Uploads a business logo or listing photo to the public image bucket. Returns
+   * the key to save (`logoKey` / `imageKey`) and a URL to preview it with.
+   * The browser PUTs straight to R2, so the bucket needs a CORS rule for this origin.
+   */
+  async uploadImage(kind: 'logo' | 'listing', file: File): Promise<{ key: string; publicUrl: string | null }> {
+    const { key, uploadUrl, publicUrl } = await request<{ key: string; uploadUrl: string; publicUrl: string | null }>(
+      '/api/vendor/images/upload-url',
+      { method: 'POST', auth: true, body: JSON.stringify({ kind, contentType: file.type, size: file.size }) }
+    );
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) throw new Error('Image upload failed. Please try again.');
+    return { key, publicUrl };
+  },
+
+  /** Uploads a KYC document to the private bucket and records it against the vendor. */
+  async uploadDocument(file: File): Promise<void> {
+    const { key, uploadUrl } = await request<{ key: string; uploadUrl: string }>('/api/vendor/documents/upload-url', {
       method: 'POST',
       auth: true,
-      body: JSON.stringify({ documents })
+      body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size })
+    });
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) throw new Error('Upload failed. Please try again.');
+    await request('/api/vendor/documents', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ documents: [{ key, fileName: file.name }] })
     });
   },
 

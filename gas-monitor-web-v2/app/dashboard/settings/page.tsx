@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import type { UpdateProfilePayload } from '@/lib/api';
+import { authApi, type UpdateProfilePayload } from '@/lib/api';
 import { Button } from '@/components/motion/button/base';
+import { Input } from '@/components/motion/input';
 import { AlertCircle, Check } from 'lucide-react';
 
 type PrefKey = 'pushEnabled' | 'emailNotifEnabled' | 'smsAlertsEnabled';
@@ -49,6 +50,10 @@ function Switch({
 }
 
 export default function SettingsPage() {
+  const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { user, logout, updateProfile } = useAuth();
   const router = useRouter();
 
@@ -78,6 +83,22 @@ export default function SettingsPage() {
   async function handleSignOut() {
     await logout();
     router.push('/');
+  }
+
+  async function handleDelete(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleteError(null);
+    setDeleteBusy(true);
+    try {
+      await authApi.deleteAccount(deletePassword);
+      // The server already ended every session; this clears the in-memory user.
+      await logout();
+      router.push('/');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete your account.');
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   return (
@@ -141,6 +162,58 @@ export default function SettingsPage() {
         <Button type="button" variant="outline" size="sm" onClick={handleSignOut}>
           Sign out
         </Button>
+      </div>
+
+      <div className="rounded-2xl bg-card border border-destructive/30 p-6 md:p-8">
+        <h2 className="text-xl font-semibold text-foreground mb-2">Delete account</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          {user.role === 'CONSUMER'
+            ? 'Removes your personal details, saved addresses and sessions. Past orders are kept as anonymous financial records.'
+            : 'Removes your personal details, documents, bank details, photos and sessions, and takes your listings off the marketplace. Past orders and payout records are kept as anonymous financial records.'}{' '}
+          This cannot be undone.
+        </p>
+        {!deleting ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => setDeleting(true)}>
+            Delete my account
+          </Button>
+        ) : (
+          <form onSubmit={handleDelete} noValidate className="space-y-4 max-w-sm">
+            <Input
+              label="Enter your password to confirm"
+              id="delete-password"
+              type="password"
+              value={deletePassword}
+              onChange={setDeletePassword}
+              error={false}
+              required
+              classNames={{ root: 'w-full' }}
+            />
+            {deleteError && (
+              <div className="text-sm text-destructive flex items-start gap-2" role="alert">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <div>{deleteError}</div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary" size="sm" disabled={!deletePassword || deleteBusy}>
+                {deleteBusy ? 'Deleting…' : 'Permanently delete'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={deleteBusy}
+                onClick={() => {
+                  setDeleting(false);
+                  setDeletePassword('');
+                  setDeleteError(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
 
       <p className="text-xs text-muted-foreground">

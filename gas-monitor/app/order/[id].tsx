@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { MOCK_ORDERS, STATUS_META, fmtPrice, type OrderStatus } from '@/app/order/_shared';
+import { ordersApi, type ConsumerOrder, type OrderStatus } from '@/lib/api';
+import {
+  STATUS_META, STATUS_CONTENT, TIMELINE_STEPS, fmtPrice, fmtDate, fmtTime, initialsOf, shortRef, supplierOf,
+} from '@/app/order/_shared';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -31,36 +34,29 @@ const cardShadow = Platform.select({
   default: {},
 });
 
-// Status-specific content
-const STATUS_CONTENT: Record<OrderStatus, { icon: string; headline: string; sub: string }> = {
-  delivered:  {
-    icon: 'checkmark.circle.fill',
-    headline: 'Order Delivered',
-    sub: 'Your gas has been successfully delivered.',
-  },
-  processing: {
-    icon: 'hourglass',
-    headline: 'Order in Progress',
-    sub: 'Your order is confirmed and on its way.',
-  },
-  cancelled:  {
-    icon: 'xmark.circle.fill',
-    headline: 'Order Cancelled',
-    sub: 'This order was cancelled before delivery.',
-  },
-};
-
 // ── Timeline ─────────────────────────────────────────────────────────────────
+function buildSteps(order: ConsumerOrder) {
+  const reached = TIMELINE_STEPS.findIndex((st) => st.status === order.status);
+  return TIMELINE_STEPS.map((st, i) => ({
+    label: st.label,
+    done: i <= reached,
+    // Only the placed time and the latest move are known — there is no per-step history.
+    time: i === 0 ? `${fmtDate(order.createdAt)}, ${fmtTime(order.createdAt)}`
+      : i === reached ? `${fmtDate(order.updatedAt)}, ${fmtTime(order.updatedAt)}` : '',
+  }));
+}
+
 function Timeline({ steps, status }: { steps: { label: string; time: string; done: boolean }[]; status: OrderStatus }) {
-  const accentColor = status === 'processing' ? C.orange : C.accent;
-  // Index of the first incomplete step (the "in-progress" step for processing)
+  const inProgress = status !== 'DELIVERED';
+  const accentColor = inProgress ? C.orange : C.accent;
+  // Index of the first incomplete step (the "in-progress" step)
   const activeIdx = steps.findIndex((s) => !s.done);
 
   return (
     <View style={tl.wrap}>
       {steps.map((step, i) => {
         const isLast = i === steps.length - 1;
-        const isCurrent = i === activeIdx && status === 'processing';
+        const isCurrent = i === activeIdx && inProgress;
         const isDone = step.done;
 
         return (
@@ -184,12 +180,38 @@ const dr = StyleSheet.create({
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const order = MOCK_ORDERS.find((o) => o.id === id);
+  const [order, setOrder] = useState<ConsumerOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    try {
+      setOrder(await ordersApi.get(id));
+      setError('');
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not load this order.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [id]);
+
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={C.accent} />
+      </SafeAreaView>
+    );
+  }
 
   if (!order) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: C.muted, fontSize: 16 }}>Order not found</Text>
+        <Text style={{ color: C.muted, fontSize: 16 }}>{error || 'Order not found'}</Text>
         <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
           <Text style={{ color: C.accent, fontWeight: '700' }}>Go back</Text>
         </TouchableOpacity>
@@ -199,7 +221,8 @@ export default function OrderDetailScreen() {
 
   const meta = STATUS_META[order.status];
   const content = STATUS_CONTENT[order.status];
-  const showTimeline = order.status !== 'cancelled';
+  const showTimeline = order.status !== 'CANCELLED';
+  const supplier = supplierOf(order);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
@@ -213,14 +236,20 @@ export default function OrderDetailScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Order Details</Text>
-          <Text style={s.headerSub}>{order.orderId}</Text>
+          <Text style={s.headerSub}>{shortRef(order)}</Text>
         </View>
         <View style={[s.headerBadge, { backgroundColor: meta.bg, borderColor: meta.border }]}>
           <IconSymbol name={content.icon as any} size={18} color={meta.color} />
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} tintColor={C.accent} onRefresh={() => { setRefreshing(true); void load(); }} />
+        }
+      >
 
         {/* Status banner */}
         <View style={[s.statusBanner, { backgroundColor: meta.bg, borderColor: meta.border }]}>
@@ -236,18 +265,14 @@ export default function OrderDetailScreen() {
         {/* Supplier */}
         <Section title="Supplier" icon="storefront.fill">
           <View style={s.supplierRow}>
-            <View style={[s.supplierAvatar, { backgroundColor: order.supplierColor + '1A', borderColor: order.supplierColor + '40' }]}>
-              <Text style={[s.supplierInitials, { color: order.supplierColor }]}>{order.supplierInitials}</Text>
+            <View style={[s.supplierAvatar, { backgroundColor: C.accent + '1A', borderColor: C.accent + '40' }]}>
+              <Text style={[s.supplierInitials, { color: C.accent }]}>{initialsOf(supplier)}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.supplierName}>{order.supplier}</Text>
-              <Text style={s.supplierAddr} numberOfLines={1}>{order.supplierAddress}</Text>
-              <View style={s.supplierMeta}>
-                <View style={[s.gasTypeBadge, { backgroundColor: order.supplierColor + '18', borderColor: order.supplierColor + '44' }]}>
-                  <Text style={[s.gasTypeText, { color: order.supplierColor }]}>{order.gasType}</Text>
-                </View>
-                <Text style={s.ratingText}>⭐ {order.supplierRating}</Text>
-              </View>
+              <Text style={s.supplierName}>{supplier}</Text>
+              {order.vendor?.businessAddress ? (
+                <Text style={s.supplierAddr} numberOfLines={2}>{order.vendor.businessAddress}</Text>
+              ) : null}
             </View>
           </View>
         </Section>
@@ -255,21 +280,30 @@ export default function OrderDetailScreen() {
         {/* Timeline */}
         {showTimeline && (
           <Section title="Order Timeline" icon="clock.fill">
-            <Timeline steps={order.timeline} status={order.status} />
+            <Timeline steps={buildSteps(order)} status={order.status} />
           </Section>
         )}
 
         {/* Rider */}
-        {order.riderName && (
+        {order.rider && (
           <Section title="Delivery Agent" icon="person.fill">
             <View style={s.supplierRow}>
               <View style={[s.supplierAvatar, { backgroundColor: C.accent + '1A', borderColor: C.accent + '40' }]}>
                 <IconSymbol name="person.fill" size={18} color={C.accent} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.supplierName}>{order.riderName}</Text>
-                {order.riderPhone ? <Text style={s.supplierAddr}>{order.riderPhone}</Text> : null}
+                <Text style={s.supplierName}>{order.rider.user.name}</Text>
+                {order.rider.phone ? <Text style={s.supplierAddr}>{order.rider.phone}</Text> : null}
               </View>
+              {order.rider.phone ? (
+                <TouchableOpacity
+                  style={s.callBtn}
+                  onPress={() => Linking.openURL(`tel:${order.rider!.phone}`).catch(() => {})}
+                  activeOpacity={0.8}
+                >
+                  <IconSymbol name="phone.fill" size={16} color="#fff" />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </Section>
         )}
@@ -281,17 +315,15 @@ export default function OrderDetailScreen() {
               <IconSymbol name="flame.fill" size={20} color={C.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.itemLabel}>{order.size} cylinder</Text>
-              <Text style={s.itemSub}>{order.gasType} · {fmtPrice(order.unitPrice)} each</Text>
+              <Text style={s.itemLabel}>{order.cylinderSize} cylinder</Text>
+              <Text style={s.itemSub}>Includes delivery</Text>
             </View>
             <Text style={s.itemQty}>× {order.quantity}</Text>
           </View>
           <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 2 }}>
-            <DetailRow label="Subtotal" value={fmtPrice(order.unitPrice * order.quantity)} />
-            <DetailRow label="Delivery fee" value={order.deliveryFee === 0 ? 'Free' : fmtPrice(order.deliveryFee)} valueColor={C.accent} />
             <View style={[dr.row, s.totalRow]}>
               <Text style={s.totalLabel}>Total</Text>
-              <Text style={s.totalValue}>{fmtPrice(order.total)}</Text>
+              <Text style={s.totalValue}>{fmtPrice(order.totalAmount)}</Text>
             </View>
           </View>
         </Section>
@@ -305,33 +337,31 @@ export default function OrderDetailScreen() {
             <Text style={s.addressText}>{order.deliveryAddress}</Text>
           </View>
           <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 2 }}>
-            <DetailRow label="Date" value={order.date} />
-            <DetailRow label="Time" value={order.time} />
+            <DetailRow label="Date" value={fmtDate(order.createdAt)} />
+            <DetailRow label="Time" value={fmtTime(order.createdAt)} />
           </View>
         </Section>
 
         {/* Payment */}
         <Section title="Payment" icon="tag.fill">
-          <DetailRow label="Method" value={order.paymentMethod} />
-          <DetailRow label="Amount paid" value={fmtPrice(order.total)} valueColor={C.accent} />
+          <DetailRow label="Method" value="Paystack" />
+          {order.paystackRef ? <DetailRow label="Reference" value={order.paystackRef} /> : null}
+          <DetailRow
+            label={order.status === 'PENDING' ? 'Amount due' : 'Amount paid'}
+            value={fmtPrice(order.totalAmount)}
+            valueColor={C.accent}
+          />
         </Section>
 
-        {/* Action button */}
-        {order.status === 'delivered' && (
+        {/* Action button — there is no consumer cancel endpoint, so none is offered. */}
+        {order.status === 'DELIVERED' && (
           <TouchableOpacity style={s.actionBtnGreen} onPress={() => router.push('/order')} activeOpacity={0.85}>
             <IconSymbol name="arrow.clockwise" size={17} color="#fff" />
             <Text style={s.actionBtnText}>Reorder</Text>
           </TouchableOpacity>
         )}
 
-        {order.status === 'processing' && (
-          <TouchableOpacity style={s.actionBtnRed} activeOpacity={0.85}>
-            <IconSymbol name="xmark.circle.fill" size={17} color={C.red} />
-            <Text style={[s.actionBtnText, { color: C.red }]}>Cancel Order</Text>
-          </TouchableOpacity>
-        )}
-
-        {order.status === 'cancelled' && (
+        {order.status === 'CANCELLED' && (
           <TouchableOpacity style={s.actionBtnGreen} onPress={() => router.push('/order')} activeOpacity={0.85}>
             <IconSymbol name="cart.fill" size={17} color="#fff" />
             <Text style={s.actionBtnText}>Place New Order</Text>
@@ -410,6 +440,11 @@ const s = StyleSheet.create({
   },
   gasTypeText: { fontSize: 10, fontWeight: '700' },
   ratingText: { color: C.muted, fontSize: 12, fontWeight: '600' },
+  callBtn: {
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: C.accent,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   // Order item
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

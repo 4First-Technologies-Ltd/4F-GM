@@ -181,6 +181,12 @@ export default function VendorLayout() {
                 active={activeRoute === 'earnings'}
                 onPress={() => navigate('earnings')}
               />
+              <NavItem
+                icon="chart.line.uptrend.xyaxis"
+                label="Analytics"
+                active={activeRoute === 'analytics'}
+                onPress={() => navigate('analytics')}
+              />
             </View>
 
             <View style={d.divider} />

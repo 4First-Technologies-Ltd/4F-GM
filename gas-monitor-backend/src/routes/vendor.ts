@@ -10,14 +10,22 @@ import { branchSchema, findMainBranch, findOwnBranch, isSellable } from '../lib/
 import { asyncHandler } from '../lib/asyncHandler';
 import {
   ALLOWED_DOC_TYPES,
+  ALLOWED_IMAGE_TYPES,
+  deleteImage,
   isStorageKey,
   MAX_DOC_BYTES,
+  MAX_IMAGE_BYTES,
   newDocumentKey,
+  newImageKey,
   objectExists,
+  presignImageUpload,
   presignUpload,
+  publicImageUrl,
+  publicStorageConfigured,
   storageConfigured,
   withViewUrls
 } from '../lib/storage';
+import { checkOwnImageKey, withImage, withLogo } from '../lib/images';
 import { documentUploadLimiter } from '../lib/security';
 import {
   cooldownExpiry,
@@ -48,7 +56,13 @@ router.get(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
-    return res.json({ profile: { ...profile, documents: await withViewUrls(profile.documents) } });
+    return res.json({
+      profile: {
+        ...withLogo(profile),
+        documents: await withViewUrls(profile.documents),
+        listings: profile.listings.map(withImage)
+      }
+    });
   })
 );
 
@@ -138,7 +152,10 @@ const patchSchema = z.object({
   city: z.string().trim().min(2).max(80).optional(),
   phone: z.string().min(1).optional(),
   bio: z.string().max(500).nullable().optional(),
-  logoUrl: z.string().url().nullable().optional(),
+  // R2 key issued by POST /images/upload-url (kind "logo"), or null to remove the logo.
+  // There is deliberately no `logoUrl` input any more: clients used to send local file
+  // paths and base64 blobs, neither of which other devices can load.
+  logoKey: z.string().min(1).nullable().optional(),
   lat: z.number().optional(),
   lng: z.number().optional()
 });
@@ -157,12 +174,19 @@ router.patch(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
+    const { logoKey, ...fields } = result.data;
+    if (logoKey) {
+      const problem = await checkOwnImageKey('logo', existing.id, logoKey);
+      if (problem) return res.status(400).json({ error: problem });
+    }
+
     const profile = await prisma.vendorProfile.update({
       where: { userId: req.user!.sub },
-      data: result.data
+      data: { ...fields, ...(logoKey !== undefined ? { logoUrl: logoKey } : {}) }
     });
+    if (logoKey !== undefined && existing.logoUrl && existing.logoUrl !== logoKey) await deleteImage(existing.logoUrl);
 
-    return res.json({ profile });
+    return res.json({ profile: withLogo(profile) });
   })
 );
 
@@ -240,6 +264,46 @@ const uploadUrlSchema = z.object({
   contentType: z.string(),
   size: z.number().int().positive()
 });
+
+const imageUploadSchema = z.object({
+  kind: z.enum(['logo', 'listing']),
+  contentType: z.string(),
+  size: z.number().int().positive()
+});
+
+/**
+ * Marketplace images (business logo, listing photos) go to the public bucket:
+ * the app PUTs straight to R2 with this link, then sends the returned `key` as
+ * `logoKey` / `imageKey` when saving the profile or listing.
+ */
+router.post(
+  '/images/upload-url',
+  requireAuth,
+  documentUploadLimiter,
+  asyncHandler(async (req, res) => {
+    if (!publicStorageConfigured()) {
+      return res.status(503).json({ error: 'Image upload is not available right now. Please try again later.' });
+    }
+    const result = imageUploadSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: 'Invalid image details' });
+    const { kind, contentType, size } = result.data;
+    if (!ALLOWED_IMAGE_TYPES[contentType]) {
+      return res.status(400).json({ error: 'Only JPG, PNG or WebP images are accepted.' });
+    }
+    if (size > MAX_IMAGE_BYTES) {
+      return res.status(400).json({ error: 'Image is too large. The limit is 5 MB.' });
+    }
+
+    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
+    if (!profile) {
+      return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
+    }
+
+    const key = newImageKey(kind, profile.id, contentType);
+    const uploadUrl = await presignImageUpload(key, contentType, size);
+    return res.json({ key, uploadUrl, publicUrl: publicImageUrl(key), contentType, expiresInSeconds: 300 });
+  })
+);
 
 /** Step 1: validate the file and hand back a short-lived upload link to R2. */
 router.post(
@@ -335,7 +399,7 @@ router.get(
       orderBy: { createdAt: 'desc' }
     });
 
-    return res.json({ listings });
+    return res.json({ listings: listings.map(withImage) });
   })
 );
 
@@ -360,6 +424,10 @@ router.post(
     // Omitted branchId means the main branch. A named one must be this
     // vendor's own and still open.
     const { branchId: requestedBranchId, ...listingData } = result.data;
+    if (listingData.imageKey) {
+      const problem = await checkOwnImageKey('listing', profile.id, listingData.imageKey);
+      if (problem) return res.status(400).json({ error: problem });
+    }
     const branch = requestedBranchId
       ? await findOwnBranch(profile.id, requestedBranchId)
       : await findMainBranch(profile.id);
@@ -371,7 +439,7 @@ router.post(
       data: { ...listingData, vendorId: profile.id, branchId: branch.id }
     });
 
-    return res.status(201).json({ listing });
+    return res.status(201).json({ listing: withImage(listing) });
   })
 );
 
@@ -404,8 +472,16 @@ router.patch(
       }
     }
 
+    if (result.data.imageKey) {
+      const problem = await checkOwnImageKey('listing', profile.id, result.data.imageKey);
+      if (problem) return res.status(400).json({ error: problem });
+    }
+
     const listing = await prisma.gasListing.update({ where: { id }, data: result.data });
-    return res.json({ listing });
+    if (result.data.imageKey !== undefined && exists.imageKey && exists.imageKey !== result.data.imageKey) {
+      await deleteImage(exists.imageKey);
+    }
+    return res.json({ listing: withImage(listing) });
   })
 );
 
@@ -426,6 +502,7 @@ router.delete(
     }
 
     await prisma.gasListing.delete({ where: { id } });
+    await deleteImage(exists.imageKey);
     return res.json({ message: 'Listing deleted' });
   })
 );

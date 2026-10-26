@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Platform, Alert, ActivityIndicator, Image,
+  TextInput, Platform, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import { pickVendorImage } from '@/lib/pickVendorImage';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { VendorPlanCard } from '@/components/vendor-plan-card';
 import { vendorApi, VendorProfile, VendorStatus } from '@/lib/api';
 import { useDrawer } from './_layout';
 
@@ -48,6 +49,9 @@ export default function VendorProfileScreen() {
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null | undefined>(null);
+  // Set only when the logo was changed this session: the uploaded key, sent on save.
+  const [logoKey, setLogoKey] = useState<string | undefined>(undefined);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [apiErr, setApiErr] = useState('');
@@ -71,19 +75,15 @@ export default function VendorProfileScreen() {
   useFocusEffect(useCallback(() => { loadProfile(); }, []));
 
   async function handlePickLogo() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo library access to change your logo.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: true,
-      aspect: [1, 1],
-    });
-    if (!result.canceled && result.assets[0]) {
-      setLogoUrl(result.assets[0].uri);
+    setUploadingLogo(true);
+    try {
+      const picked = await pickVendorImage('logo');
+      if (picked) {
+        setLogoKey(picked.key);
+        setLogoUrl(picked.previewUri);
+      }
+    } finally {
+      setUploadingLogo(false);
     }
   }
 
@@ -100,9 +100,10 @@ export default function VendorProfileScreen() {
         businessAddress: businessAddress.trim(),
         phone: phone.trim(),
         bio: bio.trim() || null,
-        logoUrl: logoUrl || null,
+        ...(logoKey ? { logoKey } : {}),
       });
       setProfile(updated);
+      setLogoKey(undefined);
     } catch (err) {
       setApiErr(err instanceof Error ? err.message : 'Failed to save profile.');
     } finally {
@@ -134,7 +135,7 @@ export default function VendorProfileScreen() {
         <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Hero */}
           <View style={[s.heroCard, cardShadow]}>
-            <TouchableOpacity onPress={handlePickLogo} activeOpacity={0.8} style={s.logoWrap}>
+            <TouchableOpacity onPress={handlePickLogo} activeOpacity={0.8} style={s.logoWrap} disabled={uploadingLogo}>
               {logoUrl ? (
                 <Image source={{ uri: logoUrl }} style={s.logoImg} />
               ) : (
@@ -143,7 +144,9 @@ export default function VendorProfileScreen() {
                 </View>
               )}
               <View style={s.logoEditBadge}>
-                <IconSymbol name="plus" size={12} color="#fff" />
+                {uploadingLogo
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <IconSymbol name="plus" size={12} color="#fff" />}
               </View>
             </TouchableOpacity>
             <Text style={s.heroName} numberOfLines={1}>{businessName || 'Your Business'}</Text>
@@ -214,6 +217,8 @@ export default function VendorProfileScreen() {
               </Text>
             </View>
           )}
+
+          {profile && <VendorPlanCard profile={profile} onUpdated={setProfile} />}
 
           {!!apiErr && (
             <View style={s.apiErr}>
