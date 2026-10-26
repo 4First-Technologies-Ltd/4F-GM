@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import type { Request } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 /** Constant-time string comparison that tolerates different lengths. */
 export function safeEqual(a: string, b: string): boolean {
@@ -13,6 +13,9 @@ export function safeEqual(a: string, b: string): boolean {
 export function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
+
+/** Client IP as a rate-limit key. IPv6 clients are grouped by /56 so one machine cannot rotate through its own addresses. */
+const ipKey = (req: Request) => ipKeyGenerator(req.ip ?? '');
 
 const json429 = { error: 'Too many requests. Please wait a few minutes and try again.' };
 
@@ -29,7 +32,7 @@ function limiter(windowMs: number, limit: number, key?: (req: Request) => string
 
 const emailOf = (req: Request) => {
   const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
-  return `${req.ip}|${email}`;
+  return `${ipKey(req)}|${email}`;
 };
 
 const MIN = 60 * 1000;
@@ -51,7 +54,7 @@ export const registerLimiter = limiter(60 * MIN, 10);
  */
 export const inviteLimiter = limiter(15 * MIN, 60);
 /** Each invite sends an email, so cap how many one vendor can send (and spam someone with). */
-export const inviteSendLimiter = limiter(60 * MIN, 30, (req: Request) => (req.user?.sub ?? req.ip ?? 'anon'));
+export const inviteSendLimiter = limiter(60 * MIN, 30, (req: Request) => (req.user?.sub ?? (ipKey(req) || 'anon')));
 export const contactLimiter = limiter(60 * MIN, 5);
 export const guestOrderLimiter = limiter(15 * MIN, 20);
 /** Each call mints an upload link, so cap how many a vendor can request. */
