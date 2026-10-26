@@ -20,6 +20,33 @@ const data = createDataSource<UserRow>({
 
 export const usersData = data;
 
+/**
+ * Marks an unverified account's email as verified, for people who never get the
+ * OTP (spam folder, typo'd mailbox the admin has since confirmed by other means).
+ * Goes through the users PATCH, so it is audited as USER_UPDATED. Shared with the
+ * Customers list, whose own endpoint is read-only.
+ */
+export function verifyEmailAction<T extends { id: string; name: string; emailVerified: boolean }>() {
+  return {
+    key: 'verify-email',
+    label: 'Verify email',
+    variant: 'primary' as const,
+    permission: 'users.update',
+    disabledHint: 'Requires the Operations role',
+    visible: (u: T) => !u.emailVerified,
+    confirm: {
+      title: 'Mark this email as verified?',
+      body: 'They can sign in without entering the emailed code. This is recorded in the audit log.',
+      confirmLabel: 'Verify email'
+    },
+    run: async (user: T, h: { toast: (m: string) => void; refresh: () => void }) => {
+      await data.update!(user.id, { emailVerified: true });
+      h.toast(`${user.name}'s email verified`);
+      h.refresh();
+    }
+  };
+}
+
 export const usersModule: ResourceConfig<UserRow> = {
   resource: 'users',
   label: 'Users',
@@ -152,6 +179,7 @@ export const usersModule: ResourceConfig<UserRow> = {
         h.refresh();
       }
     },
+    verifyEmailAction<UserRow>(),
     {
       key: 'delete',
       label: 'Delete',

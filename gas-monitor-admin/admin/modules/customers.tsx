@@ -2,6 +2,7 @@ import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
 import { formatDateTime, formatRelative } from '@/admin/primitives/format';
 import type { CustomerRow } from './types';
+import { verifyEmailAction } from './users';
 
 /**
  * Customers — consumers, with spend and order aggregates.
@@ -23,7 +24,6 @@ export const customersModule: ResourceConfig<CustomerRow> = {
   resource: 'customers',
   label: 'Customers',
   labelSingular: 'Customer',
-  readOnly: true,
 
   primaryKey: 'id',
   displayField: 'name',
@@ -82,6 +82,10 @@ export const customersModule: ResourceConfig<CustomerRow> = {
       ]
     }
   ],
+
+  // The list is read-only apart from this: verification is written through the
+  // users endpoint, not /customers.
+  rowActions: [verifyEmailAction<CustomerRow>()],
 
   search: { placeholder: 'Search name or email…' },
   defaultSort: { field: 'createdAt', direction: 'desc' },
