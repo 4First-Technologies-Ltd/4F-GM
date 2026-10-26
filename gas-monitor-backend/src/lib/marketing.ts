@@ -3,7 +3,7 @@ import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from './prisma';
 import { EMAIL_FROM, getClient } from './email';
-import { NEWSLETTER_FROM, newsletterUnsubscribeUrl, resolveNewsletterAudience } from './newsletter';
+import { NEWSLETTER_FROM, NEWSLETTER_REPLY_TO, newsletterUnsubscribeUrl, resolveNewsletterAudience } from './newsletter';
 
 /* ───────────────────────────── audience ───────────────────────────── */
 
@@ -222,6 +222,7 @@ export async function runCampaign(campaignId: string): Promise<void> {
             const url = campaign.newsletter ? newsletterUnsubscribeUrl(r.email) : unsubscribeUrl(r.email);
             return {
               from: campaign.newsletter ? NEWSLETTER_FROM : EMAIL_FROM,
+              replyTo: campaign.newsletter ? NEWSLETTER_REPLY_TO : undefined,
               to: r.email,
               subject: campaign.subject,
               html: renderCampaignHtml(campaign.body, r.name, url, campaign.newsletter),
@@ -284,6 +285,7 @@ export async function sendTestEmail(campaignId: string, to: string): Promise<voi
 
   const { error } = await resend.emails.send({
     from: campaign.newsletter ? NEWSLETTER_FROM : EMAIL_FROM,
+    replyTo: campaign.newsletter ? NEWSLETTER_REPLY_TO : undefined,
     to,
     subject: `[Test] ${campaign.subject}`,
     html: renderCampaignHtml(

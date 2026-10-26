@@ -11,6 +11,9 @@ import { getClient } from './email';
 /** Newsletter mail has its own sender; account and order mail keep using EMAIL_FROM. */
 export const NEWSLETTER_FROM = process.env.NEWSLETTER_FROM ?? '4FG Smart Gas Monitor <newsletters@notifications.4fgmonitor.com>';
 
+/** Replies land in a real inbox; the sending address has none. */
+export const NEWSLETTER_REPLY_TO = process.env.NEWSLETTER_REPLY_TO ?? '4fgmonitor@gmail.com';
+
 const CONFIRM_TTL_MS = 7 * 86_400_000;
 const RESEND_GAP_MS = 2 * 60_000;
 
@@ -77,6 +80,7 @@ async function sendConfirmationEmail(to: string, link: string): Promise<void> {
   }
   const { error } = await resend.emails.send({
     from: NEWSLETTER_FROM,
+    replyTo: NEWSLETTER_REPLY_TO,
     to,
     subject: 'Confirm your subscription — 4FG Smart Gas Monitor',
     html: `
