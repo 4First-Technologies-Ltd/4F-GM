@@ -18,6 +18,7 @@ import Image from "next/image";
 import { BeatSection } from "@/components/scroll/BeatSection";
 import { TiltCard } from "@/components/motion/tilt-card";
 import { PhoneMockup } from "@/components/mobile/phone-mockup";
+import { NewsletterForm } from "@/components/site/NewsletterForm";
 
 const section =
   "px-6 py-20 sm:py-28";
@@ -414,6 +415,21 @@ export default function HomePage() {
           </Link>
         </div>
       </BeatSection>
+
+      {/* Newsletter */}
+      <section id="newsletter" className="px-6 pb-20 sm:pb-28">
+        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-border/70 bg-card/75 p-6 backdrop-blur-md sm:p-10">
+          <p className={sectionEyebrow}>Newsletter</p>
+          <h2 className="mt-3 text-2xl font-semibold sm:text-3xl">
+            Get updates in your inbox.
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Product news, gas safety tips and vendor updates. No spam, and you
+            can unsubscribe any time.
+          </p>
+          <NewsletterForm className="relative mt-6" />
+        </div>
+      </section>
     </main>
   );
 }
