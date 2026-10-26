@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { getAccessToken, getSavedUser } from '@/lib/storage';
 import type { ApiUser } from '@/lib/api';
 import { homeRouteFor } from '@/lib/homeRoute';
+import { BadgeMark } from '@/components/badge-mark';
 
 const C = {
   bg: '#EDF7ED',
@@ -66,7 +67,7 @@ export default function SplashScreen() {
       {/* Logo + wordmark */}
       <Animated.View style={[s.logoBlock, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
         <View style={s.badge}>
-          <Text style={s.badgeText}>4FG</Text>
+          <BadgeMark />
         </View>
         <Text style={s.appName}>
           <Text style={{ color: C.accent }}>4FG</Text>

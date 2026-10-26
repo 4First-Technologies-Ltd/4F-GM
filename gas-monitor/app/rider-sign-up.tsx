@@ -13,6 +13,7 @@ import { NetworkStatusDot } from '@/components/network-status-dot';
 import { LegalConsent } from '@/components/legal-consent';
 import { SignUpTabs, RIDER_SUBTABS } from '@/components/signup-tabs';
 import { useLegalConsent } from '@/lib/legal-consent';
+import { BadgeMark } from '@/components/badge-mark';
 
 const C = {
   bg: '#FFFFFF',
@@ -164,7 +165,7 @@ export default function RiderSignUpScreen() {
         <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={s.header}>
             <View style={s.badge}>
-              <Text style={s.badgeText}>4FG</Text>
+              <BadgeMark />
             </View>
             <Text style={s.title}>{resuming ? 'Rider details' : 'Become a Rider'}</Text>
             <Text style={s.subtitle}>

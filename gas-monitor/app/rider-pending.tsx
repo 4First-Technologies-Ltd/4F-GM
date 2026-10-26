@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, riderApi, RiderStatus } from '@/lib/api';
 import { homeRouteFor } from '@/lib/homeRoute';
+import { BadgeMark } from '@/components/badge-mark';
 
 const C = {
   bg: '#EDF7ED',
@@ -92,7 +93,7 @@ export default function RiderPendingScreen() {
 
       <View style={s.content}>
         <View style={s.badge}>
-          <Text style={s.badgeText}>4FG</Text>
+          <BadgeMark />
         </View>
 
         <View style={[s.statusCard, rejected && s.statusCardRed]}>

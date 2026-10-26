@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
+import { BadgeMark } from '@/components/badge-mark';
 
 const C = {
   bg: '#FFFFFF',
@@ -143,7 +144,7 @@ export default function ForgotPasswordScreen() {
 
           <View style={s.header}>
             <View style={s.badge}>
-              <Text style={s.badgeText}>4FG</Text>
+              <BadgeMark />
             </View>
             {step === 'email' && (
               <>
