@@ -49,16 +49,16 @@ export function NewsletterForm({ className }: { className?: string }) {
 
   return (
     <form onSubmit={onSubmit} className={className} noValidate>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex-1">
           <Input
-            label="Email"
             type="email"
+            aria-label="Email address"
+            placeholder="you@example.com"
             value={email}
             onChange={setEmail}
             autoComplete="email"
-            error={email.length > 0 && !emailValid ? "Enter a valid email" : false}
-            reserveErrorLine
+            error={email.length > 0 && !emailValid}
           />
         </div>
         {/* Bots fill every field; people never see this one. */}
@@ -72,11 +72,20 @@ export function NewsletterForm({ className }: { className?: string }) {
           aria-hidden="true"
           className="absolute -left-[9999px] h-0 w-0 opacity-0"
         />
-        <Button type="submit" size="lg" disabled={!emailValid || status === "sending"}>
+        {/* h-11 matches the input so the two sit on one line. */}
+        <Button
+          type="submit"
+          size="lg"
+          className="h-11"
+          disabled={!emailValid || status === "sending"}
+        >
           {status === "sending" ? "Subscribing…" : "Subscribe"}
         </Button>
       </div>
-      {error ? <p className="mt-1 text-sm text-destructive">{error}</p> : null}
+      {email.length > 0 && !emailValid ? (
+        <p className="mt-2 text-sm text-destructive">Enter a valid email</p>
+      ) : null}
+      {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
       <p className="mt-2 text-xs text-muted-foreground">
         We email you once to confirm. Unsubscribe from any issue with one click.
       </p>
