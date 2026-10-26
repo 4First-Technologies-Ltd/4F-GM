@@ -87,6 +87,7 @@ describe('POST /subscribe', () => {
     expect(mail.send).toHaveBeenCalledTimes(1);
     const sent = mail.send.mock.calls[0][0];
     expect(sent.to).toBe('ada@example.com');
+    expect(sent.from).toContain('newsletters@notifications.4fgmonitor.com');
     expect(sent.html).toContain('https://web.test/newsletter/confirm?t=');
     expect(db.newsletterSubscriber.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ where: { email: 'ada@example.com' }, update: expect.objectContaining({ status: 'PENDING' }) })
