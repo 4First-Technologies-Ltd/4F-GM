@@ -14,7 +14,7 @@
     "@expo-google-fonts/fira-code": "^0.4.1",
     "@expo-google-fonts/fira-sans": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
-    "@react-navigation/bottom-tabs": "^7.4.0",
+    "@react-navigation/bottom-tabs": "^7.20.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@sentry/react-native": "~7.2.0",
