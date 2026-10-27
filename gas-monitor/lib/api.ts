@@ -151,6 +151,8 @@ export interface GasListing {
   pricePerKg: number;
   cylinderSizes: string[];
   otherSizes?: string;
+  /** Vendor can fill any quantity: customers may order by kg or by amount, not only by cylinder size. */
+  sellsLoose: boolean;
   inStock: boolean;
   /** Product photo as a public URL (null = none). Set via `imageKey` on create/update. */
   imageUrl?: string | null;
@@ -754,6 +756,9 @@ export interface InitializeOrderPayload {
   cylinderSize: string;
   quantity: number;
   deliveryAddress: string;
+  /** With cylinderSize "Loose" (and quantity 1): exactly one of these. */
+  looseKg?: number;
+  looseAmount?: number;
 }
 
 export interface MarketplaceListing {
@@ -763,6 +768,8 @@ export interface MarketplaceListing {
   pricePerKg: number;
   cylinderSizes: string[];
   otherSizes: string | null;
+  /** Vendor can fill any quantity, so customers may order by kg or by amount. */
+  sellsLoose: boolean;
   inStock: boolean;
   imageUrl: string | null;
   vendor: {

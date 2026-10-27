@@ -61,21 +61,24 @@ export default function VerifyEmailScreen() {
             }
           }
         }
-        router.replace('/vendor-pending');
+        await authApi.refreshUser().catch(() => {});
+        router.replace('/(vendor)');
         return;
       }
 
       if (role === 'LOGISTICS_COMPANY') {
         const pending = takePendingCompanyProfile();
         if (pending) await companyApi.createProfile(pending);
-        router.replace('/company-pending');
+        await authApi.refreshUser().catch(() => {});
+        router.replace('/(company)');
         return;
       }
 
       if (role === 'RIDER') {
         const pending = takePendingRiderProfile();
         if (pending) await riderApi.createProfile(pending);
-        router.replace('/rider-pending');
+        await authApi.refreshUser().catch(() => {});
+        router.replace('/(rider)');
         return;
       }
 

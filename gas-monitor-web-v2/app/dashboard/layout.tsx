@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { homeRouteFor } from '@/lib/home-route';
 import Sidebar from '@/components/dashboard/Sidebar';
 import Topbar from '@/components/dashboard/Topbar';
+import ApprovalBanner from '@/components/dashboard/ApprovalBanner';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -42,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-auto">
           <div className="px-4 py-6 md:px-6 md:py-8">
+            <ApprovalBanner />
             {children}
           </div>
         </main>

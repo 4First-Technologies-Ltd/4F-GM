@@ -9,6 +9,7 @@ import { useAppFonts } from '@/hooks/use-app-fonts';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Sentry } from '@/lib/sentry';
 import { track, trackScreen } from '@/lib/analytics';
+import { UpdateGate } from '@/components/update-gate';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -64,6 +65,7 @@ function RootLayout() {
         <Stack.Screen name="order" options={{ headerShown: false, animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
+      <UpdateGate />
       <StatusBar style="auto" />
     </ThemeProvider>
   );

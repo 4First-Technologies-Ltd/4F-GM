@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import { ButtonLink } from '@/components/motion/button/base';
@@ -19,6 +20,15 @@ export default function VendorPendingPage() {
 function VendorPendingContent() {
   const planParam = useSearchParams().get('plan');
   const plan = isVendorPlan(planParam) ? PLANS[planParam] : null;
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // Pending vendors go straight to their dashboard; this page is for rejected applications.
+  useEffect(() => {
+    if (loading) return;
+    if (user?.vendorStatus === 'PENDING' || user?.vendorStatus === 'APPROVED') router.replace('/dashboard');
+  }, [loading, user?.vendorStatus, router]);
+  const rejected = user?.vendorStatus === 'REJECTED';
 
   return (
     <main className="min-h-dvh flex items-center justify-center bg-background px-4 py-8">
@@ -35,10 +45,13 @@ function VendorPendingContent() {
           <Clock className="h-5 w-5" />
         </span>
 
-        <h1 className="mt-4 text-2xl font-bold text-foreground">Application received</h1>
+        <h1 className="mt-4 text-2xl font-bold text-foreground">
+          {rejected ? 'Application not approved' : 'Application received'}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          We review every vendor before they go live on the marketplace — licensing, safety record
-          and business details. You&apos;ll get an email as soon as a decision is made.
+          {rejected
+            ? 'Your vendor application was not approved, so your store stays hidden from customers. Contact the 4FG team if you think this is a mistake.'
+            : 'We review every vendor before they go live on the marketplace — licensing, safety record and business details. You’ll get an email as soon as a decision is made.'}
         </p>
 
         {plan && (

@@ -361,6 +361,8 @@ model GasListing {
   customName    String?
   pricePerKg    Float
   cylinderSizes String[]
+  /// Vendor can fill any quantity: customers may order by kg or by amount, not just by cylinder size.
+  sellsLoose    Boolean  @default(false)
   otherSizes    String?
   inStock       Boolean       @default(true)
   /// R2 key of the product photo (public bucket, see lib/storage.ts). Null = no photo.
@@ -461,6 +463,12 @@ model PlatformSettings {
   monitorUnitPrice   Int      @default(45000)
   monitorDeliveryFee Int      @default(2000)
   monitorMinQuantity Int      @default(10)
+  /// Mobile version gate. Below `minAppVersion` the app is blocked until updated;
+  /// below `latestAppVersion` it only asks. x.y.z, compared by number.
+  minAppVersion      String   @default("1.0.0")
+  latestAppVersion   String   @default("1.0.0")
+  storeUrlAndroid    String   @default("https://play.google.com/store/apps/details?id=com.fourfirsttechnologies.gasmonitor")
+  storeUrlIos        String   @default("")
   updatedAt          DateTime @updatedAt
 
   @@map("platform_settings")

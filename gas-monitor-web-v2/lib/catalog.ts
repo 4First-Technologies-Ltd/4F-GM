@@ -44,6 +44,8 @@ export interface Listing {
   price?: number;
   /** Vendor listings are priced per kg; the unit price then depends on size. */
   pricePerKg?: number;
+  /** Vendor can fill any quantity, so customers may order by kg or by amount. */
+  sellsLoose?: boolean;
   /** Minimum order quantity. The 4FG Monitor ships in tens. */
   minOrderQty?: number;
   /** Per-order delivery fee when it differs from DELIVERY_FEE (the 4FG Monitor's is admin-set). */

@@ -216,7 +216,13 @@ export default async function ListingPage({
                 </div>
               ) : null}
 
-              {perKg && (
+              {listing.sellsLoose && (
+                <p className="mt-4 rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                  Buy by weight or by amount: tell us how many kg, or how much money you have.
+                </p>
+              )}
+
+              {perKg && listing.sizes.length > 0 && (
                 <ul className="mt-4 space-y-1 text-sm">
                   {listing.sizes
                     .filter((s) => kgOf(s) != null)

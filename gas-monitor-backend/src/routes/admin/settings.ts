@@ -6,6 +6,7 @@ import { asyncHandler } from '../../lib/asyncHandler';
 import { writeAuditLog } from '../../lib/audit';
 import { getOrCreateSettings } from '../../lib/settings';
 import { MAX_ORDER_QUANTITY } from '../../lib/pricing';
+import { VERSION_PATTERN, compareVersions } from '../../lib/appVersion';
 
 const router = Router();
 
@@ -41,6 +42,13 @@ const patchSchema = z.object({
     .int('Minimum order must be a whole number')
     .min(1, 'Minimum order must be at least 1')
     .max(MAX_ORDER_QUANTITY, `Minimum order cannot exceed the ${MAX_ORDER_QUANTITY}-unit order limit`)
+    .optional(),
+  // Mobile version gate. Below min the app is blocked until updated; below latest it only asks.
+  minAppVersion: z.string().trim().regex(VERSION_PATTERN, 'Minimum app version must look like 1.2.0').optional(),
+  latestAppVersion: z.string().trim().regex(VERSION_PATTERN, 'Latest app version must look like 1.2.0').optional(),
+  storeUrlAndroid: z.string().trim().regex(/^https:\/\/\S+$/, 'Play Store link must be an https link').optional(),
+  storeUrlIos: z
+    .union([z.literal(''), z.string().trim().regex(/^https:\/\/\S+$/, 'App Store link must be an https link')])
     .optional()
 });
 
@@ -56,6 +64,12 @@ router.patch(
     }
 
     const before = await getOrCreateSettings();
+
+    const min = result.data.minAppVersion ?? before.minAppVersion;
+    const latest = result.data.latestAppVersion ?? before.latestAppVersion;
+    if (compareVersions(min, latest) > 0) {
+      return res.status(400).json({ error: 'Minimum app version cannot be higher than the latest version.' });
+    }
     const settings = await prisma.platformSettings.update({
       where: { id: 'singleton' },
       data: result.data

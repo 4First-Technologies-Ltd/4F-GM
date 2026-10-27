@@ -67,6 +67,9 @@ const orderItemShape = {
   supplierName: z.string().min(1).optional(),
   totalAmount: z.number().positive().optional(),
   cylinderSize: z.string().min(1),
+  /** With cylinderSize "Loose": how much gas, by weight (kg) or by money (naira). Exactly one. */
+  looseKg: z.number().positive().optional(),
+  looseAmount: z.number().int().positive().optional(),
   quantity: z.number().int().min(1).max(MAX_ORDER_QUANTITY, `You can order at most ${MAX_ORDER_QUANTITY} at a time`),
   deliveryAddress: z.string().min(5)
 };
@@ -88,7 +91,9 @@ function checkOrderItem(item: OrderItem, ctx: z.RefinementCtx) {
 }
 
 async function priceOrder(item: OrderItem): Promise<PricedOrder> {
-  if (item.listingId) return priceListingOrder(item.listingId, item.cylinderSize, item.quantity);
+  if (item.listingId) {
+    return priceListingOrder(item.listingId, item.cylinderSize, item.quantity, { kg: item.looseKg, amount: item.looseAmount });
+  }
   if (item.product) return pricePlatformOrder(item.product, item.cylinderSize, item.quantity);
   return { supplierName: item.supplierName!, unitPrice: 0, totalAmount: item.totalAmount! };
 }
@@ -135,11 +140,14 @@ router.post(
       return res.status(400).json({ error: result.error.issues[0].message });
     }
 
-    const { cylinderSize, quantity, deliveryAddress } = result.data;
+    const { deliveryAddress } = result.data;
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
     const { supplierName, totalAmount, listingId, vendorId, branchId } = priced;
+    // The server decides the stored size and quantity for loose-gas orders.
+    const cylinderSize = priced.cylinderSize ?? result.data.cylinderSize;
+    const quantity = priced.quantity ?? result.data.quantity;
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) {
@@ -255,11 +263,13 @@ router.post(
       return res.status(400).json({ error: result.error.issues[0].message });
     }
 
-    const { email, name, cylinderSize, quantity, deliveryAddress } = result.data;
+    const { email, name, deliveryAddress } = result.data;
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
     const { supplierName, totalAmount, listingId, vendorId, branchId } = priced;
+    const cylinderSize = priced.cylinderSize ?? result.data.cylinderSize;
+    const quantity = priced.quantity ?? result.data.quantity;
 
     // Attach the order to an existing account with this email, or create a
     // lightweight guest account (unverified, random password) to own the order.

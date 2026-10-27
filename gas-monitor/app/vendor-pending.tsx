@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { authApi } from '@/lib/api';
+import { authApi, type ApiUser } from '@/lib/api';
+import { getSavedUser } from '@/lib/storage';
 
 const C = {
   bg: '#EDF7ED',
@@ -20,6 +21,13 @@ const C = {
 };
 
 export default function VendorPendingScreen() {
+  // Pending vendors go straight to their dashboard; this screen is for rejected applications
+  // (and the rare account whose vendor profile was never created).
+  const [rejected, setRejected] = useState(false);
+  useEffect(() => {
+    getSavedUser<ApiUser>().then((u) => setRejected(u?.vendorStatus === 'REJECTED'));
+  }, []);
+
   async function handleSignOut() {
     await authApi.logout();
     router.replace('/sign-in');
@@ -44,9 +52,11 @@ export default function VendorPendingScreen() {
           <View style={s.hourglassWrap}>
             <IconSymbol name="hourglass" size={40} color={C.amber} />
           </View>
-          <Text style={s.statusTitle}>Application Submitted!</Text>
+          <Text style={s.statusTitle}>{rejected ? 'Application not approved' : 'Application Submitted!'}</Text>
           <Text style={s.statusBody}>
-            Your vendor account is under review by the 4FG team. We&apos;ll send you a notification once your account is approved — this usually takes within 24 hours.
+            {rejected
+              ? 'Your vendor application was not approved, so your store stays hidden from customers. Contact the 4FG team if you think this is a mistake.'
+              : 'Your vendor account is under review by the 4FG team. We’ll send you a notification once your account is approved — this usually takes within 24 hours.'}
           </Text>
         </View>
 

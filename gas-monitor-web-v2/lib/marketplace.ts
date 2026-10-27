@@ -28,6 +28,8 @@ export interface PublicListing {
   pricePerKg: number;
   cylinderSizes: string[];
   otherSizes: string | null;
+  /** Vendor can fill any quantity, so customers may order by kg or by amount. */
+  sellsLoose?: boolean;
   inStock: boolean;
   /** Product photo (public URL), if the vendor added one. */
   imageUrl?: string | null;
@@ -147,7 +149,9 @@ export function toCatalogListing(l: PublicListing): Listing {
         : baseDescription,
     category: 'refill',
     gasTypes: gasType ? [gasType] : [],
-    sizes: sizes.length > 0 ? sizes : [PER_KG_SIZE],
+    // A loose-only listing has no fixed sizes: it is bought by weight or amount.
+    sizes: sizes.length > 0 ? sizes : l.sellsLoose ? [] : [PER_KG_SIZE],
+    sellsLoose: l.sellsLoose ?? false,
     location: address,
     state,
     city,

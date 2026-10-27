@@ -29,7 +29,24 @@ type Draft = Pick<
   | 'monitorUnitPrice'
   | 'monitorDeliveryFee'
   | 'monitorMinQuantity'
+  | 'minAppVersion'
+  | 'latestAppVersion'
+  | 'storeUrlAndroid'
+  | 'storeUrlIos'
 >;
+
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
+/** x.y.z by number, so 1.10.0 is newer than 1.9.0. Mirrors gas-monitor-backend/src/lib/appVersion.ts. */
+function compareVersions(a: string, b: string): number {
+  const x = a.split('.').map((p) => Number.parseInt(p, 10) || 0);
+  const y = b.split('.').map((p) => Number.parseInt(p, 10) || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
 
 /** Mirrors MAX_ORDER_QUANTITY in gas-monitor-backend/src/lib/pricing.ts. */
 const MAX_ORDER_QUANTITY = 20;
@@ -57,7 +74,11 @@ export default function SettingsPage() {
           platformFeePercent: r.settings.platformFeePercent,
           monitorUnitPrice: r.settings.monitorUnitPrice,
           monitorDeliveryFee: r.settings.monitorDeliveryFee,
-          monitorMinQuantity: r.settings.monitorMinQuantity
+          monitorMinQuantity: r.settings.monitorMinQuantity,
+          minAppVersion: r.settings.minAppVersion,
+          latestAppVersion: r.settings.latestAppVersion,
+          storeUrlAndroid: r.settings.storeUrlAndroid,
+          storeUrlIos: r.settings.storeUrlIos
         });
       })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
@@ -123,6 +144,26 @@ export default function SettingsPage() {
             draft.monitorMinQuantity > MAX_ORDER_QUANTITY
           ? `Minimum order must be between 1 and ${MAX_ORDER_QUANTITY} units.`
           : null;
+
+  const dirtyVersion =
+    draft && settings
+      ? draft.minAppVersion !== settings.minAppVersion ||
+        draft.latestAppVersion !== settings.latestAppVersion ||
+        draft.storeUrlAndroid !== settings.storeUrlAndroid ||
+        draft.storeUrlIos !== settings.storeUrlIos
+      : false;
+
+  const versionError = !draft
+    ? null
+    : !VERSION_PATTERN.test(draft.minAppVersion) || !VERSION_PATTERN.test(draft.latestAppVersion)
+      ? 'Versions must look like 1.2.0.'
+      : compareVersions(draft.minAppVersion, draft.latestAppVersion) > 0
+        ? 'Minimum version cannot be higher than the latest version.'
+        : !/^https:\/\/\S+$/.test(draft.storeUrlAndroid)
+          ? 'The Play Store link must be an https link.'
+          : draft.storeUrlIos && !/^https:\/\/\S+$/.test(draft.storeUrlIos)
+            ? 'The App Store link must be an https link.'
+            : null;
 
   return (
     <div className="adm-page">
@@ -355,6 +396,86 @@ export default function SettingsPage() {
                   }
                 >
                   {saving === 'monitor' ? 'Saving…' : 'Save monitor pricing'}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="adm-card adm-card-pad">
+            <h2 className="adm-section-title">Mobile app version</h2>
+            <p className="adm-field-help" style={{ marginTop: 'var(--space-2)' }}>
+              Phones check this at launch. Below the minimum, the app is blocked until the user
+              updates. Below the latest, it asks once and lets them carry on. Raise the minimum only
+              after the new build is live in the store.
+            </p>
+
+            <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+              <label className="adm-field">
+                <span className="adm-field-label">Minimum version (forced update)</span>
+                <input
+                  className="adm-input"
+                  value={draft.minAppVersion}
+                  disabled={!canEdit}
+                  placeholder="1.0.0"
+                  onChange={(e) => setDraft({ ...draft, minAppVersion: e.target.value.trim() })}
+                />
+              </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">Latest version (optional update)</span>
+                <input
+                  className="adm-input"
+                  value={draft.latestAppVersion}
+                  disabled={!canEdit}
+                  placeholder="1.0.0"
+                  onChange={(e) => setDraft({ ...draft, latestAppVersion: e.target.value.trim() })}
+                />
+              </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">Play Store link</span>
+                <input
+                  className="adm-input"
+                  value={draft.storeUrlAndroid}
+                  disabled={!canEdit}
+                  onChange={(e) => setDraft({ ...draft, storeUrlAndroid: e.target.value.trim() })}
+                />
+              </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">App Store link</span>
+                <input
+                  className="adm-input"
+                  value={draft.storeUrlIos}
+                  disabled={!canEdit}
+                  placeholder="Leave empty until the iOS app is published"
+                  onChange={(e) => setDraft({ ...draft, storeUrlIos: e.target.value.trim() })}
+                />
+              </label>
+            </div>
+
+            {canEdit && (
+              <div className="adm-dialog-actions" style={{ marginTop: 'var(--space-4)' }}>
+                {dirtyVersion && versionError && (
+                  <span className="adm-field-help" role="alert">
+                    {versionError}
+                  </span>
+                )}
+                {saved === 'version' && <span className="adm-badge adm-badge--success">Saved</span>}
+                <button
+                  type="button"
+                  className="adm-btn adm-btn--primary"
+                  disabled={!dirtyVersion || Boolean(versionError) || saving === 'version'}
+                  onClick={() =>
+                    save('version', {
+                      minAppVersion: draft.minAppVersion,
+                      latestAppVersion: draft.latestAppVersion,
+                      storeUrlAndroid: draft.storeUrlAndroid,
+                      storeUrlIos: draft.storeUrlIos
+                    })
+                  }
+                >
+                  {saving === 'version' ? 'Saving…' : 'Save app version'}
                 </button>
               </div>
             )}

@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+web-build/
+.expo/
+expo-env.d.ts
+*.tsbuildinfo
+
+# Environment files
+.env
+.env*.local
+
+# Native generated folders
+/gas-monitor/ios
+/gas-monitor/android
+/gas-monitor/.kotlin
+
+# Expo
+app-example/
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Keys & certs
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tool-local settings
+.claude/
+
+
+# Confidential / archives - keep out of source control
+*.docx
+*.zip
+!**/node_modules/**
+.gstack/
+
+# Retired web builds - gas-monitor-web-v2 is the web app. Kept on disk locally, not in the repo.
+/gas-monitor-web/
+/gas-monitor-3d-web/
+
+# ── EAS archive only ─────────────────────────────────────────────────────────
+# Having an .easignore makes EAS ignore .gitignore, so everything above is
+# repeated on purpose. Below: other projects in this monorepo that the mobile
+# build never imports (the archive was 612 MB and took 14 minutes to upload).
+/gas-monitor-admin
+/gas-monitor-backend
+/gas-monitor-web-v2
+/gas-monitor-web
+/gas-monitor-3d-web
+/landing
+/supabase
+/screenshots
+/hardware
+.git

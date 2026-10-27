@@ -30,7 +30,7 @@ export default function RiderPendingPage() {
     setChecking(true);
     try {
       const fresh = await refreshUser();
-      if (fresh.role === 'RIDER' && fresh.riderStatus === 'APPROVED') {
+      if (fresh.role === 'RIDER' && (fresh.riderStatus === 'APPROVED' || fresh.riderStatus === 'PENDING')) {
         router.replace(homeRouteFor(fresh));
         return;
       }

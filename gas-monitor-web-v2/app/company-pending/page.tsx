@@ -32,7 +32,7 @@ export default function CompanyPendingPage() {
     setChecking(true);
     try {
       const fresh = await refreshUser();
-      if (fresh.role === 'LOGISTICS_COMPANY' && fresh.companyStatus === 'APPROVED') {
+      if (fresh.role === 'LOGISTICS_COMPANY' && (fresh.companyStatus === 'APPROVED' || fresh.companyStatus === 'PENDING')) {
         router.replace(homeRouteFor(fresh));
         return;
       }
