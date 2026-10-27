@@ -48,6 +48,8 @@ import adminSupportRoutes from './routes/admin/support';
 import adminStatsRoutes from './routes/admin/stats';
 import adminUsersRoutes from './routes/admin/users';
 import adminVendorsRoutes from './routes/admin/vendors';
+import adminBroadcastsRoutes from './routes/admin/broadcasts';
+import notificationsRoutes from './routes/notifications';
 import adminBranchStaffRoutes from './routes/admin/branchStaff';
 
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
@@ -108,6 +110,8 @@ export function createApp() {
   app.use('/api/newsletter', newsletterRoutes);
   // Mobile version gate: public, no token needed.
   app.use('/api/app-version', appVersionRoutes);
+  // A signed-in user's inbox and push token.
+  app.use('/api/notifications', notificationsRoutes);
   app.use('/api/device', deviceRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
 
@@ -134,6 +138,7 @@ export function createApp() {
   app.use('/api/admin/stats', adminStatsRoutes);
   app.use('/api/admin/users', adminUsersRoutes);
   app.use('/api/admin/vendors', adminVendorsRoutes);
+  app.use('/api/admin/broadcasts', adminBroadcastsRoutes);
   app.use('/api/admin/branch-staff', adminBranchStaffRoutes);
 
   app.use((req, res) => {

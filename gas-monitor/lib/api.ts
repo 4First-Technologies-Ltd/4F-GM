@@ -389,6 +389,9 @@ export const authApi = {
 
   async logout(): Promise<void> {
     const refreshToken = await getRefreshToken();
+    // While the session still exists: stop pushing to this phone for the account leaving it.
+    // Imported here because lib/push.ts itself uses this file.
+    await import('./push').then((m) => m.unregisterPush()).catch(() => {});
     try {
       await request('/api/auth/logout', {
         method: 'POST',
@@ -784,6 +787,37 @@ export interface MarketplaceListing {
     phone: string | null;
   };
 }
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/** Messages from the 4FG team, and this phone's push token. */
+export const notificationsApi = {
+  async list(): Promise<{ notifications: AppNotification[]; unread: number }> {
+    return request('/api/notifications', { auth: true });
+  },
+  async unreadCount(): Promise<number> {
+    const data = await request<{ unread: number }>('/api/notifications/unread-count', { auth: true });
+    return data.unread;
+  },
+  async markRead(id: string): Promise<void> {
+    await request(`/api/notifications/${id}/read`, { method: 'POST', auth: true });
+  },
+  async markAllRead(): Promise<void> {
+    await request('/api/notifications/read-all', { method: 'POST', auth: true });
+  },
+  async registerPushToken(token: string, platform: 'android' | 'ios'): Promise<void> {
+    await request('/api/notifications/push-token', { method: 'PUT', auth: true, body: JSON.stringify({ token, platform }) });
+  },
+  async removePushToken(token: string): Promise<void> {
+    await request('/api/notifications/push-token', { method: 'DELETE', auth: true, body: JSON.stringify({ token }) });
+  },
+};
 
 export const marketplaceApi = {
   async listings(): Promise<{ listings: MarketplaceListing[] }> {

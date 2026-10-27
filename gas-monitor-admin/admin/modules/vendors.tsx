@@ -2,6 +2,7 @@ import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
 import { formatDateTime, formatNumber, formatRelative } from '@/admin/primitives/format';
 import { adminFetch } from '@/lib/api';
+import { deleteJson, postJson } from '@/admin/data/source';
 import type { VendorPlan, VendorRow } from './types';
 
 /**
@@ -39,10 +40,13 @@ async function setPlan(id: string, plan: VendorPlan): Promise<void> {
 /**
  * Vendors — the supply side, with the approval queue.
  *
- * Reduced mode: there is no rejection-reason field and no suspend flag on
- * VendorProfile, so those actions are not offered. Adding them needs a schema
- * change; see ADMIN_DASHBOARD_REPORT.md.
+ * Suspend, restore and delete are SUPER_ADMIN only (matching the backend guards).
+ * Suspension is on the owner's user account (with a reason); deletion anonymises
+ * the account in place and is refused while money or deliveries are outstanding.
  */
+
+/** A deleted vendor keeps its row (orders and earnings reference it) but its owner's email is wiped. */
+const isDeleted = (v: VendorRow) => v.user.email.endsWith('@deleted.invalid');
 
 const data = createDataSource<VendorRow>({
   path: '/vendors',
@@ -69,7 +73,12 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
       render: (v) => (
         <>
           {v.businessName}
-          <span className="adm-td-sub">{v.user.email}</span>
+          {isDeleted(v) ? (
+            <span className="adm-badge adm-badge--neutral" style={{ marginLeft: 8 }}>Deleted</span>
+          ) : v.user.isSuspended ? (
+            <span className="adm-badge adm-badge--error" style={{ marginLeft: 8 }}>Suspended</span>
+          ) : null}
+          <span className="adm-td-sub">{isDeleted(v) ? 'Account deleted' : v.user.email}</span>
         </>
       )
     },
@@ -169,6 +178,65 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
         h.refresh();
       }
     },
+    {
+      key: 'suspend',
+      label: 'Suspend',
+      variant: 'danger',
+      permission: 'vendors.suspend',
+      disabledHint: 'Requires the Super admin role',
+      visible: (v) => !v.user.isSuspended && !isDeleted(v),
+      confirm: {
+        title: 'Suspend this vendor?',
+        body: 'They are signed out and cannot sign in, and their listings leave the marketplace. Orders customers have already paid for are left alone. You can reinstate them at any time. This is recorded in the audit log.',
+        confirmLabel: 'Suspend vendor',
+        reasonLabel: 'Reason (the vendor is shown this when they try to sign in)'
+      },
+      run: async (vendor, h, reason) => {
+        const r = await postJson<{ openOrders: number }>(`/vendors/${vendor.id}/suspend`, { reason });
+        h.toast(
+          `${vendor.businessName} suspended${r.openOrders ? ` — ${r.openOrders} open order${r.openOrders === 1 ? '' : 's'} left in progress` : ''}`
+        );
+        h.refresh();
+      }
+    },
+    {
+      key: 'restore',
+      label: 'Reinstate',
+      variant: 'primary',
+      permission: 'vendors.suspend',
+      disabledHint: 'Requires the Super admin role',
+      visible: (v) => v.user.isSuspended && !isDeleted(v),
+      confirm: {
+        title: 'Reinstate this vendor?',
+        body: 'They can sign in again and their listings return to the marketplace (if they are approved).',
+        confirmLabel: 'Reinstate vendor'
+      },
+      run: async (vendor, h) => {
+        await postJson(`/vendors/${vendor.id}/restore`);
+        h.toast(`${vendor.businessName} reinstated`);
+        h.refresh();
+      }
+    },
+    {
+      key: 'delete',
+      label: 'Delete',
+      variant: 'danger',
+      permission: 'vendors.delete',
+      disabledHint: 'Requires the Super admin role',
+      visible: (v) => !isDeleted(v),
+      confirm: {
+        title: 'Delete this vendor?',
+        body: 'This cannot be undone. Their personal details, documents, bank details and photos are erased, listings are taken off sale, branches are closed and the account can never sign in again. Order and earnings records are kept. It is refused while they have paid orders to deliver or earnings not yet paid out.',
+        confirmLabel: 'Delete vendor',
+        reasonLabel: 'Reason (recorded in the audit log)',
+        typeToConfirm: (v) => v.businessName
+      },
+      run: async (vendor, h, reason) => {
+        await deleteJson(`/vendors/${vendor.id}`, { reason, confirmName: vendor.businessName });
+        h.toast(`${vendor.businessName} deleted`);
+        h.refresh();
+      }
+    },
     // One action per target plan: the action engine has no input control, and
     // a vendor's plan is a short closed set.
     ...PLAN_KEYS.map((plan) => ({
@@ -229,6 +297,17 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
                 : null,
             type: 'date'
           }
+        ]
+      },
+      {
+        title: 'Account',
+        fields: [
+          {
+            key: 'accountState',
+            label: 'State',
+            accessor: (v) => (isDeleted(v) ? 'Deleted' : v.user.isSuspended ? 'Suspended' : 'Active')
+          },
+          { key: 'suspendedReason', label: 'Suspension reason', accessor: (v) => v.user.suspendedReason, full: true }
         ]
       },
       {
@@ -307,7 +386,9 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
   permissions: {
     read: 'vendors.read',
     update: 'vendors.approve',
-    approve: 'vendors.approve'
+    approve: 'vendors.approve',
+    suspend: 'vendors.suspend',
+    delete: 'vendors.delete'
   },
 
   data,

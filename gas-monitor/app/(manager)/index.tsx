@@ -1,3 +1,4 @@
+import { NotificationBell } from '@/components/notification-bell';
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
@@ -142,6 +143,9 @@ export default function ManagerOrdersScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="dark" />
       <View style={s.header}>
+        <View style={{ position: 'absolute', right: 16, top: 8 }}>
+          <NotificationBell />
+        </View>
         <Text style={s.title}>Orders</Text>
         <Text style={s.sub}>
           {branches.length === 0 ? 'Waiting for a branch invite' : branches.map((b) => b.name).join(' · ')}

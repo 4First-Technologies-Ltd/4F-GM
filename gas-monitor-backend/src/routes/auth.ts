@@ -330,7 +330,12 @@ router.post(
     }
 
     if (user.isSuspended) {
-      return res.status(403).json({ error: 'This account has been suspended. Contact support for help.', code: 'ACCOUNT_SUSPENDED' });
+      return res.status(403).json({
+        error: user.suspendedReason
+          ? `This account has been suspended: ${user.suspendedReason}. Contact support for help.`
+          : 'This account has been suspended. Contact support for help.',
+        code: 'ACCOUNT_SUSPENDED'
+      });
     }
 
     const tokens = await issueTokenPair(user.id, user.email);

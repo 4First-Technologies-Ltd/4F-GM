@@ -9,6 +9,7 @@ import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { vendorApi, VendorOrder, OrderStatus, Branch } from '@/lib/api';
 import { ApprovalBanner } from '@/components/approval-banner';
+import { NotificationBell } from '@/components/notification-bell';
 import { AssignRiderSheet } from '@/components/assign-rider-sheet';
 import { useDrawer } from './_layout';
 
@@ -252,6 +253,7 @@ export default function VendorOrdersScreen() {
             <Text style={s.pendingBadgeText}>{pendingCount}</Text>
           </View>
         )}
+        <NotificationBell />
       </View>
 
       <ApprovalBanner kind="vendor" />

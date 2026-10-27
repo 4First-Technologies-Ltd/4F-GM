@@ -45,14 +45,18 @@ export function ResourceList<T>({
 
   const idOf = (row: T) => String((row as Record<string, unknown>)[config.primaryKey]);
 
-  async function execute(action: ActionDef<T>, row: T) {
-    await action.run(row, {
-      refresh: r.refresh,
-      toast: (message) => {
-        setToast(message);
-        window.setTimeout(() => setToast(null), 4000);
-      }
-    });
+  async function execute(action: ActionDef<T>, row: T, reason?: string) {
+    await action.run(
+      row,
+      {
+        refresh: r.refresh,
+        toast: (message) => {
+          setToast(message);
+          window.setTimeout(() => setToast(null), 4000);
+        }
+      },
+      reason
+    );
   }
 
   function invoke(action: ActionDef<T>, row: T) {
@@ -185,10 +189,11 @@ export function ResourceList<T>({
           confirmLabel={pending.action.confirm!.confirmLabel}
           danger={pending.action.variant === 'danger'}
           typeToConfirm={pending.action.confirm!.typeToConfirm?.(pending.row)}
+          reasonLabel={pending.action.confirm!.reasonLabel}
           onCancel={() => setPending(null)}
-          onConfirm={async () => {
+          onConfirm={async (reason) => {
             const p = pending;
-            await execute(p.action, p.row);
+            await execute(p.action, p.row, reason);
             setPending(null);
           }}
         />

@@ -100,10 +100,12 @@ export interface ActionDef<C> {
     confirmLabel: string;
     /** Require typing this exact value. For irreversible actions. */
     typeToConfirm?: (ctx: C) => string;
+    /** Ask for a written reason first; it is passed to `run` as the third argument. */
+    reasonLabel?: string;
   };
   /** Contextual visibility, e.g. only show Approve while status is PENDING. */
   visible?: (ctx: C) => boolean;
-  run: (ctx: C, helpers: ActionHelpers) => Promise<void>;
+  run: (ctx: C, helpers: ActionHelpers, reason?: string) => Promise<void>;
 }
 
 /* ---------------------------------------------------------------- detail --- */

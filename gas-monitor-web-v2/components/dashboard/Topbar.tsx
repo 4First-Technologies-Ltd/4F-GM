@@ -2,7 +2,8 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { Menu, Bell } from 'lucide-react';
+import { Menu } from 'lucide-react';
+import NotificationBell from '@/components/dashboard/NotificationBell';
 import { ThemeToggle } from '@/components/site/ThemeToggle';
 
 const TITLES: Record<string, string> = {
@@ -17,7 +18,8 @@ const TITLES: Record<string, string> = {
   '/dashboard/addresses': 'Addresses',
   '/dashboard/profile': 'Profile',
   '/dashboard/documents': 'Documents',
-  '/dashboard/settings': 'Settings'
+  '/dashboard/settings': 'Settings',
+  '/dashboard/notifications': 'Messages'
 };
 
 function pageTitle(pathname: string) {
@@ -51,14 +53,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         {/* Actions */}
         <div className="flex items-center gap-2 md:gap-4">
           <ThemeToggle />
-          <button
-            type="button"
-            className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Notifications"
-            disabled
-          >
-            <Bell className="h-5 w-5" />
-          </button>
+          <NotificationBell />
           {user && (
             <span className="text-xs md:text-sm font-medium text-muted-foreground px-2">
               {user.name.split(' ')[0]}

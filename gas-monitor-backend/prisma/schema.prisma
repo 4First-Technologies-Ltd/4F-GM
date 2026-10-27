@@ -81,6 +81,9 @@ model User {
   role              Role              @default(CONSUMER)
   emailVerified     Boolean           @default(false)
   isSuspended       Boolean           @default(false)
+  /// Why an admin suspended this account (null for accounts suspended before reasons existed).
+  suspendedReason   String?
+  suspendedAt       DateTime?
   otpCodeHash       String?
   otpPurpose        OtpPurpose?
   otpExpiresAt      DateTime?
@@ -104,6 +107,8 @@ model User {
   crmNotes          CrmNote[]
   crmTags           CrmUserTag[]
   crmTasks          CrmTask[]
+  notifications     Notification[]
+  pushTokens        PushToken[]
 
   @@map("users")
 }
@@ -474,6 +479,83 @@ model PlatformSettings {
   @@map("platform_settings")
 }
 
+enum BroadcastAudience {
+  ALL
+  CONSUMERS
+  VENDORS
+  RIDERS
+  USER
+}
+
+enum BroadcastStatus {
+  SENDING
+  SENT
+  FAILED
+}
+
+/// A message a super admin sent from the admin panel: to everyone, to one kind
+/// of account, or to one person. Delivered in-app (a Notification row per
+/// recipient), by email and/or by push, as chosen when it was sent.
+model Broadcast {
+  id             String            @id @default(uuid())
+  title          String
+  body           String
+  audience       BroadcastAudience
+  /// Only for audience USER: the one recipient.
+  targetUserId   String?
+  sendInApp      Boolean           @default(true)
+  sendEmail      Boolean           @default(false)
+  sendPush       Boolean           @default(false)
+  status         BroadcastStatus   @default(SENDING)
+  recipientCount Int               @default(0)
+  emailsSent     Int               @default(0)
+  pushesSent     Int               @default(0)
+  /// Why it stopped early, if it did.
+  error          String?
+  /// Snapshotted so the record survives the admin being deleted.
+  createdByName  String?
+  createdByEmail String?
+  createdAt      DateTime          @default(now())
+  completedAt    DateTime?
+  notifications  Notification[]
+
+  @@index([createdAt])
+  @@map("broadcasts")
+}
+
+/// One message in one user's inbox (mobile and web). Rows from a broadcast
+/// keep a link to it; the rows are deleted with the user, not with the broadcast.
+model Notification {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  broadcastId String?
+  broadcast   Broadcast? @relation(fields: [broadcastId], references: [id], onDelete: SetNull)
+  title       String
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([userId, createdAt])
+  @@index([broadcastId])
+  @@map("notifications")
+}
+
+/// An Expo push token for one device. A token is unique: signing in as someone
+/// else on the same phone moves it to that user.
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_tokens")
+}
+
 enum AuditAction {
   VENDOR_APPROVED
   VENDOR_REJECTED
@@ -529,6 +611,10 @@ enum AuditAction {
   COMPANY_APPROVED
   COMPANY_REJECTED
   COMPANY_STATUS_RESET
+  VENDOR_SUSPENDED
+  VENDOR_RESTORED
+  VENDOR_DELETED
+  BROADCAST_SENT
 }
 
 // Append-only record of every mutating admin action.

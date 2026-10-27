@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { Prisma, VendorPlan, VendorStatus } from '@prisma/client';
 import { z } from 'zod';
-import { requireAdmin, requireOperations } from '../../middleware/requireAdmin';
+import { requireAdmin, requireOperations, requireSuperAdmin } from '../../middleware/requireAdmin';
+import { DeletionBlocked, eraseAccountAsAdmin } from '../../lib/accountDeletion';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
@@ -15,7 +16,7 @@ const router = Router();
 const SORTABLE = ['createdAt', 'businessName', 'status', 'plan'] as const;
 
 const LIST_INCLUDE = {
-  user: { select: { id: true, name: true, email: true, createdAt: true } },
+  user: { select: { id: true, name: true, email: true, createdAt: true, isSuspended: true, suspendedReason: true } },
   documents: true,
   _count: { select: { listings: true, orders: true } }
 } as const;
@@ -195,6 +196,123 @@ router.patch(
     });
 
     return res.json({ vendor: updated });
+  })
+);
+
+const vendorSuspendSchema = z.object({
+  reason: z.string().trim().min(3, 'Give a reason for the suspension').max(300)
+});
+
+/**
+ * Suspend a vendor's whole account. They cannot sign in, their listings leave the
+ * marketplace and they cannot be ordered from. Orders already paid for are left
+ * alone (the count is recorded in the audit entry) so customers are not stranded.
+ * Reversible with /restore.
+ */
+router.post(
+  '/:id/suspend',
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const result = vendorSuspendSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
+
+    const vendor = await prisma.vendorProfile.findUnique({ where: { id: req.params.id }, include: { user: true } });
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+    if (vendor.user.isSuspended) return res.status(409).json({ error: 'This vendor is already suspended' });
+
+    const openOrders = await prisma.order.count({ where: { vendorId: vendor.id, status: { in: [...OPEN_ORDER_STATUSES] } } });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: vendor.userId },
+        data: { isSuspended: true, suspendedReason: result.data.reason, suspendedAt: new Date() }
+      }),
+      // Ends their sessions: a refresh token is the only thing that keeps a phone signed in.
+      prisma.refreshToken.deleteMany({ where: { userId: vendor.userId } })
+    ]);
+
+    await writeAuditLog(req, {
+      action: 'VENDOR_SUSPENDED',
+      resource: 'vendor',
+      resourceId: vendor.id,
+      summary: `${vendor.businessName} suspended: ${result.data.reason}`,
+      metadata: { reason: result.data.reason, openOrdersLeftAlone: openOrders, businessName: vendor.businessName }
+    });
+    return res.json({ ok: true, openOrders });
+  })
+);
+
+router.post(
+  '/:id/restore',
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const vendor = await prisma.vendorProfile.findUnique({ where: { id: req.params.id }, include: { user: true } });
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+    if (!vendor.user.isSuspended) return res.status(409).json({ error: 'This vendor is not suspended' });
+    if (vendor.user.email.endsWith('@deleted.invalid')) {
+      return res.status(409).json({ error: 'This vendor was deleted and cannot be restored' });
+    }
+
+    await prisma.user.update({
+      where: { id: vendor.userId },
+      data: { isSuspended: false, suspendedReason: null, suspendedAt: null }
+    });
+    await writeAuditLog(req, {
+      action: 'VENDOR_RESTORED',
+      resource: 'vendor',
+      resourceId: vendor.id,
+      summary: `${vendor.businessName} reinstated`,
+      metadata: { businessName: vendor.businessName }
+    });
+    return res.json({ ok: true });
+  })
+);
+
+const vendorDeleteSchema = z.object({
+  reason: z.string().trim().min(3, 'Give a reason for deleting this vendor').max(300),
+  /** Must match the business name, so a stray click cannot delete the wrong vendor. */
+  confirmName: z.string().trim().min(1, 'Type the business name to confirm')
+});
+
+/**
+ * Delete a vendor. Orders, earnings and payouts are financial records, so the
+ * account is anonymised in place (details, documents, bank details and photos
+ * removed, listings out of stock, branches closed, sign-in impossible) rather
+ * than dropped. Refused while the vendor has paid orders to deliver or earnings
+ * not yet paid out; the reason is returned so the admin knows what to settle first.
+ */
+router.delete(
+  '/:id',
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const result = vendorDeleteSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
+
+    const vendor = await prisma.vendorProfile.findUnique({ where: { id: req.params.id }, include: { user: true } });
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+    if (vendor.user.email.endsWith('@deleted.invalid')) {
+      return res.status(409).json({ error: 'This vendor has already been deleted' });
+    }
+    if (result.data.confirmName.toLowerCase() !== vendor.businessName.trim().toLowerCase()) {
+      return res.status(400).json({ error: 'The name you typed does not match this vendor' });
+    }
+
+    try {
+      await eraseAccountAsAdmin(vendor.user);
+    } catch (err) {
+      if (err instanceof DeletionBlocked) {
+        return res.status(err.status).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+      }
+      throw err;
+    }
+
+    await writeAuditLog(req, {
+      action: 'VENDOR_DELETED',
+      resource: 'vendor',
+      resourceId: vendor.id,
+      summary: `${vendor.businessName} deleted: ${result.data.reason}`,
+      metadata: { reason: result.data.reason, businessName: vendor.businessName }
+    });
+    return res.json({ ok: true });
   })
 );
 

@@ -40,8 +40,10 @@ export const ROLE_LABEL: Record<AdminRole, string> = {
  *   security.read - IP blocklist; super admin only
  *   admins.read   - the admin list; granted to OPERATIONS by name below
  *   logs.read     - server logs (stack traces, paths); super admin only
+ *   broadcasts.read - messages sent to users; super admin only (as is sending them, and
+ *                     vendors.suspend / vendors.delete: none is granted to OPERATIONS)
  */
-export const EXPLICIT_ONLY_READS: readonly string[] = ['audit.read', 'security.read', 'admins.read', 'logs.read'];
+export const EXPLICIT_ONLY_READS: readonly string[] = ['audit.read', 'security.read', 'admins.read', 'logs.read', 'broadcasts.read'];
 
 export const ROLE_GRANTS: Record<AdminRole, string[]> = {
   // Answering customers is what SUPPORT is for, so support.reply is the one

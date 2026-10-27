@@ -1,3 +1,4 @@
+import { NotificationBell } from '@/components/notification-bell';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -487,13 +488,7 @@ export default function HomeScreen() {
                 </Text>
                 <IconSymbol name="chevron.down" size={13} color={C.accent} />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={s.notifBtn}
-                activeOpacity={0.7}
-                accessibilityLabel="Notifications"
-              >
-                <IconSymbol name="bell.fill" size={20} color={C.accent} />
-              </TouchableOpacity>
+              <NotificationBell />
             </View>
           </View>
 

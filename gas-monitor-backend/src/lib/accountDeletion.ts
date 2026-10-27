@@ -24,10 +24,12 @@ export class DeletionBlocked extends Error {
  * refused rather than forced whenever someone is owed money or a delivery:
  * customers are waiting on vendors and riders, vendors are owed their earnings.
  */
-async function blocker(user: User): Promise<DeletionBlocked | null> {
+async function blocker(user: User, byAdmin = false): Promise<DeletionBlocked | null> {
+  // The same rules read differently to the account holder and to an admin acting for them.
+  const say = (self: string, admin: string) => (byAdmin ? admin : self);
   // Anyone may also have bought gas, whatever their role.
   const open = await prisma.order.count({ where: { consumerId: user.id, status: { in: [...CONSUMER_OPEN] } } });
-  if (open > 0) return new DeletionBlocked('You have an order in progress. Delete your account once it is complete.');
+  if (open > 0) return new DeletionBlocked(say('You have an order in progress. Delete your account once it is complete.', 'This account has an order in progress as a customer. Wait until it is complete.'));
 
   if (user.role === 'VENDOR') {
     const vendor = await prisma.vendorProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
@@ -37,11 +39,11 @@ async function blocker(user: User): Promise<DeletionBlocked | null> {
         prisma.earning.count({ where: { vendorId: vendor.id, status: { in: ['AVAILABLE', 'IN_PAYOUT'] } } })
       ]);
       if (orders > 0) {
-        return new DeletionBlocked('You have paid orders still to deliver. Complete or hand them over first.');
+        return new DeletionBlocked(say('You have paid orders still to deliver. Complete or hand them over first.', 'This vendor has paid orders still to deliver. Wait until they are delivered or cancelled.'));
       }
       if (earnings > 0) {
         return new DeletionBlocked(
-          'You have earnings that have not been paid out yet. Contact support to settle them before closing your account.',
+          say('You have earnings that have not been paid out yet. Contact support to settle them before closing your account.', 'This vendor has earnings that have not been paid out. Settle the payout first (Payouts page).'),
           409,
           'CONTACT_SUPPORT'
         );
@@ -52,7 +54,7 @@ async function blocker(user: User): Promise<DeletionBlocked | null> {
   if (user.role === 'RIDER') {
     const rider = await prisma.riderProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
     if (rider && (await prisma.order.count({ where: { riderId: rider.id, status: { in: [...IN_FLIGHT] } } })) > 0) {
-      return new DeletionBlocked('You have deliveries in progress. Finish them before closing your account.');
+      return new DeletionBlocked(say('You have deliveries in progress. Finish them before closing your account.', 'This rider has deliveries in progress. Wait until they are finished.'));
     }
   }
 
@@ -62,7 +64,7 @@ async function blocker(user: User): Promise<DeletionBlocked | null> {
       company &&
       (await prisma.order.count({ where: { rider: { companyId: company.id }, status: { in: [...IN_FLIGHT] } } })) > 0
     ) {
-      return new DeletionBlocked('Your riders have deliveries in progress. Wait until they are finished.');
+      return new DeletionBlocked(say('Your riders have deliveries in progress. Wait until they are finished.', 'This company\'s riders have deliveries in progress. Wait until they are finished.'));
     }
   }
 
@@ -80,6 +82,21 @@ export async function eraseAccount(user: User, password: string): Promise<void> 
   if (!(await bcrypt.compare(password, user.password))) throw new DeletionBlocked('Incorrect password', 403);
   const blocked = await blocker(user);
   if (blocked) throw blocked;
+  await anonymise(user);
+}
+
+/**
+ * Erasure by a super admin (no password: the admin is the authority). Applies
+ * exactly the same refusals as self-service, so a customer waiting on a paid
+ * delivery or a vendor owed money is never silently dropped.
+ */
+export async function eraseAccountAsAdmin(user: User): Promise<void> {
+  const blocked = await blocker(user, true);
+  if (blocked) throw blocked;
+  await anonymise(user);
+}
+
+async function anonymise(user: User): Promise<void> {
 
   const email = user.email.toLowerCase();
   const randomPassword = await bcrypt.hash(randomBytes(32).toString('hex'), 10);

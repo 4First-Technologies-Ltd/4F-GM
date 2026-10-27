@@ -1,4 +1,5 @@
 import {
+  IconBell,
   IconBike,
   IconBug,
   IconChecklist,
@@ -121,6 +122,7 @@ export const NAVIGATION: NavSection[] = [
       },
       { label: 'Tasks', route: '/dashboard/tasks', icon: IconChecklist, permission: 'crm.read' },
       { label: 'Marketing', route: '/dashboard/marketing', icon: IconMegaphone, permission: 'marketing.read' },
+      { label: 'Broadcasts', route: '/dashboard/broadcasts', icon: IconBell, permission: 'broadcasts.read' },
       { label: 'Waitlist', route: '/dashboard/waitlist', icon: IconClipboardList, permission: 'waitlist.read' }
     ]
   },
