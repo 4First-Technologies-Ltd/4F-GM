@@ -197,11 +197,18 @@ describe('company routes', () => {
     expect(db.riderProfile.findMany).not.toHaveBeenCalled();
   });
 
-  it('lets a PENDING company finish its profile but not touch the fleet', async () => {
+  it('lets a PENDING company finish its profile and look at its (empty) fleet, but not change it', async () => {
     db.logisticsCompany.findUnique.mockResolvedValue({ ...company, status: 'PENDING' });
     db.logisticsCompany.upsert.mockResolvedValue({ id: 'co1' });
+    db.riderProfile.findMany.mockResolvedValue([]);
+    db.fleetInvite.findMany.mockResolvedValue([]);
+    db.order.findMany.mockResolvedValue([]);
     expect((await call('/profile', 'POST', { companyName: 'Swift', address: '1 Road', phone: '080' })).status).toBe(201);
-    for (const [p, m, b] of [['/riders', 'GET'], ['/riders/invite', 'POST', { email: 'a@b.co' }], ['/deliveries', 'GET']] as const) {
+    // Reads work so the dashboard opens; they are still scoped to this company.
+    expect((await call('/riders')).status).toBe(200);
+    expect((await call('/deliveries')).status).toBe(200);
+    // Changing the fleet still needs approval.
+    for (const [p, m, b] of [['/riders/invite', 'POST', { email: 'a@b.co' }], ['/riders/r1', 'DELETE'], ['/invites/i1', 'DELETE']] as const) {
       const res = await call(p, m, b);
       expect(res.status).toBe(403);
       expect((await res.json()).code).toBe('COMPANY_NOT_APPROVED');
