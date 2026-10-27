@@ -72,6 +72,7 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   danger = false,
   typeToConfirm,
+  reasonLabel,
   onConfirm,
   onCancel
 }: {
@@ -81,16 +82,21 @@ export function ConfirmDialog({
   cancelLabel?: string;
   danger?: boolean;
   typeToConfirm?: string;
-  onConfirm: () => void | Promise<void>;
+  /** Ask for a written reason (3+ characters) before the action can be confirmed. */
+  reasonLabel?: string;
+  onConfirm: (reason: string) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [typed, setTyped] = useState('');
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useDialogBehaviour(ref, onCancel);
 
-  const unlocked = !typeToConfirm || typed === typeToConfirm;
+  const unlocked =
+    (!typeToConfirm || typed.trim().toLowerCase() === typeToConfirm.trim().toLowerCase()) &&
+    (!reasonLabel || reason.trim().length >= 3);
 
   return (
     <div className="adm-scrim" onClick={onCancel}>
@@ -109,6 +115,19 @@ export function ConfirmDialog({
         <p id="adm-confirm-body" className="adm-dialog-body">
           {body}
         </p>
+
+        {reasonLabel && (
+          <label className="adm-field">
+            <span className="adm-field-label">{reasonLabel}</span>
+            <textarea
+              className="adm-input"
+              rows={3}
+              maxLength={300}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+        )}
 
         {typeToConfirm && (
           <label className="adm-field">
@@ -139,7 +158,7 @@ export function ConfirmDialog({
               setBusy(true);
               setError(null);
               try {
-                await onConfirm();
+                await onConfirm(reason.trim());
               } catch (e) {
                 setError(e instanceof Error ? e.message : String(e));
               } finally {

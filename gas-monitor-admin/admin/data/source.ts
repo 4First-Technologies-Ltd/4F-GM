@@ -101,6 +101,26 @@ export async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   return unwrap<T>(await adminFetch(path, init));
 }
 
+export async function postJson<T>(path: string, body?: unknown): Promise<T> {
+  return unwrap<T>(
+    await adminFetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    })
+  );
+}
+
+export async function deleteJson<T>(path: string, body?: unknown): Promise<T> {
+  return unwrap<T>(
+    await adminFetch(path, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    })
+  );
+}
+
 export async function patchJson<T>(path: string, body: unknown): Promise<T> {
   return unwrap<T>(
     await adminFetch(path, {

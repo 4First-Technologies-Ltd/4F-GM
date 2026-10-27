@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ApprovalBanner } from '@/components/approval-banner';
+import { NotificationBell } from '@/components/notification-bell';
 import { RiderOrderCard } from '@/components/rider-order-card';
 import { advanceOrder, useRiderOrders } from '@/hooks/use-rider-orders';
 import { getSavedUser } from '@/lib/storage';
@@ -55,8 +56,11 @@ export default function RiderDeliveriesScreen() {
           <Text style={s.hello}>{firstName ? `Hi, ${firstName}` : 'Hi there'}</Text>
           <Text style={s.title}>Active deliveries</Text>
         </View>
-        <View style={s.countBadge}>
-          <Text style={s.countText}>{active.length}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <NotificationBell />
+          <View style={s.countBadge}>
+            <Text style={s.countText}>{active.length}</Text>
+          </View>
         </View>
       </View>
 

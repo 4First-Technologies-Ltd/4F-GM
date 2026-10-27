@@ -962,6 +962,31 @@ export interface AddressPayload {
   isDefault?: boolean;
 }
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/** Messages from the 4FG team (admin broadcasts). */
+export const notificationsApi = {
+  async list(): Promise<{ notifications: AppNotification[]; unread: number }> {
+    return request('/api/notifications', { auth: true });
+  },
+  async unreadCount(): Promise<number> {
+    const data = await request<{ unread: number }>('/api/notifications/unread-count', { auth: true });
+    return data.unread;
+  },
+  async markRead(id: string): Promise<void> {
+    await request(`/api/notifications/${id}/read`, { method: 'POST', auth: true });
+  },
+  async markAllRead(): Promise<void> {
+    await request('/api/notifications/read-all', { method: 'POST', auth: true });
+  }
+};
+
 export const addressApi = {
   async list(): Promise<Address[]> {
     const data = await request<{ addresses: Address[] }>('/api/addresses', { auth: true });

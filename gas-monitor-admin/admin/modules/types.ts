@@ -70,13 +70,42 @@ export interface VendorRow {
   lat: number | null;
   lng: number | null;
   createdAt: string;
-  user: { id: string; name: string; email: string; createdAt: string };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    createdAt: string;
+    isSuspended: boolean;
+    suspendedReason: string | null;
+  };
   documents: { id: string; url: string; fileName: string }[];
   /** Newest first, capped server-side. Present on detail reads only. */
   planChanges?: VendorPlanChangeRow[];
   /** Main branch first. Present on detail reads only. */
   branches?: BranchRow[];
   _count: { listings: number; orders: number };
+}
+
+export type BroadcastAudience = 'ALL' | 'CONSUMERS' | 'VENDORS' | 'RIDERS' | 'USER';
+
+export interface BroadcastRow {
+  id: string;
+  title: string;
+  body: string;
+  audience: BroadcastAudience;
+  targetUserId: string | null;
+  sendInApp: boolean;
+  sendEmail: boolean;
+  sendPush: boolean;
+  status: 'SENDING' | 'SENT' | 'FAILED';
+  recipientCount: number;
+  emailsSent: number;
+  pushesSent: number;
+  error: string | null;
+  createdByName: string | null;
+  createdByEmail: string | null;
+  createdAt: string;
+  completedAt: string | null;
 }
 
 export interface VendorPlanChangeRow {
