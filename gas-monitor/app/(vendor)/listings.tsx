@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { vendorApi, Branch, GasListing, GasType } from '@/lib/api';
+import { ApprovalBanner } from '@/components/approval-banner';
 import { pickVendorImage } from '@/lib/pickVendorImage';
 import { useDrawer } from './_layout';
 
@@ -48,6 +49,8 @@ interface ListingForm {
   pricePerKg: string;
   cylinderSizes: string[];
   otherSizes: string;
+  /** Can fill any quantity, so customers may order by kg or by amount. */
+  sellsLoose: boolean;
   inStock: boolean;
   /** Uploaded photo key to save. undefined = leave the photo as it is, null = remove it. */
   imageKey?: string | null;
@@ -56,7 +59,7 @@ interface ListingForm {
 }
 
 function emptyForm(): ListingForm {
-  return { branchId: '', gasType: 'COOKING', customName: '', pricePerKg: '', cylinderSizes: [], otherSizes: '', inStock: true, imagePreview: null };
+  return { branchId: '', gasType: 'COOKING', customName: '', pricePerKg: '', cylinderSizes: [], otherSizes: '', sellsLoose: false, inStock: true, imagePreview: null };
 }
 
 // ── Listing card ──────────────────────────────────────────────────────────────
@@ -95,6 +98,7 @@ function ListingCard({
       </View>
 
       <Text style={lc.price}>₦{listing.pricePerKg.toLocaleString()} / kg</Text>
+      {listing.sellsLoose ? <Text style={{ color: C.muted, fontSize: 12 }}>Sold loose by kg or amount</Text> : null}
 
       <View style={lc.sizesRow}>
         {listing.cylinderSizes.map((sz) => (
@@ -173,8 +177,8 @@ function ListingFormView({
     const errs: Record<string, string> = {};
     if (!form.pricePerKg || isNaN(Number(form.pricePerKg)) || Number(form.pricePerKg) <= 0)
       errs.pricePerKg = 'Enter a valid price per kg';
-    if (form.cylinderSizes.length === 0 && !form.otherSizes.trim())
-      errs.cylinderSizes = 'Select or enter at least one cylinder size';
+    if (form.cylinderSizes.length === 0 && !form.otherSizes.trim() && !form.sellsLoose)
+      errs.cylinderSizes = 'Select a cylinder size, or turn on loose gas below';
     if (form.gasType === 'OTHER' && !form.customName.trim())
       errs.customName = 'Enter a name for this gas type';
     setErrors(errs);
@@ -299,6 +303,21 @@ function ListingFormView({
       {!!errors.cylinderSizes && <Text style={f.error}>{errors.cylinderSizes}</Text>}
 
       <View style={f.stockRow}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={f.label}>I sell loose gas by kg or amount</Text>
+          <Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
+            Customers can buy any weight (e.g. 3.5 kg) or say how much money they have. Leave off if you only sell fixed cylinder sizes.
+          </Text>
+        </View>
+        <Switch
+          value={form.sellsLoose}
+          onValueChange={(v) => set('sellsLoose', v)}
+          trackColor={{ false: C.border, true: C.accent }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      <View style={f.stockRow}>
         <Text style={f.label}>In Stock</Text>
         <Switch
           value={form.inStock}
@@ -368,6 +387,7 @@ export default function ListingsScreen() {
         pricePerKg: Number(form.pricePerKg),
         cylinderSizes: form.cylinderSizes,
         otherSizes: form.otherSizes.trim() || undefined,
+        sellsLoose: form.sellsLoose,
         inStock: form.inStock,
         ...(form.imageKey !== undefined ? { imageKey: form.imageKey } : {}),
       };
@@ -436,6 +456,7 @@ export default function ListingsScreen() {
         pricePerKg: String(editTarget.pricePerKg),
         cylinderSizes: editTarget.cylinderSizes,
         otherSizes: editTarget.otherSizes ?? '',
+        sellsLoose: editTarget.sellsLoose ?? false,
         inStock: editTarget.inStock,
         imagePreview: editTarget.imageUrl ?? null,
       }
@@ -462,6 +483,8 @@ export default function ListingsScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      <ApprovalBanner kind="vendor" />
 
       {view === 'form' ? (
         <ListingFormView

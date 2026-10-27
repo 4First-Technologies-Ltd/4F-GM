@@ -68,7 +68,8 @@ export default function CompanySignUpScreen() {
     try {
       if (resuming) {
         await companyApi.createProfile(details);
-        router.replace('/company-pending');
+        await authApi.refreshUser().catch(() => {});
+        router.replace('/(company)');
         return;
       }
       setPendingCompanyProfile(details);

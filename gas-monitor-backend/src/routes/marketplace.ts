@@ -31,6 +31,7 @@ const publicSelect = {
   pricePerKg: true,
   cylinderSizes: true,
   otherSizes: true,
+  sellsLoose: true,
   inStock: true,
   imageKey: true,
   createdAt: true,

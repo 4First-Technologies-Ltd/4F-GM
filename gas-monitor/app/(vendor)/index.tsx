@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { vendorApi, VendorOrder, OrderStatus, Branch } from '@/lib/api';
+import { ApprovalBanner } from '@/components/approval-banner';
 import { AssignRiderSheet } from '@/components/assign-rider-sheet';
 import { useDrawer } from './_layout';
 
@@ -252,6 +253,8 @@ export default function VendorOrdersScreen() {
           </View>
         )}
       </View>
+
+      <ApprovalBanner kind="vendor" />
 
       {/* Branch pills (only when the vendor has more than one branch) */}
       {branches.length > 1 && (

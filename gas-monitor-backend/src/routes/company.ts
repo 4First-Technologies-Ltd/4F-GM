@@ -48,6 +48,14 @@ async function requireApprovedCompany(req: Request, res: Response, next: NextFun
   next();
 }
 
+/** For read-only fleet views: the company must exist; pending ones simply have nothing yet. */
+async function requireCompany(req: Request, res: Response, next: NextFunction) {
+  const company = await prisma.logisticsCompany.findUnique({ where: { userId: req.user!.sub } });
+  if (!company) return res.status(404).json({ error: 'Company profile not found' });
+  req.company = { id: company.id, status: company.status, userId: company.userId };
+  next();
+}
+
 const guard = (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
@@ -108,7 +116,7 @@ router.patch(
 
 router.get(
   '/riders',
-  guard(requireApprovedCompany),
+  guard(requireCompany),
   asyncHandler(async (req, res) => {
     const companyId = req.company!.id;
     const [riders, invites] = await Promise.all([
@@ -217,7 +225,7 @@ router.delete(
  */
 router.get(
   '/deliveries',
-  guard(requireApprovedCompany),
+  guard(requireCompany),
   asyncHandler(async (req, res) => {
     const orders = await prisma.order.findMany({
       where: { rider: { companyId: req.company!.id } },

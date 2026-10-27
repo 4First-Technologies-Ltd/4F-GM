@@ -148,6 +148,18 @@ Migration `20261009200000_marketing`. Admin routes `src/routes/admin/marketing.t
 - Guards: create/edit/send/cancel = OPERATIONS (`marketing.manage`); removing someone from the suppression list = SUPER_ADMIN (`marketing.unsuppress`).
 - Marketing consent is not modelled beyond unsubscribe; `User.emailNotifEnabled` is a notification preference and is deliberately not consulted.
 
+## Approval, visibility and loose-gas orders
+
+Oct 2026. **Pending accounts get the whole app; approval only controls who can see them.**
+- Vendor, rider and logistics company sign-ups land on their normal dashboard while `PENDING` (`homeRouteFor` on mobile `lib/homeRoute.ts` and web `lib/home-route.ts`). Only `REJECTED` (or an account whose profile was never created) is held on `/vendor-pending`, `/rider-pending` or `/company-pending`. A warning banner (`components/approval-banner.tsx` on mobile, `components/dashboard/ApprovalBanner.tsx` on web) tells them they are not visible yet; it re-reads the user on focus so approval clears it without signing out.
+- **A pending vendor can create and edit listings** (`POST /api/vendor/listings` refuses only `REJECTED`). They stay hidden because the marketplace feed and `priceListingOrder` both require `vendor.status = APPROVED`, so approval makes everything live at once. A pending rider's `GET /api/rider/orders` returns an empty list (only approved riders can be assigned; updating a delivery still needs approval). A pending company can read `/api/company/riders` and `/deliveries`, but inviting or removing riders still needs `APPROVED`.
+- **Customer cards show the vendor's price per kg** (`₦X / kg`), not the price of the smallest cylinder. A cylinder size is still priced as `pricePerKg × kg` at checkout.
+- **Loose gas** (migration `20261027100000_listing_sells_loose`, `GasListing.sellsLoose`, default false, a per-listing opt-in): customers may buy by **size** (as before), by **weight** or by **amount**. The order carries `cylinderSize: "Loose"`, `quantity: 1` and exactly one of `looseKg` (to 0.1 kg) or `looseAmount` (whole naira). The server (`priceLooseOrder` in `lib/pricing.ts`) decides everything: by amount the customer pays exactly that for gas and gets `floor(amount / pricePerKg × 100) / 100` kg; by weight it is `round(pricePerKg × kg)`; the flat delivery fee is added on top either way. Limits 0.5–100 kg. The stored size label is e.g. `4.16 kg (loose)` with quantity 1, so vendor, rider and admin screens that print "size × quantity" need no changes. A listing with `sellsLoose` off rejects loose orders. A loose-only listing may have no cylinder sizes. Previews on mobile (`lib/looseOrder.ts`) and web (`lib/looseOrder.ts`) mirror the server maths; the server is the authority.
+
+## Mobile version gate
+
+Migration `20261027000000_app_version_gate` (`PlatformSettings.minAppVersion/latestAppVersion/storeUrlAndroid/storeUrlIos`). Public `GET /api/app-version?platform=android|ios` (`routes/appVersion.ts`, no token, so an old build can still ask) returns `{ min, latest, storeUrl }`. Admin edits it under Settings → Mobile app version (OPERATIONS, audited; refuses min > latest). The app (`gas-monitor/components/update-gate.tsx`, mounted in `app/_layout.tsx`) compares `app.json` `version` to the policy: below `min` it blocks with only an Update button, below `latest` it asks once per version. A failed check lets the app run. Raise `min` only after the new build is live in the store.
+
 ## Mobile app builds (EAS)
 
 `gas-monitor/eas.json` defines `development`, `preview`, and `production` build profiles. Android package: `com.fourfirsttechnologies.gasmonitor`. EAS project: `@devopsbbcl/gas-monitor` (project ID in `gas-monitor/app.json` → `extra.eas.projectId`).

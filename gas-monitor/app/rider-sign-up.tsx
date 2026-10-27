@@ -142,7 +142,8 @@ export default function RiderSignUpScreen() {
     try {
       if (resuming) {
         await riderApi.createProfile(details);
-        router.replace('/rider-pending');
+        await authApi.refreshUser().catch(() => {});
+        router.replace('/(rider)');
         return;
       }
       // Profile creation needs a session, which only exists after OTP verification —

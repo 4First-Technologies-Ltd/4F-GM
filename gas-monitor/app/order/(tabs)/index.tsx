@@ -10,6 +10,7 @@ import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ordersApi, marketplaceApi, type MarketplaceListing } from '@/lib/api';
 import { useAddresses } from '@/hooks/use-addresses';
+import { quoteByAmount, quoteByKg, MIN_LOOSE_KG, MAX_LOOSE_KG } from '@/lib/looseOrder';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
@@ -56,6 +57,12 @@ interface Supplier {
   /** Vendor's business logo and this listing's product photo (public URLs). */
   logoUrl: string | null;
   imageUrl: string | null;
+  /** What the vendor charges per kg: the headline price everywhere. */
+  pricePerKg: number;
+  /** Customers may order by kg or by amount, not only by cylinder size. */
+  sellsLoose: boolean;
+  /** Fixed cylinder sizes exist (otherwise the only size is the "Per kg" fallback). */
+  hasSizes: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,6 +138,9 @@ function toSupplier(l: MarketplaceListing, i: number): Supplier {
     color: AVATAR_COLORS[i % AVATAR_COLORS.length],
     logoUrl: l.vendor.logoUrl,
     imageUrl: l.imageUrl,
+    pricePerKg: l.pricePerKg,
+    sellsLoose: l.sellsLoose,
+    hasSizes: sizes.length > 0,
   };
 }
 
@@ -200,6 +210,7 @@ function SupplierCard({
           )}
         </View>
         <View style={s.cardBottomRight}>
+          <Text style={s.pricePerKg}>{fmtPrice(supplier.pricePerKg)}<Text style={s.pricePerKgUnit}> / kg</Text></Text>
           {supplier.rating != null ? <Text style={s.ratingText}>⭐ {supplier.rating}</Text> : <View />}
           <View style={[s.orderArrow, !supplier.isOpen && s.orderArrowClosed]}>
             <IconSymbol name="arrow.right" size={15} color={supplier.isOpen ? '#fff' : C.dim} />
@@ -238,6 +249,9 @@ export default function SuppliersScreen() {
   const [activeTab, setActiveTab] = useState<'new' | 'orders'>('new');
   const [selectedSize, setSelectedSize] = useState(1);
   const [quantity, setQuantity] = useState(1);
+  // How the customer buys: a fixed cylinder size, kilograms of gas, or a naira amount.
+  const [mode, setMode] = useState<'size' | 'kg' | 'amount'>('size');
+  const [looseInput, setLooseInput] = useState('');
   const [placing, setPlacing] = useState(false);
 
   // Address picker state
@@ -290,6 +304,8 @@ export default function SuppliersScreen() {
     setActiveTab('new');
     setQuantity(1);
     setSelectedSize(0);
+    setLooseInput('');
+    setMode(supplier.hasSizes ? 'size' : supplier.sellsLoose ? 'kg' : 'size');
     setSelectedAddressId(savedAddresses.find((a) => a.isDefault)?.id ?? null);
   }
 
@@ -321,12 +337,22 @@ export default function SuppliersScreen() {
     if (!selectedAddressId || !selectedSupplier || !selectedAddress) return;
     setPlacing(true);
     try {
-      const result = await ordersApi.initialize({
-        listingId: selectedSupplier.id,
-        cylinderSize: cylinder.size,
-        quantity,
-        deliveryAddress: selectedAddress.fullAddress,
-      });
+      const result = await ordersApi.initialize(
+        mode === 'size'
+          ? {
+              listingId: selectedSupplier.id,
+              cylinderSize: cylinder.size,
+              quantity,
+              deliveryAddress: selectedAddress.fullAddress,
+            }
+          : {
+              listingId: selectedSupplier.id,
+              cylinderSize: 'Loose',
+              quantity: 1,
+              deliveryAddress: selectedAddress.fullAddress,
+              ...(mode === 'kg' ? { looseKg: loose.kg } : { looseAmount: loose.gasCost }),
+            }
+      );
       router.push({
         pathname: '/order/payment',
         params: {
@@ -346,7 +372,13 @@ export default function SuppliersScreen() {
 
   const options = selectedSupplier?.options ?? [];
   const cylinder = options[selectedSize] ?? options[0] ?? { size: '', price: 0, label: '', sub: '' };
-  const total = cylinder.price * quantity + DELIVERY_FEE;
+  const loose =
+    mode === 'amount'
+      ? quoteByAmount(looseInput, selectedSupplier?.pricePerKg ?? 0)
+      : quoteByKg(looseInput, selectedSupplier?.pricePerKg ?? 0);
+  const looseReady = mode === 'size' || (loose.kg > 0 && !loose.error);
+  const gasCost = mode === 'size' ? cylinder.price * quantity : loose.gasCost;
+  const total = gasCost + DELIVERY_FEE;
 
   // ── Supplier List ───────────────────────────────────────────────────────────
   if (screen === 'suppliers') {
@@ -482,40 +514,90 @@ export default function SuppliersScreen() {
         <ScrollView contentContainerStyle={s.formContainer}
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          <View style={[s.card, cardShadow]}>
-            <Text style={s.cardTitle}>Select Cylinder Size</Text>
-            <View style={s.sizeGrid}>
-              {options.map((c, i) => (
-                <TouchableOpacity key={c.size}
-                  style={[s.sizeCard, selectedSize === i && s.sizeCardActive]}
-                  onPress={() => setSelectedSize(i)} activeOpacity={0.7}>
-                  <Text style={[s.sizeBadge, selectedSize === i && s.sizeBadgeActive]}>{c.label}</Text>
-                  <Text style={[s.sizeWeight, selectedSize === i && s.sizeWeightActive]}>{c.size}</Text>
-                  <Text style={[s.sizePrice, selectedSize === i && s.sizePriceActive]}>{fmtPrice(c.price)}</Text>
-                  <Text style={[s.sizeSub, selectedSize === i && s.sizeSubActive]}>{c.sub}</Text>
-                </TouchableOpacity>
-              ))}
+          {selectedSupplier?.sellsLoose && (
+            <View style={[s.card, cardShadow]}>
+              <Text style={s.cardTitle}>How do you want to buy?</Text>
+              <View style={s.modeRow}>
+                {([
+                  ['size', 'By size', selectedSupplier.hasSizes],
+                  ['kg', 'By weight', true],
+                  ['amount', 'By amount', true],
+                ] as const)
+                  .filter(([, , shown]) => shown)
+                  .map(([id, label]) => (
+                    <TouchableOpacity key={id} style={[s.modeBtn, mode === id && s.modeBtnActive]}
+                      onPress={() => { setMode(id); setLooseInput(''); }} activeOpacity={0.7}>
+                      <Text style={[s.modeText, mode === id && s.modeTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
             </View>
-          </View>
+          )}
 
-          <View style={[s.card, cardShadow]}>
-            <Text style={s.cardTitle}>Quantity</Text>
-            <View style={s.qtyRow}>
-              <TouchableOpacity
-                style={[s.qtyBtn, quantity <= 1 && s.qtyBtnDisabled]}
-                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1} activeOpacity={0.7}>
-                <IconSymbol name="minus" size={20} color={quantity <= 1 ? C.dim : C.accent} />
-              </TouchableOpacity>
-              <Text style={s.qtyNum}>{quantity}</Text>
-              <TouchableOpacity
-                style={[s.qtyBtn, quantity >= 10 && s.qtyBtnDisabled]}
-                onPress={() => setQuantity((q) => Math.min(10, q + 1))}
-                disabled={quantity >= 10} activeOpacity={0.7}>
-                <IconSymbol name="plus" size={20} color={quantity >= 10 ? C.dim : C.accent} />
-              </TouchableOpacity>
+          {mode === 'size' ? (
+            <>
+            <View style={[s.card, cardShadow]}>
+              <Text style={s.cardTitle}>Select Cylinder Size</Text>
+              <View style={s.sizeGrid}>
+                {options.map((c, i) => (
+                  <TouchableOpacity key={c.size}
+                    style={[s.sizeCard, selectedSize === i && s.sizeCardActive]}
+                    onPress={() => setSelectedSize(i)} activeOpacity={0.7}>
+                    <Text style={[s.sizeBadge, selectedSize === i && s.sizeBadgeActive]}>{c.label}</Text>
+                    <Text style={[s.sizeWeight, selectedSize === i && s.sizeWeightActive]}>{c.size}</Text>
+                    <Text style={[s.sizePrice, selectedSize === i && s.sizePriceActive]}>{fmtPrice(c.price)}</Text>
+                    <Text style={[s.sizeSub, selectedSize === i && s.sizeSubActive]}>{c.sub}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
+
+            <View style={[s.card, cardShadow]}>
+              <Text style={s.cardTitle}>Quantity</Text>
+              <View style={s.qtyRow}>
+                <TouchableOpacity
+                  style={[s.qtyBtn, quantity <= 1 && s.qtyBtnDisabled]}
+                  onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={quantity <= 1} activeOpacity={0.7}>
+                  <IconSymbol name="minus" size={20} color={quantity <= 1 ? C.dim : C.accent} />
+                </TouchableOpacity>
+                <Text style={s.qtyNum}>{quantity}</Text>
+                <TouchableOpacity
+                  style={[s.qtyBtn, quantity >= 10 && s.qtyBtnDisabled]}
+                  onPress={() => setQuantity((q) => Math.min(10, q + 1))}
+                  disabled={quantity >= 10} activeOpacity={0.7}>
+                  <IconSymbol name="plus" size={20} color={quantity >= 10 ? C.dim : C.accent} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            </>
+          ) : (
+            <View style={[s.card, cardShadow]}>
+              <Text style={s.cardTitle}>{mode === 'kg' ? 'How many kg of gas?' : 'How much money do you have?'}</Text>
+              <Text style={s.looseRate}>{selectedSupplier ? `${fmtPrice(selectedSupplier.pricePerKg)} per kg` : ''}</Text>
+              <TextInput
+                style={s.looseInput}
+                value={looseInput}
+                onChangeText={setLooseInput}
+                keyboardType={mode === 'kg' ? 'decimal-pad' : 'number-pad'}
+                placeholder={mode === 'kg' ? 'e.g. 3.5' : 'e.g. 5000'}
+                placeholderTextColor={C.dim}
+                maxLength={8}
+              />
+              {loose.error ? (
+                <Text style={[s.looseHint, { color: C.red }]}>{loose.error}</Text>
+              ) : loose.kg > 0 ? (
+                <Text style={s.looseHint}>
+                  {mode === 'amount'
+                    ? `${fmtPrice(loose.gasCost)} buys ${loose.kg} kg of gas.`
+                    : `${loose.kg} kg costs ${fmtPrice(loose.gasCost)}.`}
+                </Text>
+              ) : (
+                <Text style={s.looseHint}>Between {MIN_LOOSE_KG} and {MAX_LOOSE_KG} kg. Delivery is added at the end.</Text>
+              )}
+            </View>
+          )}
 
           <View style={[s.card, cardShadow]}>
             <View style={s.cardTitleRow}>
@@ -542,8 +624,14 @@ export default function SuppliersScreen() {
           <View style={[s.card, cardShadow]}>
             <Text style={s.cardTitle}>Order Summary</Text>
             <View style={s.summaryRow}>
-              <Text style={s.summaryLabel}>{cylinder.size} cylinder × {quantity}</Text>
-              <Text style={s.summaryValue}>{fmtPrice(cylinder.price * quantity)}</Text>
+              <Text style={s.summaryLabel}>
+                {mode === 'size'
+                  ? `${cylinder.size} cylinder × ${quantity}`
+                  : loose.kg > 0
+                    ? `${loose.kg} kg of gas @ ${fmtPrice(selectedSupplier?.pricePerKg ?? 0)}/kg`
+                    : 'Gas'}
+              </Text>
+              <Text style={s.summaryValue}>{fmtPrice(gasCost)}</Text>
             </View>
             <View style={s.summaryRow}>
               <Text style={s.summaryLabel}>Delivery fee</Text>
@@ -560,9 +648,9 @@ export default function SuppliersScreen() {
           )}
 
           <TouchableOpacity
-            style={[s.placeBtn, (!selectedAddressId || placing) && { opacity: 0.55 }]}
+            style={[s.placeBtn, (!selectedAddressId || placing || !looseReady) && { opacity: 0.55 }]}
             onPress={handlePlaceOrder}
-            disabled={!selectedAddressId || placing}
+            disabled={!selectedAddressId || placing || !looseReady}
             activeOpacity={0.85}>
             {placing
               ? <ActivityIndicator color="#fff" />
@@ -789,6 +877,22 @@ const s = StyleSheet.create({
     paddingTop: 10,
   },
   sizesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
+  pricePerKg: { color: C.accent, fontSize: 15, fontWeight: '800' },
+  pricePerKgUnit: { color: C.muted, fontSize: 11, fontWeight: '600' },
+  modeRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  modeBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 12,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+  },
+  modeBtnActive: { backgroundColor: C.accent, borderColor: C.accent },
+  modeText: { color: C.text, fontSize: 13, fontWeight: '700' },
+  modeTextActive: { color: '#fff' },
+  looseRate: { color: C.muted, fontSize: 12, marginTop: 2 },
+  looseInput: {
+    marginTop: 10, borderWidth: 1, borderColor: C.border, borderRadius: 12, backgroundColor: C.surface,
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 20, fontWeight: '700', color: C.text,
+  },
+  looseHint: { color: C.muted, fontSize: 12, marginTop: 8 },
   sizeChip: {
     paddingHorizontal: 9,
     paddingVertical: 4,

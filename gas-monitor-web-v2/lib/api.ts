@@ -282,6 +282,9 @@ export interface InitializeOrderPayload {
   cylinderSize: string;
   quantity: number;
   deliveryAddress: string;
+  /** With cylinderSize "Loose" (and quantity 1): exactly one of these. */
+  looseKg?: number;
+  looseAmount?: number;
 }
 
 export interface InitializeOrderResult {
@@ -392,6 +395,8 @@ export interface GasListing {
   pricePerKg: number;
   cylinderSizes: string[];
   otherSizes?: string;
+  /** Vendor can fill any quantity: customers may order by kg or by amount, not only by cylinder size. */
+  sellsLoose?: boolean;
   inStock: boolean;
   /** Product photo as a public URL (null/absent = none). Set through `imageKey` on create/update. */
   imageUrl?: string | null;
@@ -484,6 +489,7 @@ export interface ListingPayload {
   pricePerKg: number;
   cylinderSizes: string[];
   otherSizes?: string;
+  sellsLoose?: boolean;
   inStock?: boolean;
   /** Key from `vendorApi.uploadImage('listing', file)`; null removes the photo. */
   imageKey?: string | null;

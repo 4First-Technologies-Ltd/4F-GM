@@ -330,6 +330,11 @@ export interface PlatformSettings {
   monitorUnitPrice: number;
   monitorDeliveryFee: number;
   monitorMinQuantity: number;
+  /** Mobile version gate: below min the app is blocked, below latest it only asks. */
+  minAppVersion: string;
+  latestAppVersion: string;
+  storeUrlAndroid: string;
+  storeUrlIos: string;
   updatedAt: string;
 }
 

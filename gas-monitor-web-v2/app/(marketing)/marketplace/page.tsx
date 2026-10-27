@@ -590,9 +590,22 @@ export default function MarketplacePage() {
                             <>
                               <div>
                                 <p className="text-xs text-muted-foreground">
-                                  {item.minOrderQty ? `From (min ${item.minOrderQty})` : 'From'}
+                                  {item.pricePerKg != null
+                                    ? 'Price'
+                                    : item.minOrderQty
+                                      ? `From (min ${item.minOrderQty})`
+                                      : 'From'}
                                 </p>
-                                <p className="font-semibold">{formatNaira(item.price!)}</p>
+                                <p className="font-semibold">
+                                  {item.pricePerKg != null ? (
+                                    <>
+                                      {formatNaira(item.pricePerKg)}
+                                      <span className="ml-1 text-xs font-normal text-muted-foreground">/ kg</span>
+                                    </>
+                                  ) : (
+                                    formatNaira(item.price!)
+                                  )}
+                                </p>
                               </div>
                               <span className="text-sm font-medium text-primary hover:underline">
                                 Order now →

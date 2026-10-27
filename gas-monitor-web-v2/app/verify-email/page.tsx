@@ -61,7 +61,7 @@ export default function VerifyEmailPage() {
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { verifyOtp, resendOtp } = useAuth();
+  const { verifyOtp, resendOtp, refreshUser } = useAuth();
 
   const email = searchParams.get('email') ?? '';
   const role = searchParams.get('role');
@@ -84,7 +84,9 @@ function VerifyEmailContent() {
         if (pending) {
           window.sessionStorage.removeItem(PENDING_VENDOR_KEY);
           await vendorApi.createProfile(pending);
-          router.push(`/vendor-pending?plan=${pending.plan}`);
+          // Re-read the user so the dashboard sees the new profile (status PENDING) at once.
+          await refreshUser();
+          router.push('/dashboard');
           return;
         }
         // Verified, but the business details were lost (new tab, cleared
@@ -99,9 +101,10 @@ function VerifyEmailContent() {
           window.sessionStorage.removeItem(PENDING_COMPANY_KEY);
           await companyApi.createProfile(pending);
         }
-        // Without stashed details (new tab, cleared storage) the pending page
+        // Without stashed details (new tab, cleared storage) the status page
         // detects the missing profile and asks for them.
-        router.push('/company-pending');
+        const fresh = await refreshUser();
+        router.push(fresh.companyStatus ? '/dashboard' : '/company-pending');
         return;
       }
 
@@ -111,9 +114,10 @@ function VerifyEmailContent() {
           window.sessionStorage.removeItem(PENDING_RIDER_KEY);
           await riderApi.createProfile(pending);
         }
-        // Without stashed details (new tab, cleared storage) the pending page
+        // Without stashed details (new tab, cleared storage) the status page
         // detects the missing profile and asks for them.
-        router.push('/rider-pending');
+        const fresh = await refreshUser();
+        router.push(fresh.riderStatus ? '/dashboard' : '/rider-pending');
         return;
       }
 

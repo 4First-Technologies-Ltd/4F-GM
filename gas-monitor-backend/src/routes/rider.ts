@@ -111,8 +111,15 @@ router.get(
   '/orders',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const profile = await loadApprovedRider(req, res);
-    if (!profile) return;
+    // A rider awaiting approval still gets the full app; they just have no deliveries
+    // (only approved riders can be assigned). Updating a delivery still needs approval.
+    const mine = await prisma.riderProfile.findUnique({
+      where: { userId: req.user!.sub },
+      include: { company: { select: { status: true } } }
+    });
+    if (!mine) return res.status(404).json({ error: 'Rider profile not found' });
+    if (effectiveRiderStatus(mine) !== 'APPROVED') return res.json({ orders: [] });
+    const profile = mine;
 
     const orders = await prisma.order.findMany({
       where: { riderId: profile.id },

@@ -417,8 +417,13 @@ router.post(
       return res.status(404).json({ error: 'Vendor profile not found' });
     }
 
-    if (profile.status !== 'APPROVED') {
-      return res.status(403).json({ error: 'Vendor account must be approved to create listings' });
+    // PENDING vendors may set up their store: the marketplace only shows listings of APPROVED vendors,
+    // so nothing goes live until an admin approves. A rejected vendor cannot add more.
+    if (profile.status === 'REJECTED') {
+      return res.status(403).json({ error: 'Your vendor application was rejected. Contact support.' });
+    }
+    if (result.data.cylinderSizes.length === 0 && !result.data.sellsLoose) {
+      return res.status(400).json({ error: 'Select at least one cylinder size, or sell loose gas by kg' });
     }
 
     // Omitted branchId means the main branch. A named one must be this
@@ -475,6 +480,12 @@ router.patch(
     if (result.data.imageKey) {
       const problem = await checkOwnImageKey('listing', profile.id, result.data.imageKey);
       if (problem) return res.status(400).json({ error: problem });
+    }
+
+    const sizes = result.data.cylinderSizes ?? exists.cylinderSizes;
+    const loose = result.data.sellsLoose ?? exists.sellsLoose;
+    if (sizes.length === 0 && !loose) {
+      return res.status(400).json({ error: 'Select at least one cylinder size, or sell loose gas by kg' });
     }
 
     const listing = await prisma.gasListing.update({ where: { id }, data: result.data });

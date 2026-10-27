@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
+import { ApprovalBanner } from '@/components/approval-banner';
 import { companyApi, FleetInvite, FleetRider } from '@/lib/api';
 
 const C = {
@@ -92,6 +93,8 @@ export default function FleetScreen() {
         <Text style={s.title}>Your riders</Text>
         <Text style={s.sub}>{riders.length} in your fleet{invites.length ? ` · ${invites.length} invited` : ''}</Text>
       </View>
+
+      <ApprovalBanner kind="company" />
 
       {loading ? (
         <View style={s.center}><ActivityIndicator color={C.accent} /></View>

@@ -29,6 +29,7 @@ export default function ListingsPage() {
   const [customName, setCustomName] = useState('');
   const [pricePerKg, setPricePerKg] = useState('');
   const [sizes, setSizes] = useState<string[]>([]);
+  const [sellsLoose, setSellsLoose] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [branchFilter, setBranchFilter] = useState('all');
@@ -74,8 +75,8 @@ export default function ListingsPage() {
       setFormError('Enter a price per kg greater than zero.');
       return;
     }
-    if (sizes.length === 0) {
-      setFormError('Select at least one cylinder size.');
+    if (sizes.length === 0 && !sellsLoose) {
+      setFormError('Select at least one cylinder size, or turn on loose gas.');
       return;
     }
     setSubmitting(true);
@@ -86,12 +87,14 @@ export default function ListingsPage() {
         customName: customName.trim() || undefined,
         pricePerKg: price,
         cylinderSizes: sizes,
+        sellsLoose,
         ...(imageKey ? { imageKey } : {})
       });
       setListings((current) => [listing, ...current]);
       setCustomName('');
       setPricePerKg('');
       setSizes([]);
+      setSellsLoose(false);
       setImageKey(null);
       setImagePreview(null);
     } catch (err) {
@@ -143,17 +146,22 @@ export default function ListingsPage() {
 
   if (!isVendor) return null;
 
-  const notApproved = user.vendorStatus !== 'APPROVED';
+  // PENDING vendors can set up listings; the marketplace only shows approved vendors' listings.
+  const notApproved = user.vendorStatus === 'REJECTED';
 
   return (
     <div className="grid gap-6 lg:grid-cols-2 max-w-5xl">
       <div className="rounded-2xl bg-card border border-border p-6 md:p-8 h-fit">
         <h2 className="text-xl font-semibold text-foreground mb-2">Add a listing</h2>
         {notApproved ? (
-          <p className="text-sm text-muted-foreground">Listings can be created once your vendor account is approved.</p>
+          <p className="text-sm text-muted-foreground">Your vendor application was not approved, so you cannot add listings. Contact support.</p>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-6">Consumers see these in the marketplace.</p>
+            <p className="text-sm text-muted-foreground mb-6">
+              {user.vendorStatus === 'PENDING'
+                ? 'Customers will see these in the marketplace once your account is approved.'
+                : 'Consumers see these in the marketplace.'}
+            </p>
             <form onSubmit={handleCreate} noValidate className="space-y-4">
               {branches.length > 1 && (
                 <div>
@@ -240,6 +248,22 @@ export default function ListingsPage() {
                   })}
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sellsLoose}
+                  onChange={(e) => setSellsLoose(e.target.checked)}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-foreground">I sell loose gas by kg or amount</span>
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    Customers can buy any weight (e.g. 3.5 kg) or say how much money they have. Leave off if you only
+                    sell fixed cylinder sizes.
+                  </span>
+                </span>
+              </label>
 
               <div>
                 <p className="block text-sm font-medium text-foreground mb-2">Product photo (optional)</p>
@@ -332,7 +356,9 @@ export default function ListingsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-foreground">{listing.customName || GAS_TYPE_LABEL[listing.gasType]}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatNaira(listing.pricePerKg)}/kg · {listing.cylinderSizes.join(', ')}
+                      {formatNaira(listing.pricePerKg)}/kg
+                      {listing.cylinderSizes.length > 0 ? ` · ${listing.cylinderSizes.join(', ')}` : ''}
+                      {listing.sellsLoose ? ' · sold loose by kg or amount' : ''}
                     </p>
                     {branches.length > 1 && (
                       <p className="text-xs text-muted-foreground">

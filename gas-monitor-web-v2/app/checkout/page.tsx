@@ -21,6 +21,7 @@ import {
   type Listing
 } from '@/lib/catalog';
 import { findListing, priceFor } from '@/lib/marketplace';
+import { quoteByAmount, quoteByKg, MIN_LOOSE_KG, MAX_LOOSE_KG } from '@/lib/looseOrder';
 import { SellerMark } from '@/components/marketplace/SellerMark';
 
 const AREAS = ['Lagos', 'Abuja', 'Port Harcourt', 'Kano', 'Ibadan', 'Other'];
@@ -66,6 +67,9 @@ function CheckoutContent() {
 
   const [size, setSize] = useState(initialSize);
   const [quantity, setQuantity] = useState(initialQty);
+  // How the customer buys: a fixed cylinder size, kilograms of gas, or a naira amount.
+  const [buyMode, setBuyMode] = useState<'size' | 'kg' | 'amount'>('size');
+  const [looseInput, setLooseInput] = useState('');
 
   const [mode, setMode] = useState<CheckoutMode>('guest');
   const [guestEmail, setGuestEmail] = useState('');
@@ -186,9 +190,18 @@ function CheckoutContent() {
     );
   }
 
+  // A loose-only listing has no fixed sizes, so it can only be bought by weight or amount.
+  const looseOnly = !!item.sellsLoose && item.sizes.length === 0;
+  const buy = looseOnly && buyMode === 'size' ? 'kg' : buyMode;
+  const loose =
+    buy === 'amount'
+      ? quoteByAmount(looseInput, item.pricePerKg ?? 0)
+      : quoteByKg(looseInput, item.pricePerKg ?? 0);
+  const looseReady = buy === 'size' || (loose.kg > 0 && !loose.error);
+
   // Vendor listings are priced per kg, so the unit price follows the chosen size.
   const unitPrice = priceFor(item, size) ?? item.price!;
-  const subtotal = unitPrice * quantity;
+  const subtotal = buy === 'size' ? unitPrice * quantity : loose.gasCost;
   const deliveryFee = item.deliveryFee ?? DELIVERY_FEE;
   const total = subtotal + deliveryFee;
   const isGuest = !user;
@@ -254,6 +267,11 @@ function CheckoutContent() {
       return;
     }
 
+    if (!looseReady) {
+      setPlaceError(loose.error ?? 'Enter how many kg of gas, or how much money you have.');
+      return;
+    }
+
     setPlacingOrder(true);
     try {
       const composedAddress = `${address.trim()}, ${area}${phone.trim() ? ` · Tel: ${phone.trim()}` : ''}${
@@ -265,8 +283,13 @@ function CheckoutContent() {
         ...(item!.pricePerKg != null
           ? { listingId: item!.id }
           : { product: 'MONITOR' as const }),
-        cylinderSize: size,
-        quantity,
+        ...(buy === 'size'
+          ? { cylinderSize: size, quantity }
+          : {
+              cylinderSize: 'Loose',
+              quantity: 1,
+              ...(buy === 'kg' ? { looseKg: loose.kg } : { looseAmount: loose.gasCost })
+            }),
         deliveryAddress: composedAddress
       };
       const result = isGuest
@@ -850,6 +873,68 @@ function CheckoutContent() {
 
           {/* Options */}
           <div className="py-6 space-y-4 border-b border-border">
+            {item.sellsLoose && (
+              <div>
+                <span className="block text-sm font-medium text-foreground mb-2">How do you want to buy?</span>
+                <div className="grid grid-cols-3 gap-2" role="group" aria-label="How to buy">
+                  {(
+                    [
+                      ['size', 'By size', !looseOnly],
+                      ['kg', 'By weight', true],
+                      ['amount', 'By amount', true]
+                    ] as const
+                  )
+                    .filter(([, , shown]) => shown)
+                    .map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={buy === id}
+                        onClick={() => {
+                          setBuyMode(id);
+                          setLooseInput('');
+                        }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          buy === id
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {buy !== 'size' && (
+              <div>
+                <label htmlFor="sum-loose" className="block text-sm font-medium text-foreground mb-2">
+                  {buy === 'kg' ? 'How many kg of gas?' : 'How much money do you have? (₦)'}
+                </label>
+                <input
+                  id="sum-loose"
+                  inputMode={buy === 'kg' ? 'decimal' : 'numeric'}
+                  value={looseInput}
+                  onChange={(e) => setLooseInput(e.target.value)}
+                  placeholder={buy === 'kg' ? 'e.g. 3.5' : 'e.g. 5000'}
+                  maxLength={8}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-colors"
+                />
+                <p className={`mt-2 text-xs ${loose.error ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {loose.error
+                    ? loose.error
+                    : loose.kg > 0
+                      ? buy === 'amount'
+                        ? `${formatNaira(loose.gasCost)} buys ${loose.kg} kg of gas at ${formatNaira(item.pricePerKg ?? 0)}/kg.`
+                        : `${loose.kg} kg costs ${formatNaira(loose.gasCost)} at ${formatNaira(item.pricePerKg ?? 0)}/kg.`
+                      : `Between ${MIN_LOOSE_KG} and ${MAX_LOOSE_KG} kg. Delivery is added at the end.`}
+                </p>
+              </div>
+            )}
+
+            {buy === 'size' && (
+            <>
             <div>
               <label htmlFor="sum-size" className="block text-sm font-medium text-foreground mb-2">
                 Size / variant
@@ -910,13 +995,19 @@ function CheckoutContent() {
                 </p>
               )}
             </div>
+            </>
+            )}
           </div>
 
           {/* Totals */}
           <dl className="py-6 space-y-3 border-b border-border">
             <div className="flex justify-between">
               <dt className="text-sm text-muted-foreground">
-                {formatNaira(unitPrice)} × {quantity}
+                {buy === 'size'
+                  ? `${formatNaira(unitPrice)} × ${quantity}`
+                  : loose.kg > 0
+                    ? `${loose.kg} kg of gas @ ${formatNaira(item.pricePerKg ?? 0)}/kg`
+                    : 'Gas'}
               </dt>
               <dd className="text-sm font-medium text-foreground">{formatNaira(subtotal)}</dd>
             </div>
