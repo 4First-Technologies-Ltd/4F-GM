@@ -31,6 +31,10 @@ function r2() {
   client ??= new S3Client({
     region: 'auto',
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    // Recent SDKs add a CRC32 of the (empty) presign-time body to the signed URL, which R2
+    // then rejects against the real file the browser uploads. Only checksum when required.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
     credentials: {
       accessKeyId: process.env.R2_ACCESS_KEY_ID!,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!
