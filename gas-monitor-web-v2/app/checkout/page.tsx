@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { ordersApi, InitializeOrderResult } from '@/lib/api';
+import { ordersApi, InitializeOrderResult, PaymentProviderOption } from '@/lib/api';
 import { formatNaira } from '@/lib/format';
 import { Input } from '@/components/motion/input';
 import { Checkbox } from '@/components/motion/checkbox';
@@ -105,6 +105,26 @@ function CheckoutContent() {
   const [verifying, setVerifying] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+
+  // Payment gateways the backend has enabled. The picker only shows when there is a choice;
+  // if the list cannot be loaded the server default is used.
+  const [providers, setProviders] = useState<PaymentProviderOption[]>([]);
+  const [provider, setProvider] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    ordersApi
+      .paymentProviders()
+      .then((res) => {
+        if (cancelled) return;
+        setProviders(res.providers);
+        setProvider(res.default);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const providerLabel = providers.find((p) => p.id === provider)?.label ?? 'our payment partner';
 
   if (loading || itemLoading) {
     return (
@@ -290,7 +310,8 @@ function CheckoutContent() {
               quantity: 1,
               ...(buy === 'kg' ? { looseKg: loose.kg } : { looseAmount: loose.gasCost })
             }),
-        deliveryAddress: composedAddress
+        deliveryAddress: composedAddress,
+        ...(provider ? { paymentProvider: provider } : {})
       };
       const result = isGuest
         ? await ordersApi.guestInitialize({ ...payload, email: guestEmail, name: fullName })
@@ -774,8 +795,34 @@ function CheckoutContent() {
                 </div>
               )}
 
+              {providers.length > 1 && (
+                <fieldset className="mt-6" disabled={!!pendingPayment}>
+                  <legend className="text-sm font-medium text-foreground mb-2">Pay with</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {providers.map((p) => (
+                      <label
+                        key={p.id}
+                        className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm cursor-pointer transition-colors ${
+                          provider === p.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                        } ${pendingPayment ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentProvider"
+                          value={p.id}
+                          checked={provider === p.id}
+                          onChange={() => setProvider(p.id)}
+                          className="accent-primary"
+                        />
+                        <span className="font-medium text-foreground">{p.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+
               <p className="text-xs text-muted-foreground mt-4">
-                Receipt will be sent to <strong>{user ? user.email : guestEmail || 'your email'}</strong>. Payment is processed securely by Paystack — we never store your card details.
+                Receipt will be sent to <strong>{user ? user.email : guestEmail || 'your email'}</strong>. Payment is processed securely by {providerLabel} — we never store your card details.
               </p>
             </div>
 
@@ -810,7 +857,7 @@ function CheckoutContent() {
             {pendingPayment && (
               <div className="rounded-2xl bg-blue-50 border border-blue-200 p-6">
                 <p className="text-sm text-blue-900 mb-4">
-                  Order created for <strong>{formatNaira(pendingPayment.amount)}</strong>. Complete payment in the Paystack tab, then come back and confirm.
+                  Order created for <strong>{formatNaira(pendingPayment.amount)}</strong>. Complete payment in the {providerLabel} tab, then come back and confirm.
                 </p>
                 <div className="space-y-2">
                   <a
@@ -1025,7 +1072,7 @@ function CheckoutContent() {
 
           <p className="text-xs text-muted-foreground mt-6 flex items-start gap-2">
             <Check className="h-4 w-4 flex-shrink-0 mt-0.5 text-green-700" />
-            <span>Secured by Paystack · PCI-DSS compliant</span>
+            <span>Secured by {providerLabel} · PCI-DSS compliant</span>
           </p>
         </div>
       </aside>

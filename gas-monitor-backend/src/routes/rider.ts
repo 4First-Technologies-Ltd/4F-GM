@@ -51,6 +51,27 @@ router.get(
   })
 );
 
+// The rider's delivery pay: their share of each delivered order's delivery fee.
+router.get(
+  '/earnings',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const profile = await prisma.riderProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true } });
+    if (!profile) return res.status(404).json({ error: 'Rider profile not found' });
+    const rows = await prisma.riderEarning.findMany({
+      where: { riderId: profile.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: { id: true, amount: true, status: true, failureReason: true, paidAt: true, createdAt: true, orderId: true }
+    });
+    const sum = (s: string[]) => rows.filter((r) => s.includes(r.status)).reduce((t, r) => t + r.amount, 0);
+    return res.json({
+      earnings: rows,
+      totals: { paid: sum(['PAID']), pending: sum(['PENDING', 'PROCESSING', 'FAILED']) }
+    });
+  })
+);
+
 const profileSchema = z.object({
   phone: z.string().min(1, 'Phone number is required'),
   vehicleType: z.string().trim().min(1).max(40).optional(),

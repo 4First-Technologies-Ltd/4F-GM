@@ -26,6 +26,7 @@ type Draft = Pick<
   | 'allowVendorSignups'
   | 'supportEmail'
   | 'platformFeePercent'
+  | 'riderSharePercent'
   | 'monitorUnitPrice'
   | 'monitorDeliveryFee'
   | 'monitorMinQuantity'
@@ -72,6 +73,7 @@ export default function SettingsPage() {
           allowVendorSignups: r.settings.allowVendorSignups,
           supportEmail: r.settings.supportEmail,
           platformFeePercent: r.settings.platformFeePercent,
+          riderSharePercent: r.settings.riderSharePercent,
           monitorUnitPrice: r.settings.monitorUnitPrice,
           monitorDeliveryFee: r.settings.monitorDeliveryFee,
           monitorMinQuantity: r.settings.monitorMinQuantity,
@@ -122,6 +124,7 @@ export default function SettingsPage() {
   const dirtyCommerce =
     draft && settings
       ? draft.platformFeePercent !== settings.platformFeePercent ||
+        draft.riderSharePercent !== settings.riderSharePercent ||
         (draft.supportEmail ?? '') !== (settings.supportEmail ?? '')
       : false;
 
@@ -271,6 +274,24 @@ export default function SettingsPage() {
               </label>
 
               <label className="adm-field">
+                <span className="adm-field-label">Rider share of delivery fee (%)</span>
+                <input
+                  type="number"
+                  className="adm-input"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={draft.riderSharePercent}
+                  disabled={!canEdit}
+                  onChange={(e) => setDraft({ ...draft, riderSharePercent: Number(e.target.value) })}
+                />
+                <span className="adm-field-help">
+                  Paid to the rider when an order is delivered; the platform keeps the rest of the
+                  delivery fee. Applies to orders delivered from now on. Between 0 and 100.
+                </span>
+              </label>
+
+              <label className="adm-field">
                 <span className="adm-field-label">Support email</span>
                 <input
                   type="email"
@@ -294,6 +315,7 @@ export default function SettingsPage() {
                   onClick={() =>
                     save('commerce', {
                       platformFeePercent: draft.platformFeePercent,
+                      riderSharePercent: draft.riderSharePercent,
                       supportEmail: draft.supportEmail
                     })
                   }

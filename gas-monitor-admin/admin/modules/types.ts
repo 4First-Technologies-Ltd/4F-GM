@@ -63,6 +63,8 @@ export interface VendorRow {
   businessAddress: string;
   bio: string | null;
   phone: string;
+  /** CAC registration number; required before the vendor can be approved. */
+  rcNumber: string | null;
   status: VendorStatus;
   plan: VendorPlan;
   planChangedAt: string | null;
@@ -235,6 +237,7 @@ export interface UserDetail {
     state: string | null;
     city: string | null;
     phone: string;
+    rcNumber: string | null;
     status: VendorStatus;
     bio: string | null;
     logoUrl: string | null;
@@ -355,6 +358,8 @@ export interface PlatformSettings {
   allowVendorSignups: boolean;
   supportEmail: string | null;
   platformFeePercent: number;
+  /** Rider's share of the flat delivery fee on each delivered order; the platform keeps the rest. */
+  riderSharePercent: number;
   /** 4FG Monitor terms, whole naira. The backend prices monitor orders from these. */
   monitorUnitPrice: number;
   monitorDeliveryFee: number;
@@ -414,7 +419,23 @@ export interface ErrorLogRow {
 
 /* ------------------------------------------------------ payouts & support --- */
 
-export type EarningStatus = 'AVAILABLE' | 'IN_PAYOUT' | 'PAID';
+export type EarningStatus = 'AVAILABLE' | 'IN_PAYOUT' | 'PAID' | 'SETTLED';
+
+/** A rider's delivery pay: their share of one delivered order's delivery fee. */
+export interface RiderPayoutRow {
+  id: string;
+  orderId: string;
+  riderName: string;
+  riderPhone: string;
+  hasBankAccount: boolean;
+  deliveryFee: number;
+  sharePercent: number;
+  amount: number;
+  status: 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
+  failureReason: string | null;
+  createdAt: string;
+  paidAt: string | null;
+}
 export type PayoutStatus = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED' | 'CANCELLED';
 
 export interface PayoutSummary {

@@ -135,7 +135,7 @@ async function anonymise(user: User): Promise<void> {
           data: { status: 'REVOKED', tokenHash: null }
         }),
         // The business name stays: customers' past orders still show who they bought from.
-        prisma.vendorProfile.update({ where: { id: vendor.id }, data: { phone: '', bio: null, logoUrl: null } })
+        prisma.vendorProfile.update({ where: { id: vendor.id }, data: { phone: '', bio: null, logoUrl: null, rcNumber: null } })
       );
     }
   }

@@ -4,10 +4,10 @@ interface PendingVendorProfile {
   businessName: string;
   businessAddress: string;
   phone: string;
+  rcNumber: string;
   lat?: number;
   lng?: number;
   branches?: BranchInput[];
-  documents: { uri: string; fileName: string }[];
 }
 
 let pending: PendingVendorProfile | null = null;

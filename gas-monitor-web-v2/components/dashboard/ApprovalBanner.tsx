@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { Clock } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -50,6 +51,14 @@ export default function ApprovalBanner() {
       <div>
         <p className="text-sm font-semibold">{title}</p>
         <p className="mt-1 text-sm">{body}</p>
+        {user.role === 'VENDOR' && user.vendorRcNumberMissing && (
+          <p className="mt-1 text-sm font-medium">
+            We can’t approve you until you add your RC number.{' '}
+            <Link href="/dashboard/profile" className="underline">
+              Add it on your profile
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

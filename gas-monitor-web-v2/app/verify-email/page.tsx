@@ -19,6 +19,7 @@ type PendingVendor = {
   state: string;
   city: string;
   phone: string;
+  rcNumber: string;
   plan: VendorPlan;
   branches?: BranchInput[];
 };
@@ -40,6 +41,7 @@ function readPendingVendor(): PendingVendor | null {
       !parsed.state ||
       !parsed.city ||
       !parsed.phone ||
+      !parsed.rcNumber ||
       !isVendorPlan(parsed.plan)
     ) {
       return null;

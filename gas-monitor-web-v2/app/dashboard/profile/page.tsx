@@ -8,9 +8,11 @@ import { Button } from '@/components/motion/button/base';
 import { ImageUpload } from '@/components/vendor/ImageUpload';
 import { PlanSection } from '@/components/vendor/PlanSection';
 import { RiderDetailsSection } from '@/components/rider/RiderDetailsSection';
+import { PayoutAccountSection } from '@/components/dashboard/PayoutAccountSection';
 import { CompanyDetailsSection } from '@/components/company/CompanyDetailsSection';
 import { ManagerBranchesSection } from '@/components/manager/ManagerBranchesSection';
 import { StateCityFields } from '@/components/vendor/StateCityFields';
+import { isValidRcNumber, RC_NUMBER_HINT } from '@/lib/rcNumber';
 import { AlertCircle, Check } from 'lucide-react';
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
@@ -34,6 +36,7 @@ export default function ProfilePage() {
   const [vendorState, setVendorState] = useState('');
   const [vendorCity, setVendorCity] = useState('');
   const [businessPhone, setBusinessPhone] = useState('');
+  const [rcNumber, setRcNumber] = useState('');
   const [bio, setBio] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   // Set only when the logo changed this session: the uploaded key, sent on save.
@@ -59,6 +62,7 @@ export default function ProfilePage() {
         setVendorState(profile.state ?? '');
         setVendorCity(profile.city ?? '');
         setBusinessPhone(profile.phone);
+        setRcNumber(profile.rcNumber ?? '');
         setBio(profile.bio ?? '');
         setLogoUrl(profile.logoUrl ?? null);
       })
@@ -88,6 +92,10 @@ export default function ProfilePage() {
       setBusinessError('Choose the state and city you trade from.');
       return;
     }
+    if (rcNumber.trim() && !isValidRcNumber(rcNumber)) {
+      setBusinessError('Enter a valid RC number, e.g. RC1234567.');
+      return;
+    }
     setSavingBusiness(true);
     setBusinessSaved(false);
     try {
@@ -97,10 +105,12 @@ export default function ProfilePage() {
         state: vendorState,
         city: vendorCity.trim(),
         phone: businessPhone,
+        ...(rcNumber.trim() ? { rcNumber: rcNumber.trim() } : {}),
         bio: bio || null,
         ...(logoKey ? { logoKey } : {})
       });
       setVendorProfile(updated);
+      setRcNumber(updated.rcNumber ?? '');
       setLogoKey(undefined);
       setBusinessSaved(true);
       setTimeout(() => setBusinessSaved(false), 3000);
@@ -298,6 +308,24 @@ export default function ProfilePage() {
             />
 
             <div>
+              <Input
+                label="RC number"
+                id="rcNumber"
+                type="text"
+                value={rcNumber}
+                onChange={setRcNumber}
+                error={false}
+                placeholder="RC1234567"
+                classNames={{ root: 'w-full' }}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {vendorProfile?.rcNumber
+                  ? RC_NUMBER_HINT
+                  : `Required before we can approve your account. ${RC_NUMBER_HINT}`}
+              </p>
+            </div>
+
+            <div>
               <label htmlFor="bio" className="block text-sm font-medium text-foreground mb-2">
                 About your business
               </label>
@@ -358,6 +386,9 @@ export default function ProfilePage() {
 
       {/* Rider details (Riders only) */}
       {user.role === 'RIDER' && <RiderDetailsSection />}
+
+      {/* Payout account (Vendors and riders) */}
+      {(user.role === 'VENDOR' || user.role === 'RIDER') && <PayoutAccountSection />}
 
       {/* Company details (Logistics companies only) */}
       {user.role === 'LOGISTICS_COMPANY' && <CompanyDetailsSection />}

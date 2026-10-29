@@ -9,7 +9,9 @@ import { useFocusEffect } from 'expo-router';
 import { pickVendorImage } from '@/lib/pickVendorImage';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { VendorPlanCard } from '@/components/vendor-plan-card';
-import { vendorApi, VendorProfile, VendorStatus } from '@/lib/api';
+import { PayoutAccountCard } from '@/components/payout-account';
+import { authApi, vendorApi, VendorProfile, VendorStatus } from '@/lib/api';
+import { isValidRcNumber, RC_NUMBER_HINT } from '@/lib/rcNumber';
 import { useDrawer } from './_layout';
 
 const C = {
@@ -47,6 +49,7 @@ export default function VendorProfileScreen() {
   const [businessName, setBusinessName] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [rcNumber, setRcNumber] = useState('');
   const [bio, setBio] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null | undefined>(null);
   // Set only when the logo was changed this session: the uploaded key, sent on save.
@@ -63,6 +66,7 @@ export default function VendorProfileScreen() {
       setBusinessName(data.businessName);
       setBusinessAddress(data.businessAddress);
       setPhone(data.phone);
+      setRcNumber(data.rcNumber ?? '');
       setBio(data.bio ?? '');
       setLogoUrl(data.logoUrl);
     } catch {
@@ -93,17 +97,24 @@ export default function VendorProfileScreen() {
       setApiErr('Business name, address, and phone are required.');
       return;
     }
+    if (rcNumber.trim() && !isValidRcNumber(rcNumber)) {
+      setApiErr('Enter a valid RC number, e.g. RC1234567.');
+      return;
+    }
     setSaving(true);
     try {
       const updated = await vendorApi.updateProfile({
         businessName: businessName.trim(),
         businessAddress: businessAddress.trim(),
         phone: phone.trim(),
+        ...(rcNumber.trim() ? { rcNumber: rcNumber.trim() } : {}),
         bio: bio.trim() || null,
         ...(logoKey ? { logoKey } : {}),
       });
       setProfile(updated);
+      setRcNumber(updated.rcNumber ?? '');
       setLogoKey(undefined);
+      authApi.refreshUser().catch(() => {});
     } catch (err) {
       setApiErr(err instanceof Error ? err.message : 'Failed to save profile.');
     } finally {
@@ -194,6 +205,22 @@ export default function VendorProfileScreen() {
           </View>
 
           <View style={s.field}>
+            <Text style={s.label}>RC number</Text>
+            <TextInput
+              style={s.input}
+              value={rcNumber}
+              onChangeText={setRcNumber}
+              placeholder="RC1234567"
+              placeholderTextColor={C.muted + '99'}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <Text style={s.bioCount}>
+              {profile?.rcNumber ? RC_NUMBER_HINT : `Required before we can approve your account. ${RC_NUMBER_HINT}`}
+            </Text>
+          </View>
+
+          <View style={s.field}>
             <View style={s.bioLabelRow}>
               <Text style={s.label}>About your business</Text>
               <Text style={s.bioCount}>{bio.length}/500</Text>
@@ -234,6 +261,8 @@ export default function VendorProfileScreen() {
           >
             {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>Save Profile</Text>}
           </TouchableOpacity>
+
+          <PayoutAccountCard />
 
           <View style={{ height: 32 }} />
         </ScrollView>

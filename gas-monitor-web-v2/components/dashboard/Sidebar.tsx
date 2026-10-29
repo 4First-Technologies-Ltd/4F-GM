@@ -15,9 +15,9 @@ import {
   MapPin,
   Smartphone,
   User,
-  FileText,
   Bike,
   Clock,
+  Wallet,
   Truck,
   ClipboardList
 } from 'lucide-react';
@@ -37,15 +37,16 @@ const VENDOR_NAV_ITEMS = [
   { href: '/dashboard/orders', label: 'Incoming orders', icon: Package, exact: false },
   { href: '/dashboard/listings', label: 'Listings', icon: Store, exact: false },
   { href: '/dashboard/branches', label: 'Branches', icon: MapPin, exact: false },
+  { href: '/dashboard/earnings', label: 'Earnings', icon: Wallet, exact: false },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3, exact: false },
   { href: '/dashboard/profile', label: 'Profile', icon: User, exact: false },
-  { href: '/dashboard/documents', label: 'Documents', icon: FileText, exact: false },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, exact: false }
 ];
 
 const RIDER_NAV_ITEMS = [
   { href: '/dashboard', label: 'Deliveries', icon: Bike, exact: true },
   { href: '/dashboard/history', label: 'History', icon: Clock, exact: false },
+  { href: '/dashboard/earnings', label: 'Earnings', icon: Wallet, exact: false },
   { href: '/dashboard/profile', label: 'Profile', icon: User, exact: false }
 ];
 

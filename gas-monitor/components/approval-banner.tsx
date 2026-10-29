@@ -1,6 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useApprovalStatus } from '@/hooks/use-approval-status';
+import { useApprovalStatus, useVendorRcMissing } from '@/hooks/use-approval-status';
 
 type Kind = 'vendor' | 'rider' | 'company';
 
@@ -22,6 +23,7 @@ const COPY: Record<Kind, { title: string; body: string }> = {
 /** Shown on a vendor/rider/company dashboard while their account is PENDING approval. */
 export function ApprovalBanner({ kind }: { kind: Kind }) {
   const status = useApprovalStatus();
+  const rcMissing = useVendorRcMissing();
   if (status !== 'PENDING') return null;
   const { title, body } = COPY[kind];
 
@@ -31,6 +33,11 @@ export function ApprovalBanner({ kind }: { kind: Kind }) {
       <View style={{ flex: 1 }}>
         <Text style={s.title}>{title}</Text>
         <Text style={s.body}>{body}</Text>
+        {kind === 'vendor' && rcMissing && (
+          <TouchableOpacity onPress={() => router.push('/(vendor)/profile')} activeOpacity={0.7}>
+            <Text style={s.link}>We can’t approve you until you add your RC number. Add it on your profile</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -52,4 +59,5 @@ const s = StyleSheet.create({
   },
   title: { color: AMBER, fontSize: 14, fontWeight: '800' },
   body: { color: '#78350F', fontSize: 13, lineHeight: 18, marginTop: 2 },
+  link: { color: AMBER, fontSize: 13, fontWeight: '700', lineHeight: 18, marginTop: 6, textDecorationLine: 'underline' },
 });

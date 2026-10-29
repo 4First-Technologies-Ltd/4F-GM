@@ -187,14 +187,14 @@ Loads the order with `ordersApi.get(id)`. Sections:
 |---|---|
 | 1 — Account | Personal name, business name, email, password |
 | 2 — Business | Phone number, business address (multiline), GPS location (optional) |
-| 3 — Verify | Identity document upload via `expo-image-picker` (skip allowed) |
+| 3 — Verify | CAC RC number (required) |
 
 On submit (step 3):
-1. Business info + documents are stashed in-memory via `setPendingVendorProfile()` (`lib/pendingVendorProfile.ts`) — a module-level variable, not persisted storage, since it only needs to survive the navigation to `/verify-email`.
+1. Business info + RC number are stashed in-memory via `setPendingVendorProfile()` (`lib/pendingVendorProfile.ts`) — a module-level variable, not persisted storage, since it only needs to survive the navigation to `/verify-email`.
 2. `authApi.register(name, email, password, 'VENDOR')` — creates an unverified user, emails an OTP. No session yet.
 3. `router.replace('/verify-email?email=...&role=VENDOR')`.
 
-`/verify-email` then calls `authApi.verifyOtp()` (issuing the session), reads back the pending profile via `takePendingVendorProfile()`, calls `vendorApi.createProfile(...)` and `vendorApi.uploadDocuments(...)` (if docs were selected), and finally routes to `/vendor-pending`.
+`/verify-email` then calls `authApi.verifyOtp()` (issuing the session), reads back the pending profile via `takePendingVendorProfile()`, calls `vendorApi.createProfile(...)`, and finally routes to `/vendor-pending`.
 
 ---
 
@@ -276,8 +276,7 @@ API_BASE_URL:
 | Method | Endpoint | Notes |
 |---|---|---|
 | `createProfile(data)` | POST `/api/vendor/profile` | Upserts vendor profile |
-| `getProfile()` | GET `/api/vendor/me` | Returns profile + documents + listings |
-| `uploadDocuments(docs)` | POST `/api/vendor/documents` | Accepts `{ url, fileName }[]` |
+| `getProfile()` | GET `/api/vendor/me` | Returns profile (incl. `rcNumber`) + listings |
 | `getListings()` | GET `/api/vendor/listings` | Returns vendor's own listings |
 | `createListing(data)` | POST `/api/vendor/listings` | Requires APPROVED status |
 | `updateListing(id, data)` | PATCH `/api/vendor/listings/:id` | Partial update |
@@ -506,8 +505,7 @@ OTP codes are 6-digit, sha256-hashed at rest (`otpCodeHash`), expire after 10 mi
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/profile` | Create/update vendor profile (upsert) |
-| GET | `/me` | Get own profile + documents + listings |
-| POST | `/documents` | Body: `{ documents: [{ url, fileName }] }` |
+| GET | `/me` | Get own profile + listings |
 | GET | `/listings` | Own listings only |
 | POST | `/listings` | Requires APPROVED status |
 | PATCH | `/listings/:id` | Partial update, ownership checked |

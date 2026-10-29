@@ -189,8 +189,8 @@ export default function OverviewPage() {
                         <dd>{v.user.name}</dd>
                       </div>
                       <div className="adm-card-item-field">
-                        <dt className="adm-micro-label">Documents</dt>
-                        <dd>{v.documents.length}</dd>
+                        <dt className="adm-micro-label">RC number</dt>
+                        <dd>{v.rcNumber ?? 'Not provided'}</dd>
                       </div>
                     </dl>
                     {/* Triage without navigating — the point of a queue. */}

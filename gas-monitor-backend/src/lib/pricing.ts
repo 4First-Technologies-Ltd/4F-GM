@@ -70,6 +70,8 @@ export type PricedOrder = {
   supplierName: string;
   unitPrice: number;
   totalAmount: number;
+  /** The flat delivery fee inside `totalAmount` (vendor orders): platform and rider money, not the vendor's. */
+  deliveryFee?: number;
   listingId?: string;
   vendorId?: string;
   branchId?: string;
@@ -151,6 +153,7 @@ export async function priceListingOrder(
     supplierName: listing.vendor.businessName,
     unitPrice,
     totalAmount: withDelivery(unitPrice, quantity, DELIVERY_FEE),
+    deliveryFee: DELIVERY_FEE,
     listingId: listing.id,
     vendorId: listing.vendorId,
     branchId: listing.branchId ?? undefined
@@ -189,6 +192,7 @@ export function priceLooseOrder(
     supplierName: listing.vendor.businessName,
     unitPrice: gasCost,
     totalAmount: withDelivery(gasCost, 1, DELIVERY_FEE),
+    deliveryFee: DELIVERY_FEE,
     listingId: listing.id,
     vendorId: listing.vendorId,
     branchId: listing.branchId ?? undefined

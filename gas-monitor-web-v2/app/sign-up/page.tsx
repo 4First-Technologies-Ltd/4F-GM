@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, FormEvent } from 'react';
+import { isValidRcNumber, RC_NUMBER_HINT } from '@/lib/rcNumber';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -86,6 +87,7 @@ function SignUpForm() {
   const [phone, setPhone] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
+  const [rcNumber, setRcNumber] = useState('');
   const [vendorState, setVendorState] = useState('');
   const [vendorCity, setVendorCity] = useState('');
   const [vehicleType, setVehicleType] = useState('');
@@ -114,6 +116,10 @@ function SignUpForm() {
 
     if (role === 'VENDOR' && (!businessName.trim() || !businessAddress.trim() || !vendorState || !vendorCity.trim() || !phone.trim())) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (role === 'VENDOR' && !isValidRcNumber(rcNumber)) {
+      setError('Enter a valid RC number, e.g. RC1234567.');
       return;
     }
 
@@ -160,6 +166,7 @@ function SignUpForm() {
             state: vendorState,
             city: vendorCity.trim(),
             phone: phone.trim(),
+            rcNumber: rcNumber.trim(),
             plan: DEFAULT_VENDOR_PLAN,
             ...(extraBranches.length ? { branches: extraBranches } : {})
           })
@@ -345,6 +352,19 @@ function SignUpForm() {
                   placeholder="0801 234 5678"
                   classNames={{ root: 'w-full' }}
                 />
+
+                <Input
+                  label="RC number"
+                  id="rcNumber"
+                  type="text"
+                  required
+                  value={rcNumber}
+                  onChange={setRcNumber}
+                  error={false}
+                  placeholder="RC1234567"
+                  classNames={{ root: 'w-full' }}
+                />
+                <p className="-mt-3 text-xs text-muted-foreground">{RC_NUMBER_HINT}</p>
 
                 <BranchDraftFields branches={extraBranches} onChange={setExtraBranches} disabled={submitting} />
 

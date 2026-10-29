@@ -2,29 +2,22 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
-import { VendorPlan } from '@prisma/client';
+import { Prisma, VendorPlan } from '@prisma/client';
 import { listingPatchSchema, listingSchema } from '../lib/vendorSchemas';
 import { recordEarningSafe } from '../lib/earnings';
 import { ASSIGNABLE_RIDER } from '../lib/fleet';
 import { branchSchema, findMainBranch, findOwnBranch, isSellable } from '../lib/branches';
 import { asyncHandler } from '../lib/asyncHandler';
 import {
-  ALLOWED_DOC_TYPES,
   ALLOWED_IMAGE_TYPES,
   deleteImage,
-  isStorageKey,
-  MAX_DOC_BYTES,
   MAX_IMAGE_BYTES,
-  newDocumentKey,
   newImageKey,
-  objectExists,
   presignImageUpload,
-  presignUpload,
   publicImageUrl,
-  publicStorageConfigured,
-  storageConfigured,
-  withViewUrls
+  publicStorageConfigured
 } from '../lib/storage';
+import { rcNumberSchema } from '../lib/rcNumber';
 import { checkOwnImageKey, withImage, withLogo } from '../lib/images';
 import { documentUploadLimiter } from '../lib/security';
 import {
@@ -38,6 +31,78 @@ import {
 
 const router = Router();
 
+const RC_IN_USE = { error: 'That RC number is already registered to another vendor.', code: 'RC_NUMBER_IN_USE' };
+
+/** Runs a profile write and turns the unique-index clash on `rcNumber` into a result instead of a 500. */
+async function saveWithRcCheck<T>(write: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false }> {
+  try {
+    return { ok: true, value: await write() };
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return { ok: false };
+    throw err;
+  }
+}
+
+/**
+ * The vendor's own earnings ledger: what each delivered order paid them after the
+ * platform's commission (the delivery fee is never part of it), and how it reaches
+ * them. SETTLED = the payment gateway sent it to their bank at checkout; AVAILABLE
+ * and IN_PAYOUT = still to be paid out by the platform; PAID = already paid out.
+ */
+router.get(
+  '/earnings',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const profile = await prisma.vendorProfile.findUnique({
+      where: { userId: req.user!.sub },
+      select: { id: true, bankAccount: { select: { bankName: true, accountName: true, accountNumber: true } } }
+    });
+    if (!profile) return res.status(404).json({ error: 'Vendor profile not found' });
+
+    const [groups, rows] = await Promise.all([
+      prisma.earning.groupBy({
+        by: ['status'],
+        where: { vendorId: profile.id },
+        _sum: { netAmount: true, commissionAmount: true },
+        _count: true
+      }),
+      prisma.earning.findMany({
+        where: { vendorId: profile.id },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          orderId: true,
+          grossAmount: true,
+          commissionPercent: true,
+          commissionAmount: true,
+          netAmount: true,
+          status: true,
+          createdAt: true,
+          order: { select: { cylinderSize: true, quantity: true } }
+        }
+      })
+    ]);
+
+    const net = (...st: string[]) =>
+      Math.round(groups.filter((g) => st.includes(g.status)).reduce((t, g) => t + (g._sum.netAmount ?? 0), 0) * 100) / 100;
+    const bank = profile.bankAccount;
+    return res.json({
+      totals: {
+        settled: net('SETTLED'),
+        paidOut: net('PAID'),
+        awaitingPayout: net('AVAILABLE', 'IN_PAYOUT'),
+        commission: Math.round(groups.reduce((t, g) => t + (g._sum.commissionAmount ?? 0), 0) * 100) / 100,
+        orders: groups.reduce((t, g) => t + g._count, 0)
+      },
+      payoutAccount: bank
+        ? { bankName: bank.bankName, accountName: bank.accountName, last4: bank.accountNumber.slice(-4) }
+        : null,
+      earnings: rows
+    });
+  })
+);
+
 router.get(
   '/me',
   requireAuth,
@@ -45,7 +110,6 @@ router.get(
     const profile = await prisma.vendorProfile.findUnique({
       where: { userId: req.user!.sub },
       include: {
-        documents: true,
         listings: true,
         branches: { orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] },
         planChanges: { orderBy: { createdAt: 'desc' }, take: 10 }
@@ -59,7 +123,6 @@ router.get(
     return res.json({
       profile: {
         ...withLogo(profile),
-        documents: await withViewUrls(profile.documents),
         listings: profile.listings.map(withImage)
       }
     });
@@ -73,6 +136,9 @@ const profileSchema = z.object({
   state: z.string().trim().min(2).max(80).optional(),
   city: z.string().trim().min(2).max(80).optional(),
   phone: z.string().min(1, 'Phone number is required'),
+  // Optional only so older app builds keep working; admins cannot approve a
+  // vendor without one, and every current sign-up form requires it.
+  rcNumber: rcNumberSchema.optional(),
   // One plan is on sale, so sign-up no longer asks: the rate is disclosed in
   // the form and the server stamps it. Still accepted from clients that send
   // it, as long as it is a plan currently offered.
@@ -106,13 +172,17 @@ router.post(
       });
     }
 
-    const profile = await prisma.vendorProfile.upsert({
-      where: { userId: req.user!.sub },
-      create: { userId: req.user!.sub, plan: plan ?? DEFAULT_PLAN, ...details },
-      // Re-posting the profile must not become a back door around the plan
-      // cooldown — switching plans goes through PATCH /plan only.
-      update: details
-    });
+    const saved = await saveWithRcCheck(() =>
+      prisma.vendorProfile.upsert({
+        where: { userId: req.user!.sub },
+        create: { userId: req.user!.sub, plan: plan ?? DEFAULT_PLAN, ...details },
+        // Re-posting the profile must not become a back door around the plan
+        // cooldown — switching plans goes through PATCH /plan only.
+        update: details
+      })
+    );
+    if (!saved.ok) return res.status(409).json(RC_IN_USE);
+    const profile = saved.value;
 
     // Every vendor has a main branch from day one, seeded from the business
     // location. Skipped when one exists so re-posting the profile is harmless.
@@ -151,6 +221,7 @@ const patchSchema = z.object({
   state: z.string().trim().min(2).max(80).optional(),
   city: z.string().trim().min(2).max(80).optional(),
   phone: z.string().min(1).optional(),
+  rcNumber: rcNumberSchema.optional(),
   bio: z.string().max(500).nullable().optional(),
   // R2 key issued by POST /images/upload-url (kind "logo"), or null to remove the logo.
   // There is deliberately no `logoUrl` input any more: clients used to send local file
@@ -180,10 +251,14 @@ router.patch(
       if (problem) return res.status(400).json({ error: problem });
     }
 
-    const profile = await prisma.vendorProfile.update({
-      where: { userId: req.user!.sub },
-      data: { ...fields, ...(logoKey !== undefined ? { logoUrl: logoKey } : {}) }
-    });
+    const saved = await saveWithRcCheck(() =>
+      prisma.vendorProfile.update({
+        where: { userId: req.user!.sub },
+        data: { ...fields, ...(logoKey !== undefined ? { logoUrl: logoKey } : {}) }
+      })
+    );
+    if (!saved.ok) return res.status(409).json(RC_IN_USE);
+    const profile = saved.value;
     if (logoKey !== undefined && existing.logoUrl && existing.logoUrl !== logoKey) await deleteImage(existing.logoUrl);
 
     return res.json({ profile: withLogo(profile) });
@@ -259,12 +334,6 @@ router.patch(
   })
 );
 
-const uploadUrlSchema = z.object({
-  fileName: z.string().trim().min(1).max(120),
-  contentType: z.string(),
-  size: z.number().int().positive()
-});
-
 const imageUploadSchema = z.object({
   kind: z.enum(['logo', 'listing']),
   contentType: z.string(),
@@ -302,85 +371,6 @@ router.post(
     const key = newImageKey(kind, profile.id, contentType);
     const uploadUrl = await presignImageUpload(key, contentType, size);
     return res.json({ key, uploadUrl, publicUrl: publicImageUrl(key), contentType, expiresInSeconds: 300 });
-  })
-);
-
-/** Step 1: validate the file and hand back a short-lived upload link to R2. */
-router.post(
-  '/documents/upload-url',
-  requireAuth,
-  documentUploadLimiter,
-  asyncHandler(async (req, res) => {
-    if (!storageConfigured()) {
-      return res.status(503).json({ error: 'Document upload is not available right now. Please try again later.' });
-    }
-    const result = uploadUrlSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: 'Invalid file details' });
-    const { contentType, size } = result.data;
-    if (!ALLOWED_DOC_TYPES[contentType]) {
-      return res.status(400).json({ error: 'Only JPG, PNG, WebP or PDF files are accepted.' });
-    }
-    if (size > MAX_DOC_BYTES) {
-      return res.status(400).json({ error: 'File is too large. The limit is 8 MB.' });
-    }
-
-    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
-    if (!profile) {
-      return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
-    }
-    if ((await prisma.vendorDocument.count({ where: { vendorId: profile.id } })) >= 20) {
-      return res.status(400).json({ error: 'Document limit reached. Contact support if you need to add more.' });
-    }
-
-    const key = newDocumentKey(profile.id, contentType);
-    const uploadUrl = await presignUpload(key, contentType, size);
-    return res.json({ key, uploadUrl, contentType, expiresInSeconds: 300 });
-  })
-);
-
-/** Step 2: after the upload, record the document. Only keys we issued are accepted. */
-const documentSchema = z.object({
-  documents: z
-    .array(
-      z.object({
-        key: z.string().min(1),
-        fileName: z.string().trim().min(1).max(120)
-      })
-    )
-    .min(1)
-    .max(5)
-});
-
-router.post(
-  '/documents',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const result = documentSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: 'Please update the app to upload documents.' });
-    }
-
-    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
-    if (!profile) {
-      return res.status(404).json({ error: 'Vendor profile not found. Create profile first.' });
-    }
-
-    const prefix = `vendor-docs/${profile.id}/`;
-    for (const d of result.data.documents) {
-      if (!isStorageKey(d.key) || !d.key.startsWith(prefix) || d.key.includes('..')) {
-        return res.status(400).json({ error: 'Invalid document reference.' });
-      }
-      if (!(await objectExists(d.key))) {
-        return res.status(400).json({ error: 'Upload was not completed. Please try again.' });
-      }
-    }
-
-    const count = await prisma.vendorDocument.createMany({
-      data: result.data.documents.map((d) => ({ vendorId: profile.id, url: d.key, fileName: d.fileName })),
-      skipDuplicates: true
-    });
-
-    return res.status(201).json({ count: count.count });
   })
 );
 

@@ -356,15 +356,6 @@ export default function VendorSettingsScreen() {
           </View>
         </View>
 
-        {/* Quick links */}
-        <TouchableOpacity style={[s.linkRow, cardShadow]} onPress={() => router.push('/(vendor)/documents')} activeOpacity={0.8}>
-          <View style={s.linkIconCircle}>
-            <IconSymbol name="doc.fill" size={18} color={C.accent} />
-          </View>
-          <Text style={s.linkText}>Documents</Text>
-          <IconSymbol name="chevron.right" size={16} color={C.muted} />
-        </TouchableOpacity>
-
         {/* Sign out */}
         <TouchableOpacity style={[s.signOutBtn, cardShadow]} onPress={handleSignOut} activeOpacity={0.8}>
           <IconSymbol name="arrow.left" size={18} color={C.red} />

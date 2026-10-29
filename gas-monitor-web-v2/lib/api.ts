@@ -32,6 +32,8 @@ export interface ApiUser {
   avatarUrl?: string | null;
   role: UserRole;
   vendorStatus?: VendorStatus;
+  /** True for a vendor who has not yet supplied the RC number admins need to approve them. */
+  vendorRcNumberMissing?: boolean;
   riderStatus?: RiderStatus;
   companyStatus?: CompanyStatus;
   pushEnabled: boolean;
@@ -285,6 +287,8 @@ export interface InitializeOrderPayload {
   /** With cylinderSize "Loose" (and quantity 1): exactly one of these. */
   looseKg?: number;
   looseAmount?: number;
+  /** The gateway the customer chose from `ordersApi.paymentProviders()`; omitted = the server default. */
+  paymentProvider?: string;
 }
 
 export interface InitializeOrderResult {
@@ -295,7 +299,17 @@ export interface InitializeOrderResult {
   email: string;
 }
 
+export interface PaymentProviderOption {
+  id: string;
+  label: string;
+}
+
 export const ordersApi = {
+  /** Gateways enabled for checkout. Show a picker only when there is more than one. */
+  async paymentProviders(): Promise<{ default: string; providers: PaymentProviderOption[] }> {
+    return request('/api/orders/payment-providers');
+  },
+
   async initialize(payload: InitializeOrderPayload): Promise<InitializeOrderResult> {
     return request<InitializeOrderResult>('/api/orders/initialize', {
       method: 'POST',
@@ -380,13 +394,6 @@ export interface StaffMember {
   user?: { name: string } | null;
 }
 
-export interface VendorDocument {
-  id: string;
-  url: string;
-  fileName: string;
-  createdAt: string;
-}
-
 export interface GasListing {
   id: string;
   branchId?: string | null;
@@ -425,11 +432,12 @@ export interface VendorProfile {
   lat?: number;
   lng?: number;
   phone: string;
+  /** CAC registration number ("RC1234567"); admins need it to approve the vendor. */
+  rcNumber?: string | null;
   status: VendorStatus;
   plan: VendorPlan;
   planChangedAt?: string | null;
   planLockedUntil?: string | null;
-  documents?: VendorDocument[];
   listings?: GasListing[];
   branches?: Branch[];
   /** Newest first, capped server-side. */
@@ -442,6 +450,7 @@ export interface UpdateVendorProfilePayload {
   state?: string;
   city?: string;
   phone?: string;
+  rcNumber?: string;
   bio?: string | null;
   /** Key from `vendorApi.uploadImage('logo', file)`; null removes the logo. */
   logoKey?: string | null;
@@ -474,6 +483,7 @@ export interface CreateVendorProfilePayload {
   state: string;
   city: string;
   phone: string;
+  rcNumber: string;
   plan: VendorPlan;
   lat?: number;
   lng?: number;
@@ -495,7 +505,32 @@ export interface ListingPayload {
   imageKey?: string | null;
 }
 
+export type VendorEarningStatus = 'AVAILABLE' | 'IN_PAYOUT' | 'PAID' | 'SETTLED';
+
+export interface VendorEarningRow {
+  id: string;
+  orderId: string;
+  grossAmount: number;
+  commissionPercent: number;
+  commissionAmount: number;
+  netAmount: number;
+  status: VendorEarningStatus;
+  createdAt: string;
+  order: { cylinderSize: string; quantity: number };
+}
+
+export interface VendorEarningsResponse {
+  totals: { settled: number; paidOut: number; awaitingPayout: number; commission: number; orders: number };
+  payoutAccount: { bankName: string; accountName: string; last4: string } | null;
+  earnings: VendorEarningRow[];
+}
+
 export const vendorApi = {
+  /** What delivered orders paid the vendor after commission, and how each reaches them. */
+  async earnings(): Promise<VendorEarningsResponse> {
+    return request<VendorEarningsResponse>('/api/vendor/earnings', { auth: true });
+  },
+
   async createProfile(payload: CreateVendorProfilePayload): Promise<VendorProfile> {
     const data = await request<{ profile: VendorProfile }>('/api/vendor/profile', {
       method: 'POST',
@@ -545,22 +580,6 @@ export const vendorApi = {
     const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
     if (!put.ok) throw new Error('Image upload failed. Please try again.');
     return { key, publicUrl };
-  },
-
-  /** Uploads a KYC document to the private bucket and records it against the vendor. */
-  async uploadDocument(file: File): Promise<void> {
-    const { key, uploadUrl } = await request<{ key: string; uploadUrl: string }>('/api/vendor/documents/upload-url', {
-      method: 'POST',
-      auth: true,
-      body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size })
-    });
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!put.ok) throw new Error('Upload failed. Please try again.');
-    await request('/api/vendor/documents', {
-      method: 'POST',
-      auth: true,
-      body: JSON.stringify({ documents: [{ key, fileName: file.name }] })
-    });
   },
 
   async getListings(branchId?: string): Promise<GasListing[]> {
@@ -692,7 +711,64 @@ export interface RiderOrder extends Order {
   vendor?: { id: string; businessName: string; businessAddress?: string | null; phone: string } | null;
 }
 
+// ── Payout account (vendors and riders) ──────────────────────────────────────
+
+export interface BankOption {
+  name: string;
+  code: string;
+}
+
+/** The saved payout account. The full number is never returned. */
+export interface PayoutAccount {
+  bankName: string;
+  accountName: string;
+  last4: string;
+  updatedAt: string;
+}
+
+export const bankApi = {
+  async banks(): Promise<BankOption[]> {
+    const data = await request<{ banks: BankOption[] }>('/api/bank/banks', { auth: true });
+    return data.banks;
+  },
+
+  async getAccount(): Promise<PayoutAccount | null> {
+    const data = await request<{ account: PayoutAccount | null }>('/api/bank/account', { auth: true });
+    return data.account;
+  },
+
+  /** The account name is resolved by the bank; the password confirms it is really the owner. */
+  async saveAccount(payload: { bankCode: string; accountNumber: string; password: string }): Promise<PayoutAccount> {
+    const data = await request<{ account: PayoutAccount }>('/api/bank/account', {
+      method: 'PUT',
+      auth: true,
+      body: JSON.stringify(payload)
+    });
+    return data.account;
+  }
+};
+
+export interface RiderEarningRow {
+  id: string;
+  orderId: string;
+  amount: number;
+  status: 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
+  failureReason: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface RiderEarningsResponse {
+  earnings: RiderEarningRow[];
+  totals: { paid: number; pending: number };
+}
+
 export const riderApi = {
+  /** The rider's share of each delivered order's delivery fee. */
+  async earnings(): Promise<RiderEarningsResponse> {
+    return request<RiderEarningsResponse>('/api/rider/earnings', { auth: true });
+  },
+
   async createProfile(payload: CreateRiderProfilePayload): Promise<RiderProfile> {
     const data = await request<{ profile: RiderProfile }>('/api/rider/profile', {
       method: 'POST',

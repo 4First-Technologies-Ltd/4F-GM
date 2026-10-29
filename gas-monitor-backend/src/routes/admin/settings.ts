@@ -24,6 +24,8 @@ const patchSchema = z.object({
   allowVendorSignups: z.boolean().optional(),
   supportEmail: z.string().email().nullable().optional(),
   platformFeePercent: z.number().min(0).max(100).optional(),
+  // Rider's share of the flat delivery fee on each delivered order; the platform keeps the rest.
+  riderSharePercent: z.number().min(0).max(100).optional(),
   // 4FG Monitor commercial terms — orders are priced from these server-side.
   monitorUnitPrice: z
     .number()

@@ -1,22 +1,26 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { vendorApi, VendorOrder } from '@/lib/api';
+import { vendorApi, VendorEarningsResponse } from '@/lib/api';
 import { useDrawer } from './_layout';
 
 const C = {
   bg: '#EDF7ED',
   card: '#FFFFFF',
-  surface: '#F5FBF5',
   border: '#E0EEE0',
   text: '#1A2E1A',
   muted: '#7A9A7A',
   dim: '#AECAAE',
   accent: '#2D7450',
   accentLight: '#E8F5E8',
+  red: '#D32F2F',
+  amber: '#B26A00',
+  amberBg: '#FFF4E0',
+  blue: '#1565C0',
+  blueBg: '#E3F0FF',
 };
 
 const cardShadow = Platform.select({
@@ -25,201 +29,144 @@ const cardShadow = Platform.select({
   default: {},
 });
 
-type Period = 'ALL' | 'MONTH' | 'WEEK';
+const naira = (n: number) => '₦' + Math.round(n).toLocaleString();
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
 
-const PERIODS: { id: Period; label: string }[] = [
-  { id: 'ALL', label: 'All Time' },
-  { id: 'MONTH', label: 'This Month' },
-  { id: 'WEEK', label: 'This Week' },
-];
-
-const GAS_LABELS: Record<string, string> = {
-  COOKING: 'Cooking Gas',
-  MEDICAL: 'Medical O₂',
-  INDUSTRIAL: 'Industrial',
-  BULK: 'Bulk LPG',
-  OTHER: 'Other',
+const STATUS: Record<string, { text: string; color: string; bg: string }> = {
+  SETTLED: { text: 'Paid at checkout', color: C.accent, bg: C.accentLight },
+  PAID: { text: 'Paid out', color: C.accent, bg: C.accentLight },
+  IN_PAYOUT: { text: 'Payout on its way', color: C.blue, bg: C.blueBg },
+  AVAILABLE: { text: 'Awaiting payout', color: C.amber, bg: C.amberBg },
 };
-
-function fmtPrice(n: number) {
-  return '₦' + Math.round(n).toLocaleString();
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
-}
-
-function inPeriod(iso: string, period: Period) {
-  if (period === 'ALL') return true;
-  const d = new Date(iso);
-  const now = new Date();
-  if (period === 'MONTH') {
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }
-  const weekAgo = new Date(now);
-  weekAgo.setDate(now.getDate() - 7);
-  return d >= weekAgo;
-}
-
-// ── Payout row ────────────────────────────────────────────────────────────────
-
-function PayoutRow({ order }: { order: VendorOrder }) {
-  const gasLabel = order.listing.customName ?? GAS_LABELS[order.listing.gasType] ?? order.listing.gasType;
-  return (
-    <View style={[pr.card, cardShadow]}>
-      <View style={pr.iconCircle}>
-        <IconSymbol name="checkmark.circle.fill" size={18} color={C.accent} />
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={pr.customer} numberOfLines={1}>{order.consumer.name}</Text>
-        <Text style={pr.meta} numberOfLines={1}>
-          {gasLabel} · {order.cylinderSize} × {order.quantity} · {fmtDate(order.createdAt)}
-        </Text>
-      </View>
-      <Text style={pr.amount}>+{fmtPrice(order.totalAmount)}</Text>
-    </View>
-  );
-}
-
-// ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function EarningsScreen() {
   const { openDrawer } = useDrawer();
-  const [orders, setOrders] = useState<VendorOrder[]>([]);
-  const [period, setPeriod] = useState<Period>('ALL');
+  const [data, setData] = useState<VendorEarningsResponse | null>(null);
+  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  async function loadOrders() {
+  const load = useCallback(async () => {
+    setError('');
     try {
-      const data = await vendorApi.getOrders();
-      setOrders(data);
-    } catch {
-      // silently fail — empty state handles this
+      setData(await vendorApi.earnings());
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not load your earnings.');
     }
-  }
+  }, []);
 
-  useFocusEffect(useCallback(() => { loadOrders(); }, []));
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadOrders();
+    await load();
     setRefreshing(false);
   }
 
-  const stats = useMemo(() => {
-    const inRange = orders.filter((o) => inPeriod(o.createdAt, period));
-    const delivered = inRange
-      .filter((o) => o.status === 'DELIVERED')
-      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-    const pending = inRange.filter((o) => o.status === 'CONFIRMED');
-
-    const totalEarnings = delivered.reduce((sum, o) => sum + o.totalAmount, 0);
-    const pendingPayout = pending.reduce((sum, o) => sum + o.totalAmount, 0);
-    const completedCount = delivered.length;
-    const avgOrder = completedCount > 0 ? totalEarnings / completedCount : 0;
-
-    return { delivered, totalEarnings, pendingPayout, completedCount, avgOrder };
-  }, [orders, period]);
+  const totals = data?.totals;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar style="dark" />
 
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={openDrawer} activeOpacity={0.7}>
           <IconSymbol name="line.3.horizontal" size={22} color={C.accent} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Earnings</Text>
-          <Text style={s.headerSub}>Track your revenue</Text>
+          <Text style={s.headerSub}>After commission, delivery fee excluded</Text>
         </View>
       </View>
-
-      {/* Period pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.filterRow}
-        style={s.filterScroll}
-      >
-        {PERIODS.map((p) => (
-          <TouchableOpacity
-            key={p.id}
-            style={[s.pill, period === p.id && s.pillActive]}
-            onPress={() => setPeriod(p.id)}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.pillText, period === p.id && s.pillTextActive]}>{p.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       <ScrollView
         contentContainerStyle={s.body}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.accent} />}
       >
-        {orders.length === 0 ? (
+        {!!error && (
+          <View style={s.errBox}>
+            <Text style={s.errText}>{error}</Text>
+          </View>
+        )}
+
+        {data && !data.payoutAccount && (
+          <TouchableOpacity style={s.notice} activeOpacity={0.8} onPress={() => router.push('/(vendor)/profile')}>
+            <Text style={s.noticeText}>
+              You have not added a payout account yet, so we cannot pay you. Tap to add your bank account on your profile.
+            </Text>
+          </TouchableOpacity>
+        )}
+        {data?.payoutAccount && (
+          <Text style={s.acct}>
+            Paid to {data.payoutAccount.accountName} · {data.payoutAccount.bankName} ••••{data.payoutAccount.last4}
+          </Text>
+        )}
+
+        {totals && (
+          <>
+            <View style={[s.heroCard, cardShadow]}>
+              <Text style={s.heroLabel}>Paid to you</Text>
+              <Text style={s.heroValue}>{naira(totals.settled + totals.paidOut)}</Text>
+              <Text style={s.heroCaption}>
+                from {totals.orders} delivered order{totals.orders !== 1 ? 's' : ''}
+              </Text>
+            </View>
+
+            <View style={s.statRow}>
+              <View style={[s.statCard, cardShadow]}>
+                <Text style={s.statValue}>{naira(totals.settled)}</Text>
+                <Text style={s.statLabel}>Paid at checkout</Text>
+              </View>
+              <View style={[s.statCard, cardShadow]}>
+                <Text style={s.statValue}>{naira(totals.awaitingPayout)}</Text>
+                <Text style={s.statLabel}>Awaiting payout</Text>
+              </View>
+              <View style={[s.statCard, cardShadow]}>
+                <Text style={s.statValue}>{naira(totals.commission)}</Text>
+                <Text style={s.statLabel}>Commission</Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {data && data.earnings.length === 0 && !error && (
           <View style={s.emptyState}>
             <View style={s.emptyIconCircle}>
               <IconSymbol name="chart.bar.fill" size={34} color={C.dim} />
             </View>
             <Text style={s.emptyTitle}>No earnings yet</Text>
-            <Text style={s.emptySubtitle}>
-              Revenue from delivered orders will show up here once customers start ordering from you.
-            </Text>
+            <Text style={s.emptySubtitle}>Earnings appear here once an order you fulfilled is delivered.</Text>
           </View>
-        ) : (
+        )}
+
+        {data && data.earnings.length > 0 && (
           <>
-            {/* Hero total */}
-            <View style={[s.heroCard, cardShadow]}>
-              <View style={s.heroTopRow}>
-                <Text style={s.heroLabel}>Total Earnings</Text>
-                <View style={s.heroIconCircle}>
-                  <IconSymbol name="chart.line.uptrend.xyaxis" size={16} color="#fff" />
-                </View>
-              </View>
-              <Text style={s.heroValue}>{fmtPrice(stats.totalEarnings)}</Text>
-              <Text style={s.heroCaption}>
-                from {stats.completedCount} delivered order{stats.completedCount !== 1 ? 's' : ''}
-              </Text>
+            <Text style={s.sectionTitle}>Delivered orders</Text>
+            <View style={{ gap: 10 }}>
+              {data.earnings.map((e) => {
+                const st = STATUS[e.status] ?? { text: e.status, color: C.muted, bg: C.accentLight };
+                return (
+                  <View key={e.id} style={[s.row, cardShadow]}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={s.rowAmount}>{naira(e.netAmount)}</Text>
+                      <Text style={s.rowMeta} numberOfLines={2}>
+                        {naira(e.grossAmount)} gas − {naira(e.commissionAmount)} commission ({e.commissionPercent}%)
+                      </Text>
+                      <Text style={s.rowMeta} numberOfLines={1}>
+                        {e.order.cylinderSize} × {e.order.quantity} · {fmtDate(e.createdAt)}
+                      </Text>
+                    </View>
+                    <View style={[s.badge, { backgroundColor: st.bg }]}>
+                      <Text style={[s.badgeText, { color: st.color }]}>{st.text}</Text>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
-
-            {/* Stat grid */}
-            <View style={s.statRow}>
-              <View style={[s.statCard, cardShadow]}>
-                <IconSymbol name="checkmark.circle.fill" size={18} color={C.accent} />
-                <Text style={s.statValue}>{stats.completedCount}</Text>
-                <Text style={s.statLabel}>Completed</Text>
-              </View>
-              <View style={[s.statCard, cardShadow]}>
-                <IconSymbol name="tag.fill" size={18} color={C.accent} />
-                <Text style={s.statValue}>{fmtPrice(stats.avgOrder)}</Text>
-                <Text style={s.statLabel}>Avg. Order</Text>
-              </View>
-              <View style={[s.statCard, cardShadow]}>
-                <IconSymbol name="clock.fill" size={18} color="#B45309" />
-                <Text style={s.statValue}>{fmtPrice(stats.pendingPayout)}</Text>
-                <Text style={s.statLabel}>Pending</Text>
-              </View>
-            </View>
-
-            {/* Recent payouts */}
-            <Text style={s.sectionTitle}>Recent Payouts</Text>
-            {stats.delivered.length === 0 ? (
-              <View style={s.emptyInline}>
-                <Text style={s.emptyInlineText}>
-                  No delivered orders {period === 'ALL' ? 'yet' : 'in this period'}.
-                </Text>
-              </View>
-            ) : (
-              <View style={{ gap: 10 }}>
-                {stats.delivered.map((order) => (
-                  <PayoutRow key={order.id} order={order} />
-                ))}
-              </View>
-            )}
           </>
         )}
         <View style={{ height: 32 }} />
@@ -228,31 +175,6 @@ export default function EarningsScreen() {
   );
 }
 
-// ── Payout row styles ─────────────────────────────────────────────────────────
-const pr = StyleSheet.create({
-  card: {
-    backgroundColor: C.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconCircle: {
-    width: 36, height: 36,
-    borderRadius: 18,
-    backgroundColor: C.accentLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  customer: { color: C.text, fontSize: 14, fontWeight: '700' },
-  meta: { color: C.muted, fontSize: 12, marginTop: 1 },
-  amount: { color: C.accent, fontSize: 15, fontWeight: '800' },
-});
-
-// ── Screen styles ─────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -272,47 +194,16 @@ const s = StyleSheet.create({
   headerTitle: { color: C.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
   headerSub: { color: C.muted, fontSize: 12, marginTop: 1 },
 
-  filterScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
-    height: 44,
-    marginBottom: 14,
-  },
-  filterRow: {
-    paddingHorizontal: 20,
-    gap: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    backgroundColor: C.card,
-  },
-  pillActive: { borderColor: C.accent, backgroundColor: C.accent },
-  pillText: { color: C.muted, fontSize: 13, fontWeight: '600' },
-  pillTextActive: { color: '#fff', fontWeight: '700' },
-
   body: { paddingHorizontal: 20, gap: 14 },
 
-  heroCard: {
-    backgroundColor: C.accent,
-    borderRadius: 22,
-    padding: 20,
-    gap: 4,
-  },
-  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  errBox: { backgroundColor: '#FDECEC', borderRadius: 12, padding: 12 },
+  errText: { color: C.red, fontSize: 13 },
+  notice: { backgroundColor: C.amberBg, borderRadius: 12, padding: 14 },
+  noticeText: { color: C.amber, fontSize: 13, lineHeight: 18 },
+  acct: { color: C.muted, fontSize: 12.5 },
+
+  heroCard: { backgroundColor: C.accent, borderRadius: 22, padding: 20, gap: 4 },
   heroLabel: { color: '#DCEFE4', fontSize: 13, fontWeight: '600' },
-  heroIconCircle: {
-    width: 30, height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   heroValue: { color: '#fff', fontSize: 32, fontWeight: '800', letterSpacing: -0.6, marginTop: 4 },
   heroCaption: { color: '#CBE6D6', fontSize: 12.5, marginTop: 2 },
 
@@ -325,40 +216,35 @@ const s = StyleSheet.create({
     borderColor: C.border,
     paddingVertical: 14,
     paddingHorizontal: 10,
-    alignItems: 'flex-start',
-    gap: 6,
+    gap: 4,
   },
-  statValue: { color: C.text, fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
+  statValue: { color: C.text, fontSize: 15, fontWeight: '800' },
   statLabel: { color: C.muted, fontSize: 11.5, fontWeight: '600' },
 
   sectionTitle: { color: C.text, fontSize: 15, fontWeight: '800', marginTop: 4 },
-
-  emptyInline: {
-    backgroundColor: C.surface,
+  row: {
+    backgroundColor: C.card,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: C.border,
-    paddingVertical: 24,
+    padding: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  emptyInlineText: { color: C.muted, fontSize: 13 },
+  rowAmount: { color: C.text, fontSize: 16, fontWeight: '800' },
+  rowMeta: { color: C.muted, fontSize: 12 },
+  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 120 },
+  badgeText: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
 
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 12,
-    gap: 10,
-  },
+  emptyState: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
   emptyIconCircle: {
-    width: 80, height: 80,
-    borderRadius: 40,
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
+    width: 72, height: 72,
+    borderRadius: 36,
+    backgroundColor: C.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  emptyTitle: { color: C.text, fontSize: 18, fontWeight: '700' },
-  emptySubtitle: { color: C.muted, fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyTitle: { color: C.text, fontSize: 17, fontWeight: '700', marginTop: 14 },
+  emptySubtitle: { color: C.muted, fontSize: 13, textAlign: 'center', marginTop: 6 },
 });

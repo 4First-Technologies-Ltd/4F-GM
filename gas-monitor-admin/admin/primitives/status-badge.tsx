@@ -35,6 +35,7 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   FAILED: { tone: 'error', label: 'Failed' },
   AVAILABLE: { tone: 'success', label: 'Available' },
   IN_PAYOUT: { tone: 'info', label: 'In payout' },
+  SETTLED: { tone: 'success', label: 'Settled at checkout' },
 
   // TicketStatus (PENDING = waiting on the customer)
   OPEN: { tone: 'warning', label: 'Open' },

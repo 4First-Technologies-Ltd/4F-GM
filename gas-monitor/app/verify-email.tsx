@@ -47,19 +47,11 @@ export default function VerifyEmailScreen() {
             businessName: pending.businessName,
             businessAddress: pending.businessAddress,
             phone: pending.phone,
+            rcNumber: pending.rcNumber,
             lat: pending.lat,
             lng: pending.lng,
             branches: pending.branches?.length ? pending.branches : undefined,
           });
-          // The account already exists at this point, so a failed upload must not
-          // block sign-up; the vendor can add the file again from Documents.
-          for (const d of pending.documents) {
-            try {
-              await vendorApi.uploadDocument({ uri: d.uri, fileName: d.fileName });
-            } catch {
-              /* retry later from the Documents screen */
-            }
-          }
         }
         await authApi.refreshUser().catch(() => {});
         router.replace('/(vendor)');

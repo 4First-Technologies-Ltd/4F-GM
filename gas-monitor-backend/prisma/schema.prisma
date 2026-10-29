@@ -152,6 +152,10 @@ model VendorProfile {
   lat             Float?
   lng             Float?
   phone           String
+  /// CAC registration number, stored normalised ("RC1234567"). Replaces KYC
+  /// document uploads as the verification input; admins need it before they can
+  /// approve a vendor. Null for vendors who have not supplied it yet.
+  rcNumber        String?            @unique
   status          VendorStatus       @default(PENDING)
   /// Partner plan the vendor sells under. New vendors pick one at sign-up;
   /// BASIC is the default only so pre-existing rows backfill sensibly.
@@ -238,6 +242,8 @@ model RiderProfile {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orders      Order[]     @relation("RiderOrders")
+  bankAccount RiderBankAccount?
+  earnings    RiderEarning[]
 
   @@index([companyId])
   @@map("rider_profiles")
@@ -423,8 +429,21 @@ model Order {
   totalAmount     Float
   deliveryAddress String
   status          OrderStatus    @default(PENDING)
+  /// Gateway the order was started with: PAYSTACK or MYIMO. `paystackRef` /
+  /// `paystackStatus` hold that gateway's reference and status either way
+  /// (column names predate MyIMO Pay and are kept to avoid a rename).
+  paymentProvider String         @default("PAYSTACK")
   paystackRef     String?        @unique
   paystackStatus  String?
+  /// The flat delivery fee inside `totalAmount`, frozen at pricing time. It goes
+  /// to the platform (and the rider's cut of it), never to the vendor. 0 on orders
+  /// placed before this column existed, which keep the old all-to-vendor maths.
+  deliveryFee     Float          @default(0)
+  /// True when the gateway paid the vendor's share out of this payment (split
+  /// settlement). `vendorSplitAmount` is exactly what was sent, in naira.
+  vendorSettledByGateway Boolean @default(false)
+  vendorSplitAmount      Float?
+  riderEarning    RiderEarning?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -474,6 +493,9 @@ model PlatformSettings {
   latestAppVersion   String   @default("1.0.0")
   storeUrlAndroid    String   @default("https://play.google.com/store/apps/details?id=com.fourfirsttechnologies.gasmonitor")
   storeUrlIos        String   @default("")
+  /// Share of the flat delivery fee paid to the rider who delivers the order.
+  /// The platform keeps the rest. A placeholder until the business sets it.
+  riderSharePercent  Float    @default(70)
   updatedAt          DateTime @updatedAt
 
   @@map("platform_settings")
@@ -677,10 +699,30 @@ model VendorBankAccount {
   accountNumber         String
   accountName           String
   paystackRecipientCode String?
+  /// Payee ids per payment gateway for split settlement, e.g. {"PAYSTACK":"ACCT_x"}.
+  /// Cleared whenever the account changes.
+  gatewayRecipients     Json          @default("{}")
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
   @@map("vendor_bank_accounts")
+}
+
+/// Where a rider's payouts are sent. Same shape as VendorBankAccount; the name is
+/// always resolved from the bank, never typed.
+model RiderBankAccount {
+  id                    String       @id @default(uuid())
+  riderId               String       @unique
+  rider                 RiderProfile @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  bankCode              String
+  bankName              String
+  accountNumber         String
+  accountName           String
+  paystackRecipientCode String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@map("rider_bank_accounts")
 }
 
 enum EarningStatus {
@@ -689,6 +731,9 @@ enum EarningStatus {
   /// Locked into a payout that is pending or in flight.
   IN_PAYOUT
   PAID
+  /// Paid to the vendor by the payment gateway at checkout (split settlement).
+  /// Never part of a payout: the money has already reached their bank.
+  SETTLED
 }
 
 /// One row per delivered marketplace order: what the vendor earned after the
@@ -1154,4 +1199,42 @@ model OpsBriefing {
   updatedAt DateTime  @updatedAt
 
   @@map("ops_briefings")
+}
+
+enum RiderEarningStatus {
+  /// Recorded; no transfer yet (no bank account, auto-payout off, or awaiting retry).
+  PENDING
+  /// Paystack accepted the transfer; waiting for the transfer.success webhook.
+  PROCESSING
+  PAID
+  FAILED
+}
+
+/// A rider's cut of one delivered order's delivery fee, paid by its own Paystack
+/// transfer. One row per order (orderId is unique), so a repeat delivery event is a no-op.
+model RiderEarning {
+  id                   String             @id @default(uuid())
+  orderId              String             @unique
+  order                Order              @relation(fields: [orderId], references: [id])
+  riderId              String
+  rider                RiderProfile       @relation(fields: [riderId], references: [id])
+  deliveryFee          Float
+  sharePercent         Float
+  amount               Float
+  status               RiderEarningStatus @default(PENDING)
+  /// Idempotency key, also sent to Paystack as the transfer reference.
+  reference            String             @unique
+  paystackTransferCode String?
+  failureReason        String?
+  /// Account snapshot taken when the transfer is first sent.
+  bankName             String?
+  accountNumber        String?
+  accountName          String?
+  paidAt               DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([riderId, status])
+  @@index([status])
+  @@map("rider_earnings")
 }
