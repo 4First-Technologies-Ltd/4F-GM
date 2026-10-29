@@ -14,6 +14,27 @@ function statusOf(user: ApiUser | null): ApprovalStatus | null {
   return null;
 }
 
+/** True while the signed-in vendor has no RC number on file (needed before admins can approve them). */
+export function useVendorRcMissing() {
+  const [missing, setMissing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      getSavedUser<ApiUser>().then((u) => live && setMissing(!!u?.vendorRcNumberMissing));
+      authApi
+        .refreshUser()
+        .then((u) => live && setMissing(!!u?.vendorRcNumberMissing))
+        .catch(() => {});
+      return () => {
+        live = false;
+      };
+    }, [])
+  );
+
+  return missing;
+}
+
 /**
  * The signed-in user's approval status. Reads the saved user straight away,
  * then re-fetches on focus so an approval made in the admin panel shows up

@@ -105,13 +105,7 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
       priority: 1
     },
     { key: 'orders', header: 'Orders', accessor: (v) => v._count.orders, type: 'number', priority: 1 },
-    {
-      key: 'docs',
-      header: 'Docs',
-      accessor: (v) => v.documents.length,
-      type: 'number',
-      priority: 3
-    },
+    { key: 'rcNumber', header: 'RC number', accessor: (v) => v.rcNumber, priority: 2 },
     {
       key: 'createdAt',
       header: 'Registered',
@@ -268,6 +262,7 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
         fields: [
           { key: 'businessName', label: 'Name', accessor: (v) => v.businessName },
           { key: 'phone', label: 'Phone', accessor: (v) => v.phone },
+          { key: 'rcNumber', label: 'RC number', accessor: (v) => v.rcNumber },
           { key: 'address', label: 'Address', accessor: (v) => v.businessAddress, full: true },
           { key: 'bio', label: 'Bio', accessor: (v) => v.bio, full: true },
           {
@@ -356,11 +351,10 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
         )}
       </section>
 
-      <section className="adm-detail-section">
-        <h3 className="adm-micro-label">Documents ({v.documents.length})</h3>
-        {v.documents.length === 0 ? (
-          <p className="adm-muted">No documents uploaded.</p>
-        ) : (
+      {/* Vendors now verify with an RC number; this only lists files uploaded before that. */}
+      {v.documents.length > 0 && (
+        <section className="adm-detail-section">
+          <h3 className="adm-micro-label">Earlier uploaded documents ({v.documents.length})</h3>
           <ul className="adm-doc-list">
             {v.documents.map((d) => (
               <li key={d.id} className="adm-doc-item">
@@ -377,8 +371,8 @@ export const vendorsModule: ResourceConfig<VendorRow> = {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
       </>
     )
   },

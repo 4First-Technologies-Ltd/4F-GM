@@ -40,6 +40,7 @@ router.get(
       where.OR = [
         { businessName: { contains: query.q, mode: 'insensitive' } },
         { businessAddress: { contains: query.q, mode: 'insensitive' } },
+        { rcNumber: { contains: query.q.replace(/[s-]/g, ''), mode: 'insensitive' } },
         { user: { name: { contains: query.q, mode: 'insensitive' } } },
         { user: { email: { contains: query.q, mode: 'insensitive' } } }
       ];
@@ -114,6 +115,14 @@ router.patch(
     }
 
     const { status } = result.data;
+    // RC number replaced document uploads as the verification input, so a
+    // vendor cannot be approved until they have supplied one.
+    if (status === 'APPROVED' && !vendor.rcNumber) {
+      return res.status(400).json({
+        error: "This vendor has not provided an RC number yet, so they can't be approved.",
+        code: 'RC_NUMBER_MISSING'
+      });
+    }
     const updated = await prisma.vendorProfile.update({ where: { id }, data: { status } });
 
     await writeAuditLog(req, {

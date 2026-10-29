@@ -60,4 +60,6 @@ export const guestOrderLimiter = limiter(15 * MIN, 20);
 /** Each call mints an upload link, so cap how many a vendor can request. */
 export const documentUploadLimiter = limiter(60 * MIN, 30);
 /** Each newsletter sign-up sends an email to an address the caller chose. */
+/** Changing a payout account needs the password, so this also caps password guessing from a stolen session. */
+export const bankAccountLimiter = limiter(60 * MIN, 10, (req: Request) => (req.user?.sub ?? (ipKey(req) || 'anon')));
 export const newsletterLimiter = limiter(60 * MIN, 8);

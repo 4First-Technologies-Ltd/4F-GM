@@ -205,12 +205,6 @@ export default function VendorLayout() {
                 onPress={() => navigate('branches')}
               />
               <NavItem
-                icon="doc.fill"
-                label="Documents"
-                active={activeRoute === 'documents'}
-                onPress={() => navigate('documents')}
-              />
-              <NavItem
                 icon="gearshape.fill"
                 label="Settings"
                 active={activeRoute === 'settings'}

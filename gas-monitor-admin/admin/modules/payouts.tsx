@@ -250,7 +250,8 @@ export const earningsModule: ResourceConfig<EarningRow> = {
       options: [
         { value: 'AVAILABLE', label: 'Available' },
         { value: 'IN_PAYOUT', label: 'In payout' },
-        { value: 'PAID', label: 'Paid' }
+        { value: 'PAID', label: 'Paid' },
+        { value: 'SETTLED', label: 'Settled at checkout' }
       ]
     }
   ],

@@ -4,6 +4,7 @@ import { safeEqual } from '../lib/security';
 import { prisma } from '../lib/prisma';
 import { PAYSTACK_SECRET } from '../lib/paystack';
 import { applyTransferStatus } from '../lib/payouts';
+import { applyRiderTransferStatus } from '../lib/riderPayouts';
 
 // Mounted separately in app.ts with express.raw() so the exact request bytes
 // are available for HMAC verification — do not run through express.json().
@@ -35,14 +36,16 @@ export async function paystackWebhookHandler(req: Request, res: Response) {
   // Vendor payout outcomes. applyTransferStatus is idempotent, so Paystack's
   // retries of the same event are harmless.
   if (event.event === 'transfer.success' || event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
+    const outcome = event.event.replace('transfer.', '');
     const payout = await prisma.payout.findUnique({ where: { reference: event.data.reference } });
     if (payout) {
-      await applyTransferStatus(
-        payout.id,
-        event.event.replace('transfer.', ''),
-        event.data.transfer_code,
-        event.data.reason
-      );
+      await applyTransferStatus(payout.id, outcome, event.data.transfer_code, event.data.reason);
+    } else {
+      // Not a vendor payout: it may be a rider's delivery pay.
+      const riderEarning = await prisma.riderEarning.findUnique({ where: { reference: event.data.reference } });
+      if (riderEarning) {
+        await applyRiderTransferStatus(riderEarning.id, outcome, event.data.transfer_code, event.data.reason);
+      }
     }
   }
 

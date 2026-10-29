@@ -88,7 +88,7 @@ router.post(
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        vendorProfile: { select: { status: true } },
+        vendorProfile: { select: { status: true, rcNumber: true } },
         riderProfile: { select: RIDER_STATUS_SELECT },
         logisticsCompany: { select: { status: true } }
       }
@@ -122,6 +122,7 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
+        vendorRcNumberMissing: user.vendorProfile ? !user.vendorProfile.rcNumber : undefined,
         riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
         companyStatus: user.logisticsCompany?.status ?? undefined,
         createdAt: user.createdAt
@@ -311,7 +312,7 @@ router.post(
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        vendorProfile: { select: { status: true } },
+        vendorProfile: { select: { status: true, rcNumber: true } },
         riderProfile: { select: RIDER_STATUS_SELECT },
         logisticsCompany: { select: { status: true } }
       }
@@ -347,6 +348,7 @@ router.post(
         email: user.email,
         role: user.role,
         vendorStatus: user.vendorProfile?.status ?? undefined,
+        vendorRcNumberMissing: user.vendorProfile ? !user.vendorProfile.rcNumber : undefined,
         riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
         companyStatus: user.logisticsCompany?.status ?? undefined,
         createdAt: user.createdAt
@@ -369,14 +371,14 @@ const SELECT = {
   unitPreference: true,
   createdAt: true,
   updatedAt: true,
-  vendorProfile: { select: { status: true } },
+  vendorProfile: { select: { status: true, rcNumber: true } },
   riderProfile: { select: RIDER_STATUS_SELECT },
   logisticsCompany: { select: { status: true } }
 } as const;
 
 function serialize<
   T extends {
-    vendorProfile: { status: string } | null;
+    vendorProfile: { status: string; rcNumber: string | null } | null;
     riderProfile: Parameters<typeof effectiveRiderStatus>[0] | null;
     logisticsCompany: { status: string } | null;
   }
@@ -385,6 +387,7 @@ function serialize<
   return {
     ...userData,
     vendorStatus: vendorProfile?.status ?? undefined,
+    vendorRcNumberMissing: vendorProfile ? !vendorProfile.rcNumber : undefined,
     riderStatus: riderProfile ? effectiveRiderStatus(riderProfile) : undefined,
     companyStatus: logisticsCompany?.status ?? undefined
   };

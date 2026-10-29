@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { PLANS } from './plans';
+import { processRiderEarningSafe } from './riderPayouts';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -30,6 +31,9 @@ export async function recordEarning(orderId: string): Promise<boolean> {
       id: true,
       status: true,
       totalAmount: true,
+      deliveryFee: true,
+      vendorSettledByGateway: true,
+      vendorSplitAmount: true,
       vendorId: true,
       vendor: { select: { plan: true } },
       earning: { select: { id: true } }
@@ -39,13 +43,30 @@ export async function recordEarning(orderId: string): Promise<boolean> {
     return false;
   }
 
+  // The delivery fee belongs to the platform (and the rider), so commission is taken on
+  // the gas alone. Orders placed before the fee was recorded (deliveryFee 0) keep the old maths.
+  const gas = round2(order.totalAmount - order.deliveryFee);
+
+  let amounts: ReturnType<typeof splitOrder>;
+  let status: 'AVAILABLE' | 'SETTLED' = 'AVAILABLE';
+  if (order.vendorSettledByGateway && order.vendorSplitAmount != null) {
+    // The gateway already paid the vendor exactly this at checkout, so the ledger records
+    // what was really sent (not today's plan) and marks it so no payout ever repeats it.
+    const commissionAmount = round2(gas - order.vendorSplitAmount);
+    amounts = {
+      grossAmount: gas,
+      commissionPercent: gas > 0 ? round2((commissionAmount / gas) * 100) : 0,
+      commissionAmount,
+      netAmount: round2(order.vendorSplitAmount)
+    };
+    status = 'SETTLED';
+  } else {
+    amounts = splitOrder(gas, PLANS[order.vendor.plan].commissionPercent);
+  }
+
   try {
     await prisma.earning.create({
-      data: {
-        orderId: order.id,
-        vendorId: order.vendorId,
-        ...splitOrder(order.totalAmount, PLANS[order.vendor.plan].commissionPercent)
-      }
+      data: { orderId: order.id, vendorId: order.vendorId, ...amounts, status }
     });
     return true;
   } catch (err) {
@@ -56,6 +77,8 @@ export async function recordEarning(orderId: string): Promise<boolean> {
 
 /** Fire-and-forget wrapper for status handlers: a ledger failure must not fail the delivery. */
 export function recordEarningSafe(orderId: string): void {
+  // The rider's cut of the delivery fee is recorded at the same moment (see riderPayouts.ts).
+  processRiderEarningSafe(orderId);
   recordEarning(orderId).catch((err) => console.error('[earnings] failed to record earning', { orderId, err }));
 }
 

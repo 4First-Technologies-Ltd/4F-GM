@@ -197,7 +197,7 @@ router.put(
         where: { vendorId: vendor.id },
         create: { vendorId: vendor.id, bankCode, bankName: bank.name, accountNumber, accountName },
         // A new account invalidates the cached Paystack recipient.
-        update: { bankCode, bankName: bank.name, accountNumber, accountName, paystackRecipientCode: null }
+        update: { bankCode, bankName: bank.name, accountNumber, accountName, paystackRecipientCode: null, gatewayRecipients: {} }
       });
 
       await writeAuditLog(req, {

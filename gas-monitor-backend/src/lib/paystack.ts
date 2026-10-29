@@ -126,3 +126,29 @@ export async function verifyTransfer(reference: string): Promise<PaystackTransfe
     throw err;
   }
 }
+
+/**
+ * Creates a Paystack subaccount: a payee that a transaction can pay out to at
+ * checkout. `percentage_charge` is required by the API but irrelevant to us: every
+ * split sends a flat `transaction_charge`, which overrides it. Returns the
+ * subaccount code (ACCT_...).
+ */
+export async function createSubaccount(input: {
+  businessName: string;
+  bankCode: string;
+  accountNumber: string;
+}): Promise<string> {
+  const data = await call<{ subaccount_code: string }>(() =>
+    axios.post(
+      `${PAYSTACK_BASE}/subaccount`,
+      {
+        business_name: input.businessName,
+        settlement_bank: input.bankCode,
+        account_number: input.accountNumber,
+        percentage_charge: 0
+      },
+      { headers: paystackHeaders() }
+    )
+  );
+  return data.subaccount_code;
+}

@@ -65,7 +65,7 @@ export default function VendorPendingScreen() {
           <Text style={s.stepsTitle}>What happens next</Text>
           {[
             { icon: 'checkmark.circle.fill' as const, label: 'Application received', done: true },
-            { icon: 'shield.fill' as const, label: 'Identity documents reviewed', done: false },
+            { icon: 'shield.fill' as const, label: 'RC number verified', done: false },
             { icon: 'storefront.fill' as const, label: 'Account approved & activated', done: false },
           ].map((item, i) => (
             <View key={i} style={s.stepRow}>

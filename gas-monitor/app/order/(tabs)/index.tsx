@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ordersApi, marketplaceApi, type MarketplaceListing } from '@/lib/api';
+import { ordersApi, marketplaceApi, type MarketplaceListing, type PaymentProviderOption } from '@/lib/api';
 import { useAddresses } from '@/hooks/use-addresses';
 import { quoteByAmount, quoteByKg, MIN_LOOSE_KG, MAX_LOOSE_KG } from '@/lib/looseOrder';
 
@@ -254,6 +254,22 @@ export default function SuppliersScreen() {
   const [looseInput, setLooseInput] = useState('');
   const [placing, setPlacing] = useState(false);
 
+  // Payment gateways the backend has enabled. The picker only shows when there is a choice;
+  // if the list cannot be loaded the server default is used.
+  const [providers, setProviders] = useState<PaymentProviderOption[]>([]);
+  const [provider, setProvider] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    ordersApi.paymentProviders()
+      .then((res) => {
+        if (cancelled) return;
+        setProviders(res.providers);
+        setProvider(res.default);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   // Address picker state
   const { addresses: savedAddresses, add: saveAddress } = useAddresses();
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -337,6 +353,7 @@ export default function SuppliersScreen() {
     if (!selectedAddressId || !selectedSupplier || !selectedAddress) return;
     setPlacing(true);
     try {
+      const paymentProvider = provider ? { paymentProvider: provider } : {};
       const result = await ordersApi.initialize(
         mode === 'size'
           ? {
@@ -344,6 +361,7 @@ export default function SuppliersScreen() {
               cylinderSize: cylinder.size,
               quantity,
               deliveryAddress: selectedAddress.fullAddress,
+              ...paymentProvider,
             }
           : {
               listingId: selectedSupplier.id,
@@ -351,6 +369,7 @@ export default function SuppliersScreen() {
               quantity: 1,
               deliveryAddress: selectedAddress.fullAddress,
               ...(mode === 'kg' ? { looseKg: loose.kg } : { looseAmount: loose.gasCost }),
+              ...paymentProvider,
             }
       );
       router.push({
@@ -642,6 +661,31 @@ export default function SuppliersScreen() {
               <Text style={s.summaryTotalValue}>{fmtPrice(total)}</Text>
             </View>
           </View>
+
+          {providers.length > 1 && (
+            <View style={s.payWith}>
+              <Text style={s.payWithTitle}>Pay with</Text>
+              {providers.map((p) => {
+                const on = provider === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[s.payOption, on && s.payOptionOn]}
+                    onPress={() => setProvider(p.id)}
+                    disabled={placing}
+                    activeOpacity={0.8}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`Pay with ${p.label}`}>
+                    <View style={[s.payRadio, on && s.payRadioOn]}>
+                      {on && <View style={s.payRadioDot} />}
+                    </View>
+                    <Text style={s.payOptionText}>{p.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           {!selectedAddressId && (
             <Text style={s.addressHint}>Select a delivery address to place your order</Text>
@@ -1014,6 +1058,29 @@ const s = StyleSheet.create({
   summaryTotalValue: { color: C.accent, fontSize: 20, fontWeight: '800' },
 
   addressHint: { color: C.muted, fontSize: 12, textAlign: 'center', marginTop: -4 },
+
+  payWith: { gap: 8 },
+  payWithTitle: { color: C.text, fontSize: 14, fontWeight: '700' },
+  payOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: C.card,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  payOptionOn: { borderColor: C.accent, backgroundColor: C.accentLight },
+  payRadio: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, borderColor: C.dim,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  payRadioOn: { borderColor: C.accent },
+  payRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.accent },
+  payOptionText: { color: C.text, fontSize: 15, fontWeight: '600' },
 
   placeBtn: {
     backgroundColor: C.accent,

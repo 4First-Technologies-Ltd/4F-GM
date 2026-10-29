@@ -6,11 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, BranchInput } from '@/lib/api';
 import { setPendingVendorProfile } from '@/lib/pendingVendorProfile';
+import { isValidRcNumber, RC_NUMBER_HINT } from '@/lib/rcNumber';
 import { NetworkStatusDot } from '@/components/network-status-dot';
 import { LegalConsent } from '@/components/legal-consent';
 import { SignUpTabs } from '@/components/signup-tabs';
@@ -43,11 +42,6 @@ type Step = 1 | 2 | 3;
  * `PLANS[DEFAULT_PLAN].maxBranches - 1` in the backend; the server enforces it.
  */
 const MAX_EXTRA_BRANCHES = 4;
-
-interface SelectedDoc {
-  uri: string;
-  fileName: string;
-}
 
 // ── Field component ───────────────────────────────────────────────────────────
 
@@ -150,7 +144,7 @@ export default function VendorSignUpScreen() {
   const [gettingLocation, setGettingLocation] = useState(false);
 
   // Step 3
-  const [selectedDocs, setSelectedDocs] = useState<SelectedDoc[]>([]);
+  const [rcNumber, setRcNumber] = useState('');
 
   // Step 2 — optional extra branches (the business address above is the main one)
   const [branches, setBranches] = useState<BranchInput[]>([]);
@@ -211,6 +205,9 @@ export default function VendorSignUpScreen() {
   async function captureLocation() {
     setGettingLocation(true);
     try {
+      // Loaded on demand: a static import runs when the Vendor tab opens this screen,
+      // and a missing/failing native module there crashes the whole sign-up screen.
+      const Location = await import('expo-location');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Allow location access to capture your business GPS coordinates.');
@@ -225,31 +222,8 @@ export default function VendorSignUpScreen() {
     }
   }
 
-  async function pickDocuments() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo library access to select identity documents.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      const docs = result.assets.map((a) => ({
-        uri: a.uri,
-        fileName: a.fileName ?? a.uri.split('/').pop() ?? 'document',
-      }));
-      setSelectedDocs((prev) => [...prev, ...docs]);
-    }
-  }
-
-  function removeDoc(index: number) {
-    setSelectedDocs((prev) => prev.filter((_, i) => i !== index));
-  }
-
   async function handleSubmit() {
+    if (!isValidRcNumber(rcNumber)) { setErrors({ rcNumber: 'Enter a valid RC number, e.g. RC1234567' }); return; }
     if (!consent.all) { setConsentInvalid(true); setApiErr('Please read and accept the Terms and Conditions and the Privacy Policy to continue.'); return; }
     setLoading(true);
     setApiErr('');
@@ -258,10 +232,10 @@ export default function VendorSignUpScreen() {
         businessName: businessName.trim(),
         businessAddress: businessAddress.trim(),
         phone: phone.trim(),
+        rcNumber: rcNumber.trim(),
         lat: coords?.lat,
         lng: coords?.lng,
         branches,
-        documents: selectedDocs.map((d) => ({ uri: d.uri, fileName: d.fileName })),
       });
 
       const result = await authApi.register(name.trim(), email.trim(), password, 'VENDOR');
@@ -448,35 +422,17 @@ export default function VendorSignUpScreen() {
             </View>
           )}
 
-          {/* ── STEP 3: Verification docs ── */}
+          {/* ── STEP 3: Business verification ── */}
           {step === 3 && (
             <View style={s.form}>
               <View style={s.formHeader}>
-                <Text style={s.formTitle}>Identity Verification</Text>
-                <Text style={s.formSub}>
-                  Upload a government-issued ID or business registration document. You can skip this and add documents later from your profile.
-                </Text>
+                <Text style={s.formTitle}>Business Verification</Text>
+                <Text style={s.formSub}>{RC_NUMBER_HINT}</Text>
               </View>
 
-              <TouchableOpacity style={s.uploadBtn} onPress={pickDocuments} activeOpacity={0.8}>
-                <IconSymbol name="plus" size={20} color={C.accent} />
-                <Text style={s.uploadBtnText}>Select document(s) from library</Text>
-              </TouchableOpacity>
-
-              {selectedDocs.length > 0 && (
-                <View style={s.docList}>
-                  {selectedDocs.map((doc, i) => (
-                    <View key={i} style={s.docItem}>
-                      <IconSymbol name="doc.fill" size={18} color={C.accent} />
-                      <Text style={s.docName} numberOfLines={1}>{doc.fileName}</Text>
-                      <TouchableOpacity onPress={() => removeDoc(i)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <IconSymbol name="xmark.circle.fill" size={18} color={C.dim} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
+              <Field label="RC number" value={rcNumber}
+                onChangeText={(t) => { setRcNumber(t); clearErr('rcNumber'); }}
+                placeholder="RC1234567" error={errors.rcNumber} />
 
               <View style={s.commissionBox}>
                 <Text style={s.commissionLabel}>Platform commission</Text>
@@ -504,15 +460,6 @@ export default function VendorSignUpScreen() {
                 {loading
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={s.primaryBtnText}>Submit Application</Text>}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[s.skipLink, loading && { opacity: 0.4 }]}
-                onPress={handleSubmit}
-                disabled={loading}
-                activeOpacity={0.7}
-              >
-                <Text style={s.skipLinkText}>Skip for now — submit without documents</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -671,35 +618,6 @@ const s = StyleSheet.create({
   },
   locationBtnText: { color: C.accent, fontSize: 14, fontWeight: '600' },
 
-  uploadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderWidth: 1.5,
-    borderColor: C.accent + '60',
-    borderRadius: 16,
-    borderStyle: 'dashed',
-    backgroundColor: C.accentLight,
-    paddingVertical: 20,
-  },
-  uploadBtnText: { color: C.accent, fontSize: 14, fontWeight: '700' },
-
-  docList: {
-    gap: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 14,
-    backgroundColor: C.surface,
-    padding: 12,
-  },
-  docItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  docName: { flex: 1, color: C.text, fontSize: 13, fontWeight: '500' },
-
   commissionBox: {
     backgroundColor: C.accentLight,
     borderWidth: 1,
@@ -738,9 +656,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
-
-  skipLink: { alignItems: 'center', paddingVertical: 12 },
-  skipLinkText: { color: C.muted, fontSize: 13, fontWeight: '500', textDecorationLine: 'underline' },
 
   switchLink: { alignItems: 'center', paddingVertical: 16 },
   switchText: { color: C.muted, fontSize: 14 },

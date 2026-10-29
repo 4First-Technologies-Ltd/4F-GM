@@ -12,7 +12,7 @@ import { StatusBadge } from '@/admin/primitives/status-badge';
 import { EmptyState, ErrorState, ForbiddenState, LoadingBlock, LoadingState } from '@/admin/primitives/states';
 import { formatNaira, formatNairaCompact } from '@/admin/primitives/format';
 import { Can, usePermission } from '@/admin/permissions/use-permission';
-import type { BankOption, PayoutRow, PayoutSummary, VendorBalanceRow } from '@/admin/modules/types';
+import type { BankOption, PayoutRow, PayoutSummary, RiderPayoutRow, VendorBalanceRow } from '@/admin/modules/types';
 
 /**
  * Payouts — what each vendor is owed, what has been sent, and the ledger
@@ -20,11 +20,12 @@ import type { BankOption, PayoutRow, PayoutSummary, VendorBalanceRow } from '@/a
  * frozen on each delivered order.
  */
 
-type Tab = 'balances' | 'payouts' | 'earnings';
+type Tab = 'balances' | 'payouts' | 'earnings' | 'rider';
 const TABS: { value: Tab; label: string }[] = [
   { value: 'balances', label: 'Balances' },
   { value: 'payouts', label: 'Payouts' },
-  { value: 'earnings', label: 'Earnings' }
+  { value: 'earnings', label: 'Earnings' },
+  { value: 'rider', label: 'Rider pay' }
 ];
 
 export default function PayoutsPage() {
@@ -161,6 +162,7 @@ function PayoutsView() {
       {tab === 'balances' && <BalancesPanel key={version} canManage={canManage} onChanged={reload} />}
       {tab === 'payouts' && <ResourceList key={version} config={payoutsModule} />}
       {tab === 'earnings' && <ResourceList key={version} config={earningsModule} />}
+      {tab === 'rider' && <RiderPayPanel canManage={canManage} />}
     </div>
   );
 }
@@ -308,6 +310,148 @@ function BalancesPanel({ canManage, onChanged }: { canManage: boolean; onChanged
             load();
           }}
         />
+      )}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- rider pay --- */
+
+/**
+ * Riders' delivery pay: their share of each delivered order's delivery fee, sent by
+ * Paystack transfer. Rows wait as Pending while the rider has no bank account or
+ * automatic payout is off; "Send now" sends them.
+ */
+function RiderPayPanel({ canManage }: { canManage: boolean }) {
+  const [rows, setRows] = useState<RiderPayoutRow[] | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [status, setStatus] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    getJson<{ earnings: RiderPayoutRow[] }>(`/rider-payouts${status ? `?status=${status}` : ''}`)
+      .then((r) => setRows(r.earnings))
+      .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
+  }, [status]);
+  useEffect(load, [load]);
+
+  async function retry(row: RiderPayoutRow) {
+    setBusyId(row.id);
+    setMessage(null);
+    try {
+      const { earning } = await sendJson<{ earning: { status: string; failureReason: string | null } }>(
+        'POST',
+        `/rider-payouts/${row.id}/retry`
+      );
+      setMessage(
+        earning.status === 'FAILED' || (earning.status === 'PENDING' && earning.failureReason)
+          ? { text: `${row.riderName}: ${earning.failureReason ?? 'could not be sent'}`, tone: 'error' }
+          : { text: `${formatNaira(row.amount)} to ${row.riderName} is ${earning.status.toLowerCase()}.`, tone: 'ok' }
+      );
+      load();
+    } catch (e) {
+      setMessage({ text: e instanceof Error ? e.message : String(e), tone: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (error) return <ErrorState title="Could not load rider pay" error={error} onRetry={load} />;
+  if (!rows) return <LoadingBlock height={200} />;
+
+  return (
+    <>
+      <div className="adm-segmented" role="group" aria-label="Filter rider pay by status">
+        {[
+          { value: '', label: 'All' },
+          { value: 'PENDING', label: 'Pending' },
+          { value: 'PROCESSING', label: 'Processing' },
+          { value: 'FAILED', label: 'Failed' },
+          { value: 'PAID', label: 'Paid' }
+        ].map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            className="adm-segment"
+            aria-pressed={status === o.value}
+            onClick={() => setStatus(o.value)}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {message && (
+        <div className={message.tone === 'error' ? 'adm-inline-error' : 'adm-alert'} role={message.tone === 'error' ? 'alert' : 'status'}>
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <EmptyState
+          title="No rider pay here"
+          description="A rider's share of the delivery fee appears once an order they were assigned is delivered."
+        />
+      ) : (
+        <div className="adm-table-scroll" tabIndex={0} role="region" aria-label="Rider pay (scrollable)">
+          <table className="adm-table">
+            <caption className="adm-sr-only">Rider pay</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="adm-th adm-th--left">Rider</th>
+                <th scope="col" className="adm-th adm-th--right">Amount</th>
+                <th scope="col" className="adm-th adm-th--left">Status</th>
+                <th scope="col" className="adm-th adm-th--left">Date</th>
+                <th scope="col" className="adm-th adm-th--right">
+                  <span className="adm-sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="adm-tr">
+                  <td className="adm-td adm-td--primary">
+                    {r.riderName}
+                    <span className="adm-td-sub">{r.riderPhone}</span>
+                  </td>
+                  <td className="adm-td adm-td--right adm-num">
+                    {formatNaira(r.amount)}
+                    <span className="adm-td-sub">
+                      {r.sharePercent}% of {formatNaira(r.deliveryFee)}
+                    </span>
+                  </td>
+                  <td className="adm-td">
+                    <StatusBadge value={r.status} />
+                    {r.status !== 'PAID' && !r.hasBankAccount && <span className="adm-td-sub">No bank account yet</span>}
+                    {r.failureReason && r.status !== 'PAID' && <span className="adm-td-sub">{r.failureReason}</span>}
+                  </td>
+                  <td className="adm-td">{new Date(r.paidAt ?? r.createdAt).toLocaleDateString()}</td>
+                  <td className="adm-td adm-td--right">
+                    {(r.status === 'PENDING' || r.status === 'FAILED') && (
+                      <button
+                        type="button"
+                        className="adm-btn adm-btn--sm adm-btn--primary"
+                        disabled={!canManage || !r.hasBankAccount || busyId === r.id}
+                        title={
+                          !canManage
+                            ? 'Requires the Operations role'
+                            : !r.hasBankAccount
+                              ? 'The rider has not added a bank account'
+                              : undefined
+                        }
+                        onClick={() => retry(r)}
+                      >
+                        {busyId === r.id ? 'Sending…' : 'Send now'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

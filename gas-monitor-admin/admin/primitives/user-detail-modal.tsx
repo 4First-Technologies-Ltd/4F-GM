@@ -226,6 +226,7 @@ export function UserDetailModal({
                     ? formatDate(v.planLockedUntil)
                     : null}
                 </Field>
+                <Field label="RC number">{v.rcNumber}</Field>
                 <Field label="Listings">{formatNumber(v._count.listings)}</Field>
                 <Field label="Orders received">{formatNumber(v._count.orders)}</Field>
                 <Field label="Logo" full>
@@ -248,9 +249,10 @@ export function UserDetailModal({
                 </ul>
               )}
 
-              <h4 className="adm-micro-label">Documents ({v.documents.length})</h4>
+              {/* Vendors now verify with an RC number; this only lists files uploaded before that. */}
+              <h4 className="adm-micro-label">Earlier uploaded documents ({v.documents.length})</h4>
               {v.documents.length === 0 ? (
-                <p className="adm-muted">No documents uploaded.</p>
+                <p className="adm-muted">None.</p>
               ) : (
                 <ul className="adm-doc-list">
                   {v.documents.map((d) => (

@@ -1,11 +1,20 @@
 import { Router, type Response } from 'express';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
-import axios from 'axios';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
-import { PAYSTACK_BASE, CALLBACK_URL, paystackHeaders } from '../lib/paystack';
+import { CALLBACK_URL } from '../lib/paystack';
+import { planVendorSplit } from '../lib/settlement';
+import {
+  GatewayError,
+  defaultGateway,
+  enabledGateways,
+  getGateway,
+  resolveGateway,
+  type PaymentGateway,
+  type StartedPayment
+} from '../lib/gateways';
 import { asyncHandler } from '../lib/asyncHandler';
 import {
   MAX_ORDER_QUANTITY,
@@ -34,6 +43,15 @@ router.get(
     return res.json({ orders });
   })
 );
+
+// Public: checkout shows a picker only when more than one gateway is enabled.
+// Declared before '/:id' so it is not read as an order id.
+router.get('/payment-providers', (_req, res) => {
+  return res.json({
+    default: defaultGateway().id,
+    providers: enabledGateways().map((g) => ({ id: g.id, label: g.label }))
+  });
+});
 
 router.get(
   '/:id',
@@ -71,7 +89,9 @@ const orderItemShape = {
   looseKg: z.number().positive().optional(),
   looseAmount: z.number().int().positive().optional(),
   quantity: z.number().int().min(1).max(MAX_ORDER_QUANTITY, `You can order at most ${MAX_ORDER_QUANTITY} at a time`),
-  deliveryAddress: z.string().min(5)
+  deliveryAddress: z.string().min(5),
+  /** The gateway the customer chose (see GET /payment-providers). Omitted by older clients: the default is used. */
+  paymentProvider: z.string().optional()
 };
 
 type OrderItem = z.infer<z.ZodObject<typeof orderItemShape>>;
@@ -112,21 +132,95 @@ async function priceOrRespond(item: OrderItem, res: Response): Promise<PricedOrd
 }
 
 /**
- * Marks an order paid after Paystack reports success. Only a PENDING order
- * moves to CONFIRMED (a later verify call can no longer drag a delivered or
- * cancelled order backwards), the amount Paystack collected must match the
- * order, and a signed-in caller may only confirm their own order.
+ * Moves a paid order PENDING → CONFIRMED. Only a PENDING order moves (a later
+ * verify call can no longer drag a delivered or cancelled order backwards).
  */
-async function confirmPaidOrder(reference: string, paidKobo: number, consumerId?: string) {
+async function confirmOrder(orderId: string) {
+  await prisma.order.updateMany({
+    where: { id: orderId, status: 'PENDING' },
+    data: { status: 'CONFIRMED', paystackStatus: 'success' }
+  });
+  return prisma.order.findUnique({ where: { id: orderId } });
+}
+
+type PaymentOutcome = { code: number; body: Record<string, unknown> };
+
+/**
+ * Checks the order's payment with the gateway it was started on and confirms
+ * it. The amount collected must match the order, and a signed-in caller may
+ * only confirm their own order.
+ */
+async function verifyOrderPayment(reference: string, consumerId?: string): Promise<PaymentOutcome> {
   const order = await prisma.order.findFirst({ where: { paystackRef: reference, ...(consumerId ? { consumerId } : {}) } });
-  if (!order || Math.round(order.totalAmount * 100) !== paidKobo) return null;
-  if (order.status === 'PENDING') {
-    await prisma.order.updateMany({
-      where: { id: order.id, status: 'PENDING' },
-      data: { status: 'CONFIRMED', paystackStatus: 'success' }
-    });
+  if (!order) return { code: 404, body: { error: 'Order not found or amount mismatch' } };
+
+  // Always the gateway the order was started on, even if it is no longer enabled.
+  const gateway = getGateway(order.paymentProvider);
+  if (!gateway) return { code: 502, body: { error: 'Verification failed' } };
+
+  try {
+    const result = await gateway.verify(reference, order.totalAmount);
+    if (result.state === 'amount_mismatch') {
+      return { code: 404, body: { error: 'Order not found or amount mismatch' } };
+    }
+    if (result.state !== 'paid') {
+      // Not an error until the payment is final: the customer may still be paying.
+      return {
+        code: 400,
+        body: { error: 'Payment was not successful', paystackStatus: result.status ?? result.state }
+      };
+    }
+  } catch (err) {
+    return { code: 502, body: { error: err instanceof GatewayError ? err.message : 'Verification failed' } };
   }
-  return prisma.order.findUnique({ where: { id: order.id } });
+
+  const confirmed = await confirmOrder(order.id);
+  return { code: 200, body: { success: true, orderId: order.id, status: confirmed?.status } };
+}
+
+/**
+ * Opens a payment for a freshly created order on the chosen gateway and stores
+ * the reference and gateway id on the order. Throws with a message fit to show.
+ */
+async function startOrderPayment(
+  gateway: PaymentGateway,
+  order: { id: string; totalAmount: number; deliveryFee: number; vendorId: string | null },
+  customer: { email: string; name: string },
+  meta: { supplierName: string; cylinderSize: string; guestCheckout?: boolean }
+): Promise<StartedPayment> {
+  const input = {
+    reference: `4FG-${order.id}`,
+    amountNaira: order.totalAmount,
+    customer,
+    callbackUrl: CALLBACK_URL,
+    meta: { orderId: order.id, ...meta }
+  };
+
+  // Pay the vendor at checkout when the gateway can and the vendor has a payout account.
+  let plan = await planVendorSplit(gateway, order);
+  let started: StartedPayment;
+  try {
+    started = await gateway.initialize({ ...input, split: plan?.split });
+  } catch (err) {
+    // A split the gateway refused must not cost us the sale: pay the vendor later instead.
+    // (If the gateway never answered, the payment may exist, so that is not retried.)
+    if (!plan || !(err instanceof GatewayError) || err.indeterminate) throw err;
+    console.error('[orders] split payment refused, retrying without it', { orderId: order.id, gateway: gateway.id, err });
+    plan = null;
+    started = await gateway.initialize(input);
+  }
+
+  // Persist the reference so we can verify later, and whether the vendor is settled by the gateway.
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      paystackRef: started.reference,
+      paymentProvider: gateway.id,
+      vendorSettledByGateway: !!plan,
+      vendorSplitAmount: plan?.vendorAmount ?? null
+    }
+  });
+  return started;
 }
 
 const initSchema = z.object(orderItemShape).superRefine(checkOrderItem);
@@ -141,6 +235,9 @@ router.post(
     }
 
     const { deliveryAddress } = result.data;
+
+    const gateway = resolveGateway(result.data.paymentProvider);
+    if (!gateway) return res.status(400).json({ error: 'That payment method is not available' });
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
@@ -165,53 +262,30 @@ router.post(
         cylinderSize,
         quantity,
         totalAmount,
+        deliveryFee: priced.deliveryFee ?? 0,
         deliveryAddress,
         status: 'PENDING'
       }
     });
 
-    const reference = `4FG-${order.id}`;
-
     try {
-      const { data: ps } = await axios.post(
-        `${PAYSTACK_BASE}/transaction/initialize`,
-        {
-          email: user.email,
-          amount: Math.round(totalAmount * 100), // naira → kobo
-          reference,
-          callback_url: CALLBACK_URL,
-          metadata: {
-            orderId: order.id,
-            supplierName,
-            cylinderSize,
-            custom_fields: [
-              { display_name: 'Order ID', variable_name: 'order_id', value: order.id },
-              { display_name: 'Supplier', variable_name: 'supplier_name', value: supplierName },
-              { display_name: 'Cylinder Size', variable_name: 'cylinder_size', value: cylinderSize }
-            ]
-          }
-        },
-        { headers: paystackHeaders() }
+      const started = await startOrderPayment(
+        gateway,
+        order,
+        { email: user.email, name: user.name },
+        { supplierName, cylinderSize }
       );
-
-      // Persist the reference so we can verify later
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { paystackRef: ps.data.reference }
-      });
-
       return res.json({
         orderId: order.id,
-        reference: ps.data.reference,
-        authorizationUrl: ps.data.authorization_url,
+        reference: started.reference,
+        authorizationUrl: started.authorizationUrl,
         amount: totalAmount,
         email: user.email
       });
     } catch (err: any) {
-      // Clean up the pending order if Paystack initialization failed
+      // Clean up the pending order if the gateway could not open a payment
       await prisma.order.delete({ where: { id: order.id } }).catch(() => {});
-      const msg = err?.response?.data?.message ?? 'Payment initialization failed';
-      return res.status(502).json({ error: msg });
+      return res.status(502).json({ error: err?.message ?? 'Payment initialization failed' });
     }
   })
 );
@@ -224,26 +298,8 @@ router.post(
     if (!reference) {
       return res.status(400).json({ error: 'reference is required' });
     }
-
-    try {
-      const { data: ps } = await axios.get(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
-        headers: paystackHeaders()
-      });
-
-      if (ps.data.status !== 'success') {
-        return res.status(400).json({ error: 'Payment was not successful', paystackStatus: ps.data.status });
-      }
-
-      const order = await confirmPaidOrder(reference, ps.data.amount, req.user!.sub);
-      if (!order) {
-        return res.status(404).json({ error: 'Order not found or amount mismatch' });
-      }
-
-      return res.json({ success: true, orderId: order.id, status: order.status });
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Verification failed';
-      return res.status(502).json({ error: msg });
-    }
+    const outcome = await verifyOrderPayment(reference, req.user!.sub);
+    return res.status(outcome.code).json(outcome.body);
   })
 );
 
@@ -264,6 +320,9 @@ router.post(
     }
 
     const { email, name, deliveryAddress } = result.data;
+
+    const gateway = resolveGateway(result.data.paymentProvider);
+    if (!gateway) return res.status(400).json({ error: 'That payment method is not available' });
 
     const priced = await priceOrRespond(result.data, res);
     if (!priced) return;
@@ -296,58 +355,35 @@ router.post(
         cylinderSize,
         quantity,
         totalAmount,
+        deliveryFee: priced.deliveryFee ?? 0,
         deliveryAddress,
         status: 'PENDING'
       }
     });
 
-    const reference = `4FG-${order.id}`;
-
     try {
-      const { data: ps } = await axios.post(
-        `${PAYSTACK_BASE}/transaction/initialize`,
-        {
-          email,
-          amount: Math.round(totalAmount * 100), // naira → kobo
-          reference,
-          callback_url: CALLBACK_URL,
-          metadata: {
-            orderId: order.id,
-            supplierName,
-            cylinderSize,
-            guestCheckout: true,
-            custom_fields: [
-              { display_name: 'Order ID', variable_name: 'order_id', value: order.id },
-              { display_name: 'Supplier', variable_name: 'supplier_name', value: supplierName },
-              { display_name: 'Cylinder Size', variable_name: 'cylinder_size', value: cylinderSize }
-            ]
-          }
-        },
-        { headers: paystackHeaders() }
+      const started = await startOrderPayment(
+        gateway,
+        order,
+        { email, name: user.name },
+        { supplierName, cylinderSize, guestCheckout: true }
       );
-
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { paystackRef: ps.data.reference }
-      });
-
       return res.json({
         orderId: order.id,
-        reference: ps.data.reference,
-        authorizationUrl: ps.data.authorization_url,
+        reference: started.reference,
+        authorizationUrl: started.authorizationUrl,
         amount: totalAmount,
         email
       });
     } catch (err: any) {
       await prisma.order.delete({ where: { id: order.id } }).catch(() => {});
-      const msg = err?.response?.data?.message ?? 'Payment initialization failed';
-      return res.status(502).json({ error: msg });
+      return res.status(502).json({ error: err?.message ?? 'Payment initialization failed' });
     }
   })
 );
 
 // Unauthenticated verification for guest checkout. Safe because the order is
-// only ever moved to the status Paystack itself reports, keyed by a reference
+// only ever moved to the status the gateway itself reports, keyed by a reference
 // that is generated server-side and returned to the payer.
 router.post(
   '/guest/verify',
@@ -356,26 +392,8 @@ router.post(
     if (!reference) {
       return res.status(400).json({ error: 'reference is required' });
     }
-
-    try {
-      const { data: ps } = await axios.get(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
-        headers: paystackHeaders()
-      });
-
-      if (ps.data.status !== 'success') {
-        return res.status(400).json({ error: 'Payment was not successful', paystackStatus: ps.data.status });
-      }
-
-      const order = await confirmPaidOrder(reference, ps.data.amount);
-      if (!order) {
-        return res.status(404).json({ error: 'Order not found or amount mismatch' });
-      }
-
-      return res.json({ success: true, orderId: order.id, status: order.status });
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Verification failed';
-      return res.status(502).json({ error: msg });
-    }
+    const outcome = await verifyOrderPayment(reference);
+    return res.status(outcome.code).json(outcome.body);
   })
 );
 
