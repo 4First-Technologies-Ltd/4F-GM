@@ -44,6 +44,7 @@ afterEach(() => {
   delete process.env.GATEWAY_SPLIT_SETTLEMENT;
   delete process.env.MYIMO_API_URL;
   delete process.env.MYIMO_PUBLIC_KEY;
+  delete process.env.MYIMO_MP_KEY;
 });
 
 describe('vendor share', () => {
@@ -217,6 +218,7 @@ describe('MyIMO split', () => {
   beforeEach(() => {
     process.env.MYIMO_API_URL = 'https://staging.example';
     process.env.MYIMO_PUBLIC_KEY = 'pk_test';
+    process.env.MYIMO_MP_KEY = 'mp_test';
     request.mockReset();
   });
   const ok = (data: unknown) => ({ data: { header: { is_success: true }, data } });
@@ -244,6 +246,40 @@ describe('MyIMO split', () => {
     expect(initiate.url).not.toContain('/gov/');
     expect(initiate.data.settlement_order_id).toBe(settlement.data.settlement_order_id);
     expect(initiate.data.amount).toBe(12000);
+
+    // Settlement orders take the merchant key; the payment itself takes the public key.
+    expect(settlement.headers['mp-key']).toBe('mp_test');
+    expect(settlement.headers['xp-key']).toBeUndefined();
+    expect(initiate.headers['xp-key']).toBe('pk_test');
+    expect(initiate.headers['mp-key']).toBeUndefined();
+  });
+
+  it('refuses to register a new payee without contact details, before calling MyIMO', async () => {
+    request.mockResolvedValueOnce(ok([]));
+    await expect(
+      myimoGateway.ensureRecipient!({
+        name: 'Ada Gas',
+        bankCode: '058',
+        bankName: 'GTBank',
+        accountNumber: '0123456789',
+        accountName: 'ADA OKE'
+      })
+    ).rejects.toThrow(/phone number and email/);
+    expect(request).toHaveBeenCalledTimes(1); // the lookup only, no add
+  });
+
+  it('is unavailable, without a request, when the merchant key is not set', async () => {
+    delete process.env.MYIMO_MP_KEY;
+    await expect(
+      myimoGateway.ensureRecipient!({
+        name: 'Ada Gas',
+        bankCode: '058',
+        bankName: 'GTBank',
+        accountNumber: '0123456789',
+        accountName: 'ADA OKE'
+      })
+    ).rejects.toThrow(/temporarily unavailable/);
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('reuses an existing subaccount instead of registering the bank account twice', async () => {
