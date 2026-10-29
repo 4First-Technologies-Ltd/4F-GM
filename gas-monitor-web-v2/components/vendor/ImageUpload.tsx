@@ -43,7 +43,10 @@ export function ImageUpload({
     setUploading(true);
     try {
       const { key, publicUrl } = await vendorApi.uploadImage(kind, file);
-      onUploaded({ key, previewUrl: publicUrl ?? URL.createObjectURL(file) });
+      // Preview from the local file: it always renders, so the thumbnail confirms the pick
+      // even when the public bucket URL isn't reachable from this page.
+      void publicUrl;
+      onUploaded({ key, previewUrl: URL.createObjectURL(file) });
     } catch (err) {
       onError?.(err instanceof Error ? err.message : 'Could not upload that image.');
     } finally {
