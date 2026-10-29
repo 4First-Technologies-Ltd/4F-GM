@@ -83,8 +83,17 @@ export default function VendorProfileScreen() {
     try {
       const picked = await pickVendorImage('logo');
       if (picked) {
-        setLogoKey(picked.key);
+        setApiErr('');
         setLogoUrl(picked.previewUri);
+        try {
+          // Save straight away so the logo doesn't depend on the Save button.
+          const updated = await vendorApi.updateProfile({ logoKey: picked.key });
+          setProfile(updated);
+          setLogoKey(undefined);
+        } catch (err) {
+          setLogoKey(picked.key);
+          setApiErr(err instanceof Error ? err.message : 'Could not save your logo.');
+        }
       }
     } finally {
       setUploadingLogo(false);

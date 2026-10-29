@@ -27,8 +27,9 @@ export async function pickVendorImage(
 
   const asset = result.assets[0];
   try {
-    const { key, publicUrl } = await vendorApi.uploadImage(kind, { uri: asset.uri, mimeType: asset.mimeType });
-    return { key, previewUri: publicUrl ?? asset.uri };
+    const { key } = await vendorApi.uploadImage(kind, { uri: asset.uri, mimeType: asset.mimeType });
+    // Preview from the local file so the thumbnail always shows what was picked.
+    return { key, previewUri: asset.uri };
   } catch (err: any) {
     Alert.alert('Upload failed', err?.message ?? 'Could not upload the image. Please try again.');
     return null;

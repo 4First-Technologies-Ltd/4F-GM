@@ -252,13 +252,28 @@ export default function ProfilePage() {
                 <ImageUpload
                   kind="logo"
                   label="Change logo"
-                  onUploaded={({ key, previewUrl }) => {
-                    setLogoKey(key);
+                  onUploaded={async ({ key, previewUrl }) => {
+                    setBusinessError(null);
                     setLogoUrl(previewUrl);
+                    try {
+                      // Save straight away so the logo doesn't depend on the form's Save button.
+                      const updated = await vendorApi.updateProfile({ logoKey: key });
+                      setVendorProfile(updated);
+                      setLogoKey(undefined);
+                      setBusinessSaved(true);
+                      setTimeout(() => setBusinessSaved(false), 3000);
+                    } catch (err) {
+                      setLogoKey(key);
+                      setBusinessError(err instanceof ApiRequestError ? err.message : 'Could not save your logo.');
+                    }
                   }}
                   onError={setBusinessError}
                 />
-                <p className="mt-1.5 text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB. Saved with your business profile.</p>
+                <p className={`mt-1.5 text-xs ${logoKey ? 'text-green-700 font-medium' : 'text-muted-foreground'}`}>
+                  {logoKey
+                    ? 'Logo uploaded but not saved yet. Press Save to apply it.'
+                    : 'JPG, PNG or WebP, up to 5 MB. Saved as soon as it uploads.'}
+                </p>
               </div>
             </div>
 
