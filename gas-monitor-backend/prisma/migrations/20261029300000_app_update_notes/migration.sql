@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "PlatformSettings" ADD COLUMN "updateNotes" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "platform_settings" ADD COLUMN "updateNotes" TEXT NOT NULL DEFAULT '';
