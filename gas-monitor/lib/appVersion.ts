@@ -8,6 +8,38 @@ export interface VersionPolicy {
   min: string;
   latest: string;
   storeUrl: string | null;
+  /** "What's new" text from the admin Settings page; null/absent from older servers. */
+  notes?: string | null;
+}
+
+export interface UpdateNotes {
+  summary: string;
+  points: string[];
+}
+
+// Used when the admin hasn't written notes for this release.
+const DEFAULT_NOTES: UpdateNotes = {
+  summary: 'This update makes 4FG Monitor faster, smoother and more reliable for you.',
+  points: [
+    'Faster start-up and smoother screens, so you get to your gas orders sooner.',
+    'Orders, payments and tracking load quicker, even on a slow connection.',
+    'Fewer crashes and errors when ordering or paying.',
+    'The latest security improvements keep your account and payments safe.',
+    'Bug fixes and small improvements throughout the app.'
+  ]
+};
+
+/**
+ * First line is the short summary; every other line is a point (a leading "-", "*" or "•"
+ * is dropped). Empty notes fall back to the built-in wording.
+ */
+export function parseUpdateNotes(notes?: string | null): UpdateNotes {
+  const lines = (notes ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^\s*[-*•]\s*/, '').trim())
+    .filter(Boolean);
+  if (!lines.length) return DEFAULT_NOTES;
+  return { summary: lines[0], points: lines.slice(1) };
 }
 
 export type UpdateState = 'ok' | 'available' | 'required';

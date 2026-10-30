@@ -23,5 +23,5 @@ export function compareVersions(a: string, b: string): number {
 export async function versionPolicy(platform: 'android' | 'ios') {
   const s = await getOrCreateSettings();
   const storeUrl = platform === 'ios' ? s.storeUrlIos : s.storeUrlAndroid;
-  return { min: s.minAppVersion, latest: s.latestAppVersion, storeUrl: storeUrl || null };
+  return { min: s.minAppVersion, latest: s.latestAppVersion, storeUrl: storeUrl || null, notes: s.updateNotes || null };
 }
