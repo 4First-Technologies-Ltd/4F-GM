@@ -92,7 +92,16 @@ async function pushChunk(title: string, body: string, people: Recipient[], broad
     try {
       const { data } = await axios.post<{ data: ExpoTicket[] }>(
         EXPO_PUSH_URL,
-        batch.map((t) => ({ to: t.token, title, body, sound: 'default', data: { broadcastId } })),
+        // channelId matches the channel the app creates; high priority wakes a dozing Android phone.
+        batch.map((t) => ({
+          to: t.token,
+          title,
+          body,
+          sound: 'default',
+          channelId: 'default',
+          priority: 'high',
+          data: { broadcastId }
+        })),
         {
           headers: {
             Accept: 'application/json',
@@ -106,6 +115,8 @@ async function pushChunk(title: string, body: string, people: Recipient[], broad
       data.data.forEach((ticket, idx) => {
         if (ticket.status === 'ok') accepted += 1;
         else if (ticket.details?.error === 'DeviceNotRegistered') dead.push(batch[idx].token);
+        // Anything else (e.g. InvalidCredentials = the FCM key is missing in Expo) used to vanish silently.
+        else console.error('[broadcast] Expo rejected a push:', ticket.details?.error ?? 'unknown error');
       });
       // The app was uninstalled: stop sending to that token.
       if (dead.length) await prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
