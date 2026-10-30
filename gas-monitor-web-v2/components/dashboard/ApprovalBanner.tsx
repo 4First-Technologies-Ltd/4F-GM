@@ -53,9 +53,8 @@ export default function ApprovalBanner() {
         <p className="mt-1 text-sm">{body}</p>
         {user.role === 'VENDOR' && user.vendorRcNumberMissing && (
           <p className="mt-1 text-sm font-medium">
-            We can’t approve you until you add your RC number.{' '}
             <Link href="/dashboard/profile" className="underline">
-              Add it on your profile
+              Complete your profile to get approved
             </Link>
           </p>
         )}

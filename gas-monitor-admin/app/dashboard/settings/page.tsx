@@ -34,6 +34,7 @@ type Draft = Pick<
   | 'latestAppVersion'
   | 'storeUrlAndroid'
   | 'storeUrlIos'
+  | 'updateNotes'
 >;
 
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
@@ -80,7 +81,8 @@ export default function SettingsPage() {
           minAppVersion: r.settings.minAppVersion,
           latestAppVersion: r.settings.latestAppVersion,
           storeUrlAndroid: r.settings.storeUrlAndroid,
-          storeUrlIos: r.settings.storeUrlIos
+          storeUrlIos: r.settings.storeUrlIos,
+          updateNotes: r.settings.updateNotes ?? ''
         });
       })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
@@ -153,11 +155,14 @@ export default function SettingsPage() {
       ? draft.minAppVersion !== settings.minAppVersion ||
         draft.latestAppVersion !== settings.latestAppVersion ||
         draft.storeUrlAndroid !== settings.storeUrlAndroid ||
-        draft.storeUrlIos !== settings.storeUrlIos
+        draft.storeUrlIos !== settings.storeUrlIos ||
+        draft.updateNotes.trim() !== (settings.updateNotes ?? '')
       : false;
 
   const versionError = !draft
     ? null
+    : draft.updateNotes.length > 2000
+      ? 'Update notes can be at most 2000 characters.'
     : !VERSION_PATTERN.test(draft.minAppVersion) || !VERSION_PATTERN.test(draft.latestAppVersion)
       ? 'Versions must look like 1.2.0.'
       : compareVersions(draft.minAppVersion, draft.latestAppVersion) > 0
@@ -474,6 +479,26 @@ export default function SettingsPage() {
                   onChange={(e) => setDraft({ ...draft, storeUrlIos: e.target.value.trim() })}
                 />
               </label>
+
+              <label className="adm-field">
+                <span className="adm-field-label">What&apos;s new in the latest version</span>
+                <textarea
+                  className="adm-input"
+                  rows={7}
+                  value={draft.updateNotes}
+                  disabled={!canEdit}
+                  maxLength={2000}
+                  placeholder={
+                    'Faster order tracking and quicker app start-up\n- Orders load faster on slow networks\n- Fewer crashes when paying\n- Smoother logo and photo uploads'
+                  }
+                  onChange={(e) => setDraft({ ...draft, updateNotes: e.target.value })}
+                />
+                <span className="adm-field-help">
+                  Shown in the app&apos;s update prompt, in plain language for customers. The first
+                  line is the short summary; start other lines with &quot;- &quot; for bullets. Leave
+                  empty to use the app&apos;s standard wording.
+                </span>
+              </label>
             </div>
 
             {canEdit && (
@@ -493,7 +518,8 @@ export default function SettingsPage() {
                       minAppVersion: draft.minAppVersion,
                       latestAppVersion: draft.latestAppVersion,
                       storeUrlAndroid: draft.storeUrlAndroid,
-                      storeUrlIos: draft.storeUrlIos
+                      storeUrlIos: draft.storeUrlIos,
+                      updateNotes: draft.updateNotes.trim()
                     })
                   }
                 >

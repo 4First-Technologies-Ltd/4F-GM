@@ -369,6 +369,8 @@ export interface PlatformSettings {
   latestAppVersion: string;
   storeUrlAndroid: string;
   storeUrlIos: string;
+  /** "What's new" for the app's update prompt; first line is the short summary. */
+  updateNotes: string;
   updatedAt: string;
 }
 

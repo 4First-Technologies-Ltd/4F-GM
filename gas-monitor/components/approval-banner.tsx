@@ -35,7 +35,7 @@ export function ApprovalBanner({ kind }: { kind: Kind }) {
         <Text style={s.body}>{body}</Text>
         {kind === 'vendor' && rcMissing && (
           <TouchableOpacity onPress={() => router.push('/(vendor)/profile')} activeOpacity={0.7}>
-            <Text style={s.link}>We can’t approve you until you add your RC number. Add it on your profile</Text>
+            <Text style={s.link}>Complete your profile to get approved</Text>
           </TouchableOpacity>
         )}
       </View>

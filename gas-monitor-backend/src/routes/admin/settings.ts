@@ -51,7 +51,9 @@ const patchSchema = z.object({
   storeUrlAndroid: z.string().trim().regex(/^https:\/\/\S+$/, 'Play Store link must be an https link').optional(),
   storeUrlIos: z
     .union([z.literal(''), z.string().trim().regex(/^https:\/\/\S+$/, 'App Store link must be an https link')])
-    .optional()
+    .optional(),
+  // What's new in the latest version, shown in the app's update prompt.
+  updateNotes: z.string().trim().max(2000, 'Update notes can be at most 2000 characters').optional()
 });
 
 router.patch(

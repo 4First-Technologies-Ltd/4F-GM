@@ -493,6 +493,10 @@ model PlatformSettings {
   latestAppVersion   String   @default("1.0.0")
   storeUrlAndroid    String   @default("https://play.google.com/store/apps/details?id=com.fourfirsttechnologies.gasmonitor")
   storeUrlIos        String   @default("")
+  /// "What's new" shown in the app's update prompt: plain text, one line per
+  /// point (a leading "- " makes a bullet). The first line is the short summary.
+  /// Empty = the app shows its built-in wording.
+  updateNotes        String   @default("")
   /// Share of the flat delivery fee paid to the rider who delivers the order.
   /// The platform keeps the rest. A placeholder until the business sets it.
   riderSharePercent  Float    @default(70)
