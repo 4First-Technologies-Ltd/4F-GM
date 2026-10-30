@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.fourfirsttechnologies.gasmonitor",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "4FG Monitor uses your photos so you can set your business logo and product pictures.",
+        "NSLocationWhenInUseUsageDescription": "4FG Monitor uses your location to find gas suppliers near you and to set your delivery or business address."
+      }
     },
     "android": {
       "package": "com.fourfirsttechnologies.gasmonitor",
