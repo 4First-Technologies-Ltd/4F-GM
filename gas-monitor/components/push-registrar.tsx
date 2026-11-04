@@ -16,7 +16,13 @@ export function PushRegistrar() {
   }, [segments]);
 
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { type?: string; action?: string; deviceId?: string } | undefined;
+      // A low or empty gas alert opens the refill flow; everything else opens the inbox.
+      if (data?.type === 'device_alert' && data.action === 'order') {
+        router.push({ pathname: '/order', params: data.deviceId ? { deviceId: data.deviceId } : {} });
+        return;
+      }
       router.push('/notifications');
     });
     return () => sub.remove();

@@ -50,7 +50,8 @@ function RootLayout() {
         <Stack.Screen name="vendor-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="legal/[doc]" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
         <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
-        <Stack.Screen name="analytics" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="monitors" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="analytics"options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="verify-email" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="rider-sign-up" options={{ headerShown: false, animation: 'slide_from_right' }} />

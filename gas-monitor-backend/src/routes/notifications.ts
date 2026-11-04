@@ -22,7 +22,7 @@ router.get(
         where,
         orderBy: { createdAt: 'desc' },
         take,
-        select: { id: true, title: true, body: true, readAt: true, createdAt: true }
+        select: { id: true, title: true, body: true, kind: true, refId: true, readAt: true, createdAt: true }
       }),
       prisma.notification.count({ where: { ...where, readAt: null } })
     ]);

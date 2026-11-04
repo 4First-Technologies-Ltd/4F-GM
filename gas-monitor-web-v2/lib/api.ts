@@ -1042,6 +1042,9 @@ export interface AppNotification {
   id: string;
   title: string;
   body: string;
+  /** Where clicking it leads: REFILL or MONITOR (the device id is in `refId`). Null for plain messages. */
+  kind?: 'REFILL' | 'MONITOR' | null;
+  refId?: string | null;
   readAt: string | null;
   createdAt: string;
 }
@@ -1188,5 +1191,103 @@ export const deviceApi = {
       auth: true,
       body: JSON.stringify({ locationName })
     });
+  }
+};
+
+/** One suggested way to refill a monitor's cylinder (`GET /api/devices/:id/reorder`). */
+export interface ReorderOption {
+  listingId: string;
+  vendorName: string;
+  branchName: string | null;
+  city: string | null;
+  cylinderSize: string;
+  unitPrice: number;
+  total: number;
+  previous: boolean;
+}
+
+export interface ReorderSuggestion {
+  sizeKg: number | null;
+  options: ReorderOption[];
+  hasOpenOrder: boolean;
+  needsCylinder: boolean;
+}
+
+export interface Monitor {
+  id: string;
+  nickname: string | null;
+  role: 'OWNER' | 'MEMBER' | 'VIEWER';
+  cylinder: { id: string; name: string; sizeKg: number } | null;
+  emptyWeightKg: number | null;
+  alerts: { lowPercent: number; lowKg: number | null; lowDays: number | null };
+  fw: string | null;
+  state: {
+    online: boolean;
+    lastSeenAt: string | null;
+    lastReadingAt: string | null;
+    readingAgeSec: number | null;
+    stale: boolean;
+    grossKg: number | null;
+    netKg: number | null;
+    percent: number | null;
+    calibrating: boolean;
+    tempC: number | null;
+    batteryPct: number | null;
+    externalPower: boolean;
+    rssi: number | null;
+  };
+  config: { version: number; applied: number; pending: boolean };
+}
+
+export interface MonitorHourPoint {
+  t: string;
+  percent: number | null;
+  netKg: number | null;
+}
+
+export type MonitorCommandStatus = 'QUEUED' | 'SENT' | 'ACKED' | 'FAILED' | 'EXPIRED';
+export interface MonitorCommand {
+  id: string;
+  type: string;
+  status: MonitorCommandStatus;
+  result: string | null;
+  detail: string | null;
+}
+
+export interface MonitorSettingsPatch {
+  nickname?: string | null;
+  cylinderId?: string | null;
+  emptyWeightKg?: number | null;
+  lowPercent?: number;
+  lowKg?: number | null;
+  lowDays?: number | null;
+}
+
+/** The cloud-connected monitor endpoints (distinct from the older USSD `deviceApi`). */
+export const monitorApi = {
+  async list(): Promise<{ devices: Monitor[] }> {
+    return request('/api/devices', { auth: true });
+  },
+  async claim(deviceId: string, claimCode: string, nickname?: string): Promise<{ device: Monitor }> {
+    return request('/api/devices/claim', { method: 'POST', auth: true, body: JSON.stringify({ deviceId, claimCode, ...(nickname ? { nickname } : {}) }) });
+  },
+  async get(deviceId: string): Promise<{ device: Monitor }> {
+    return request(`/api/devices/${encodeURIComponent(deviceId)}`, { auth: true });
+  },
+  async hourly(deviceId: string, hours = 24): Promise<{ points: MonitorHourPoint[] }> {
+    const from = new Date(Date.now() - hours * 3600_000).toISOString();
+    return request(`/api/devices/${encodeURIComponent(deviceId)}/readings?bucket=hour&from=${encodeURIComponent(from)}`, { auth: true });
+  },
+  async command(deviceId: string, type: 'REPORT_NOW' | 'TARE' | 'REBOOT', idempotencyKey: string): Promise<{ command: MonitorCommand }> {
+    return request(`/api/devices/${encodeURIComponent(deviceId)}/commands`, { method: 'POST', auth: true, headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({ type }) });
+  },
+  async getCommand(deviceId: string, commandId: string): Promise<{ command: MonitorCommand }> {
+    return request(`/api/devices/${encodeURIComponent(deviceId)}/commands/${encodeURIComponent(commandId)}`, { auth: true });
+  },
+  async settings(deviceId: string, patch: MonitorSettingsPatch): Promise<{ device: Monitor }> {
+    return request(`/api/devices/${encodeURIComponent(deviceId)}/settings`, { method: 'PATCH', auth: true, body: JSON.stringify(patch) });
+  },
+  async reorder(deviceId: string): Promise<ReorderSuggestion> {
+    return request(`/api/devices/${encodeURIComponent(deviceId)}/reorder`, { auth: true });
   }
 };

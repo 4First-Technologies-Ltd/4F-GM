@@ -17,6 +17,8 @@ import addressesRoutes from './routes/addresses';
 import analyticsRoutes from './routes/analytics';
 import contactRoutes from './routes/contact';
 import deviceRoutes from './routes/device';
+import devicesRoutes from './routes/devices';
+import internalMqttRoutes from './routes/internalMqtt';
 import marketplaceRoutes from './routes/marketplace';
 import { paystackWebhookHandler } from './routes/ordersWebhook';
 import { sentryWebhookHandler } from './routes/internalSentryWebhook';
@@ -116,6 +118,9 @@ export function createApp() {
   // A signed-in user's inbox and push token.
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/device', deviceRoutes);
+  app.use('/api/devices', devicesRoutes);
+  // Called by the MQTT broker over the internal network only; off unless MQTT_AUTH_TOKEN is set.
+  app.use('/internal/mqtt', internalMqttRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
 
   // Admin API — namespaced under /api/admin to avoid colliding with the

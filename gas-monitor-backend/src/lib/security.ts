@@ -61,5 +61,7 @@ export const guestOrderLimiter = limiter(15 * MIN, 20);
 export const documentUploadLimiter = limiter(60 * MIN, 30);
 /** Each newsletter sign-up sends an email to an address the caller chose. */
 /** Changing a payout account needs the password, so this also caps password guessing from a stolen session. */
+/** Claiming a device checks a short code printed on the unit, so cap guessing per signed-in user. */
+export const deviceClaimLimiter = limiter(15 * MIN, 10, (req: Request) => (req.user?.sub ?? (ipKey(req) || 'anon')));
 export const bankAccountLimiter = limiter(60 * MIN, 10, (req: Request) => (req.user?.sub ?? (ipKey(req) || 'anon')));
 export const newsletterLimiter = limiter(60 * MIN, 8);
