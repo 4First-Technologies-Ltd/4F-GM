@@ -27,3 +27,6 @@ bbdc3d99bae0c04bce732a9c234feac6d43f8565:TERMII_VERIFICATION_GUIDE.md:curl-auth-
 b45c1951b054540da187c3fd9583c9cd8e6c5628:landing/index.html:jwt:1052
 # Supabase anon key (role=anon, public by design; RLS protects the data)
 b45c1951b054540da187c3fd9583c9cd8e6c5628:landing/waitlist-admin.html:jwt:577
+
+# App Store Connect issuer ID in eas.json: an identifier, not a secret (the .p8 key is outside the repo)
+80ab21eef545328ec7195bff5872f6b6664fc773:gas-monitor/eas.json:generic-api-key:49
