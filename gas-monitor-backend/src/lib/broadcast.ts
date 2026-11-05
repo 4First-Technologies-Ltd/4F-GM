@@ -1,7 +1,7 @@
-import axios from 'axios';
 import type { BroadcastAudience, Prisma, Role } from '@prisma/client';
 import { prisma } from './prisma';
 import { EMAIL_FROM, getClient } from './email';
+import { sendExpoPush } from './expoPush';
 
 /**
  * Admin broadcasts: one message, delivered in-app (always), and optionally by
@@ -23,8 +23,6 @@ const ALL_ROLES: Role[] = ['CONSUMER', 'VENDOR', 'RIDER', 'LOGISTICS_COMPANY', '
 const CHUNK = 500;
 const EMAIL_BATCH = 50;
 const EMAIL_GAP_MS = 700;
-const PUSH_BATCH = 100;
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 /** Who an audience reaches: live accounts only (not suspended, not erased). */
 export function recipientWhere(audience: BroadcastAudience, targetUserId?: string | null): Prisma.UserWhereInput {
@@ -79,52 +77,12 @@ async function emailChunk(title: string, body: string, people: Recipient[]): Pro
   return sent;
 }
 
-type ExpoTicket = { status: 'ok' | 'error'; details?: { error?: string } };
-
 /** Sends one chunk by Expo push. Returns how many devices were accepted. */
 async function pushChunk(title: string, body: string, people: Recipient[], broadcastId: string): Promise<number> {
   const wanted = people.filter((p) => p.pushEnabled).map((p) => p.id);
   if (wanted.length === 0) return 0;
   const tokens = await prisma.pushToken.findMany({ where: { userId: { in: wanted } }, select: { token: true } });
-  let accepted = 0;
-  for (let i = 0; i < tokens.length; i += PUSH_BATCH) {
-    const batch = tokens.slice(i, i + PUSH_BATCH);
-    try {
-      const { data } = await axios.post<{ data: ExpoTicket[] }>(
-        EXPO_PUSH_URL,
-        // channelId matches the channel the app creates; high priority wakes a dozing Android phone.
-        batch.map((t) => ({
-          to: t.token,
-          title,
-          body,
-          sound: 'default',
-          channelId: 'default',
-          priority: 'high',
-          data: { broadcastId }
-        })),
-        {
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            ...(process.env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${process.env.EXPO_ACCESS_TOKEN}` } : {})
-          },
-          timeout: 15_000
-        }
-      );
-      const dead: string[] = [];
-      data.data.forEach((ticket, idx) => {
-        if (ticket.status === 'ok') accepted += 1;
-        else if (ticket.details?.error === 'DeviceNotRegistered') dead.push(batch[idx].token);
-        // Anything else (e.g. InvalidCredentials = the FCM key is missing in Expo) used to vanish silently.
-        else console.error('[broadcast] Expo rejected a push:', ticket.details?.error ?? 'unknown error');
-      });
-      // The app was uninstalled: stop sending to that token.
-      if (dead.length) await prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
-    } catch (err) {
-      console.error('[broadcast] Expo push failed:', err instanceof Error ? err.message : err);
-    }
-  }
-  return accepted;
+  return sendExpoPush(tokens, title, body, { broadcastId }, 'broadcast');
 }
 
 /** Delivers a SENDING broadcast to its whole audience, then marks it SENT (or FAILED). */

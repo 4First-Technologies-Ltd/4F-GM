@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, Platform, Switch, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { useSensorReading } from '@/hooks/use-sensor-reading';
 import { useDeviceConfig } from '@/hooks/use-device-config';
 
@@ -152,6 +153,19 @@ export default function DeviceScreen() {
           <Text style={s.headerTitle}>Device</Text>
           <Text style={s.headerSub}>Sensor status and configuration</Text>
         </View>
+
+        {/* 4G cloud monitors */}
+        <TouchableOpacity
+          style={[s.card, { ...cardShadow, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+          activeOpacity={0.8}
+          onPress={() => router.push('/monitors' as never)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={s.cardTitle}>My 4G monitors</Text>
+            <Text style={s.headerSub}>Live gas level, alerts and refills</Text>
+          </View>
+          <Text style={{ color: C.accent, fontSize: 20 }}>›</Text>
+        </TouchableOpacity>
 
         {/* Connection Status */}
         <View style={[s.card, { ...cardShadow }]}>

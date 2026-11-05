@@ -13,7 +13,16 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "sim:broker": "tsx tools/device-simulator/dev-broker.ts",
+    "sim:device": "tsx tools/device-simulator/simulator.ts",
+    "sim:cli": "tsx tools/device-simulator/cli.ts",
+    "sim:check": "tsx tools/device-simulator/check.ts",
+    "worker:ingest": "tsx src/workers/ingest.ts",
+    "worker:ingest:prod": "node dist/workers/ingest.js",
+    "device:provision": "tsx tools/provision-device.ts",
+    "sim:e2e": "tsx tools/device-simulator/e2e.ts",
+    "sim:api": "tsx tools/device-simulator/dev-api.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
@@ -41,6 +50,8 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.9.0",
     "@types/qrcode": "^1.5.6",
+    "aedes": "^1.2.0",
+    "mqtt": "^5.16.1",
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.9.2",

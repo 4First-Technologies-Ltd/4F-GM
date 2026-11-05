@@ -19,10 +19,12 @@ import {
   Clock,
   Wallet,
   Truck,
-  ClipboardList
+  ClipboardList,
+  Gauge
 } from 'lucide-react';
 
 const CONSUMER_NAV_ITEMS = [
+  { href: '/dashboard/monitors', label: 'My monitors', icon: Gauge, exact: false },
   { href: '/dashboard/device', label: 'Device', icon: Smartphone, exact: false },
   { href: '/dashboard/overview', label: 'Overview', icon: Grid3x3, exact: false },
   { href: '/dashboard/orders', label: 'Orders', icon: Package, exact: false },

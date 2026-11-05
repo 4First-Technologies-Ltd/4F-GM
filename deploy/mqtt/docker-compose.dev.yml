@@ -1,0 +1,27 @@
+# Local broker that behaves like production: TLS, and every connection checked against the 4FG API.
+#
+#   sh gen-dev-cert.sh
+#   MQTT_AUTH_TOKEN=devtoken docker compose -f docker-compose.dev.yml up
+#
+# The API must be running on this machine with the same MQTT_AUTH_TOKEN (and MQTT_SERVICE_USER /
+# MQTT_SERVICE_PASS) and a database that has the devices. Port 9000 is the API's default.
+services:
+  mqtt:
+    image: iegomez/mosquitto-go-auth:latest
+    ports:
+      - "8883:8883"
+    environment:
+      API_HOST: host.docker.internal
+      API_PORT: "${API_PORT:-9000}"
+      MQTT_AUTH_TOKEN: "${MQTT_AUTH_TOKEN:?set MQTT_AUTH_TOKEN to the same value the API uses}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./mosquitto.conf.template:/mosquitto-template/mosquitto.conf:ro
+      - ./start.sh:/start.sh:ro
+      - ./certs-dev:/mosquitto/certs:ro
+      - mqtt-data:/mosquitto/data
+    command: ["sh", "/start.sh"]
+
+volumes:
+  mqtt-data:

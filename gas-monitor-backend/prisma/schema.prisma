@@ -109,6 +109,8 @@ model User {
   crmTasks          CrmTask[]
   notifications     Notification[]
   pushTokens        PushToken[]
+  ownedDevices      Device[]          @relation("DeviceOwner")
+  deviceMemberships DeviceMember[]
 
   @@map("users")
 }
@@ -401,6 +403,7 @@ model CylinderProfile {
   isActive        Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  devices         Device[]
 
   @@map("cylinder_profiles")
 }
@@ -559,6 +562,10 @@ model Notification {
   broadcast   Broadcast? @relation(fields: [broadcastId], references: [id], onDelete: SetNull)
   title       String
   body        String
+  /// Where tapping it leads, platform-neutral so web and mobile each map it to their own screen:
+  /// REFILL (open the refill suggestions) or MONITOR (open the monitor), with the device id in refId.
+  kind        String?
+  refId       String?
   readAt      DateTime?
   createdAt   DateTime   @default(now())
 
@@ -1241,4 +1248,209 @@ model RiderEarning {
   @@index([riderId, status])
   @@index([status])
   @@map("rider_earnings")
+}
+
+// ── Device cloud ──────────────────────────────────────────────────────────────
+// Weighing platforms that report over MQTT. See docs/CLOUD_ARCHITECTURE.md.
+// The printed device id is the primary key, so an MQTT topic maps straight to a row.
+
+enum CommandStatus {
+  QUEUED
+  SENT
+  ACKED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum DeviceRole {
+  OWNER
+  MEMBER
+  VIEWER
+}
+
+model Device {
+  /// Factory-assigned id printed on the unit (e.g. FG-2024-0047). Never reused.
+  id            String           @id
+  /// sha256 of the device's MQTT secret. The secret is 32 random bytes, so a fast hash is enough.
+  secretHash    String
+  /// sha256 of the short claim code printed on the unit; cleared once claimed.
+  claimCodeHash String?
+  ownerId       String?
+  owner         User?            @relation("DeviceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  cylinderId    String?
+  cylinder      CylinderProfile? @relation(fields: [cylinderId], references: [id], onDelete: SetNull)
+  nickname      String?
+  /// Empty weight of the cylinder on the platform (the stamped TW), entered or learned.
+  emptyWeightKg Float?
+  /// Factory calibration version the device reported last.
+  platformCal   Int              @default(1)
+  fw            String?
+  hwRev         String?
+  imei          String?
+  iccid         String?
+  provisionedAt DateTime         @default(now())
+  claimedAt     DateTime?
+  /// Set to cut the device off at the broker.
+  revokedAt     DateTime?
+  /// Low-gas alert thresholds the owner sets. LOW fires when ANY configured one is met.
+  lowPercent    Float            @default(20)
+  lowKg         Float?
+  lowDays       Float?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  state         DeviceState?
+  config        DeviceConfig?
+  members       DeviceMember[]
+  readings      DeviceReading[]
+  daily         DeviceReadingDaily[]
+  events        DeviceEvent[]
+  commands      DeviceCommand[]
+  alertStates   DeviceAlertState[]
+
+  @@index([ownerId])
+  @@map("devices")
+}
+
+/// One row per device: the latest values. This is what the live view reads.
+model DeviceState {
+  deviceId      String    @id
+  device        Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  online        Boolean   @default(false)
+  lastSeenAt    DateTime?
+  lastReadingAt DateTime?
+  grossKg       Float?
+  netKg         Float?
+  percent       Float?
+  tempC         Float?
+  batteryPct    Int?
+  batteryMv     Int?
+  externalPower Boolean   @default(false)
+  rssi          Int?
+  /// Config version the device last reported holding.
+  cfgApplied    Int       @default(0)
+  fw            String?
+  uptimeSec     Int?
+  updatedAt     DateTime  @updatedAt
+
+  @@map("device_states")
+}
+
+/// Desired settings for a device. `version` bumps on every change; the device
+/// reports the version it holds, so the app can show pending vs applied.
+model DeviceConfig {
+  deviceId  String   @id
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  version   Int      @default(1)
+  desired   Json
+  updatedAt DateTime @updatedAt
+
+  @@map("device_configs")
+}
+
+model DeviceMember {
+  deviceId  String
+  device    Device     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      DeviceRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+
+  @@id([deviceId, userId])
+  @@index([userId])
+  @@map("device_members")
+}
+
+/// Append-only history. Raw rows are pruned after the retention window; daily
+/// rollups are kept.
+model DeviceReading {
+  id         BigInt   @id @default(autoincrement())
+  deviceId   String
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  /// Reading time, corrected for device clock error.
+  t          DateTime
+  receivedAt DateTime @default(now())
+  /// Message sequence number; a batch shares one seq.
+  seq        Int
+  grossKg    Float
+  netKg      Float?
+  percent    Float?
+  tempC      Float?
+  settled    Boolean  @default(true)
+  /// heartbeat | change | event | refresh | boot | retry
+  why        String   @default("heartbeat")
+
+  /// Makes MQTT redelivery harmless.
+  @@unique([deviceId, seq, t])
+  @@index([deviceId, t])
+  @@map("device_readings")
+}
+
+model DeviceReadingDaily {
+  deviceId   String
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  /// Start of the Lagos day, stored as UTC.
+  day        DateTime
+  startKg    Float
+  endKg      Float
+  minKg      Float
+  maxKg      Float
+  consumedKg Float    @default(0)
+  readings   Int      @default(0)
+
+  @@id([deviceId, day])
+  @@map("device_reading_daily")
+}
+
+model DeviceEvent {
+  id         BigInt   @id @default(autoincrement())
+  deviceId   String
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  t          DateTime
+  receivedAt DateTime @default(now())
+  code       String
+  payload    Json?
+
+  @@index([deviceId, t])
+  @@index([code, t])
+  @@map("device_events")
+}
+
+model DeviceCommand {
+  /// Globally unique; the device uses it to ignore duplicates.
+  id             String        @id
+  deviceId       String
+  device         Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  type           String
+  args           Json?
+  status         CommandStatus @default(QUEUED)
+  requestedBy    String?
+  /// Client-supplied key so a double tap does not create two commands.
+  idempotencyKey String?
+  requestedAt    DateTime      @default(now())
+  sentAt         DateTime?
+  ackedAt        DateTime?
+  expiresAt      DateTime
+  /// Device result: OK | FAILED | EXPIRED | REJECTED
+  result         String?
+  detail         String?
+
+  @@unique([deviceId, idempotencyKey])
+  @@index([deviceId, requestedAt])
+  @@index([status, expiresAt])
+  @@map("device_commands")
+}
+
+/// De-duplication state for alert rules: one alert per crossing, re-armed by a refill.
+model DeviceAlertState {
+  deviceId       String
+  device         Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  rule           String
+  armed          Boolean   @default(true)
+  firedAt        DateTime?
+  lastNotifiedAt DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@id([deviceId, rule])
+  @@map("device_alert_states")
 }

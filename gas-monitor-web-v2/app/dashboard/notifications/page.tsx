@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell } from 'lucide-react';
 import { notificationsApi, type AppNotification } from '@/lib/api';
 
@@ -16,6 +17,7 @@ function when(iso: string): string {
 
 /** Messages from the 4FG team (broadcasts sent from the admin panel). */
 export default function NotificationsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<AppNotification[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,9 +36,13 @@ export default function NotificationsPage() {
   }, [load]);
 
   function open(n: AppNotification) {
-    if (n.readAt) return;
-    setItems((cur) => cur?.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)) ?? cur);
-    notificationsApi.markRead(n.id).catch(() => {});
+    if (!n.readAt) {
+      setItems((cur) => cur?.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)) ?? cur);
+      notificationsApi.markRead(n.id).catch(() => {});
+    }
+    // Monitor alerts lead somewhere: low or empty gas to the refill suggestions, the rest to the monitor.
+    if (n.kind === 'REFILL' && n.refId) router.push(`/dashboard/refill?deviceId=${encodeURIComponent(n.refId)}`);
+    else if (n.kind === 'MONITOR') router.push('/dashboard/monitors');
   }
 
   function readAll() {
@@ -86,6 +92,7 @@ export default function NotificationsPage() {
                   <span className="text-xs text-muted-foreground">{when(n.createdAt)}</span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{n.body}</p>
+                {n.kind && <p className="mt-2 text-sm font-medium text-primary">{n.kind === 'REFILL' ? 'Order a refill ›' : 'View monitor ›'}</p>}
               </button>
             </li>
           ))}

@@ -4,11 +4,11 @@ import {
   Platform, ActivityIndicator, TextInput, Modal, KeyboardAvoidingView, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ordersApi, marketplaceApi, type MarketplaceListing, type PaymentProviderOption } from '@/lib/api';
+import { ordersApi, marketplaceApi, monitorApi, type MarketplaceListing, type PaymentProviderOption, type ReorderSuggestion } from '@/lib/api';
 import { useAddresses } from '@/hooks/use-addresses';
 import { quoteByAmount, quoteByKg, MIN_LOOSE_KG, MAX_LOOSE_KG } from '@/lib/looseOrder';
 
@@ -246,6 +246,16 @@ export default function SuppliersScreen() {
   }
   useEffect(() => { void loadSuppliers(); }, []);
 
+  // Opened from a low-gas alert: the monitor says which cylinder size is needed and who sells it.
+  const { deviceId } = useLocalSearchParams<{ deviceId?: string }>();
+  const [suggestion, setSuggestion] = useState<ReorderSuggestion | null>(null);
+  useEffect(() => {
+    if (!deviceId) return;
+    let cancelled = false;
+    monitorApi.reorder(deviceId).then((r) => { if (!cancelled) setSuggestion(r); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [deviceId]);
+
   const [activeTab, setActiveTab] = useState<'new' | 'orders'>('new');
   const [selectedSize, setSelectedSize] = useState(1);
   const [quantity, setQuantity] = useState(1);
@@ -323,6 +333,14 @@ export default function SuppliersScreen() {
     setLooseInput('');
     setMode(supplier.hasSizes ? 'size' : supplier.sellsLoose ? 'kg' : 'size');
     setSelectedAddressId(savedAddresses.find((a) => a.isDefault)?.id ?? null);
+  }
+
+  /** Jump straight to the order form with the vendor and the monitor's cylinder size chosen. */
+  function pickSuggestion(o: ReorderSuggestion['options'][number]) {
+    const sup = filtered.find((x) => x.id === o.listingId) ?? suppliersWithDist.find((x) => x.id === o.listingId);
+    if (!sup) return;
+    selectSupplier(sup);
+    setSelectedSize(Math.max(0, sup.options.findIndex((c) => c.size === o.cylinderSize)));
   }
 
   function backToSuppliers() {
@@ -451,6 +469,40 @@ export default function SuppliersScreen() {
         </ScrollView>
 
         <ScrollView contentContainerStyle={s.listContainer} showsVerticalScrollIndicator={false}>
+          {suggestion && (
+            <View style={[s.suggestCard, cardShadow]}>
+              {suggestion.hasOpenOrder ? (
+                <>
+                  <Text style={s.suggestTitle}>A refill is already on the way</Text>
+                  <Text style={s.suggestSub}>You have a paid order that has not been delivered yet. You can still order another below.</Text>
+                </>
+              ) : suggestion.needsCylinder || suggestion.sizeKg == null ? (
+                <>
+                  <Text style={s.suggestTitle}>Tell us which cylinder your monitor is on</Text>
+                  <Text style={s.suggestSub}>Set the cylinder in the monitor settings and we will suggest matching suppliers.</Text>
+                </>
+              ) : suggestion.options.length === 0 ? (
+                <>
+                  <Text style={s.suggestTitle}>Refill for your {suggestion.sizeKg} kg cylinder</Text>
+                  <Text style={s.suggestSub}>No supplier near you lists this size right now. Browse everyone below.</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={s.suggestTitle}>Refill for your {suggestion.sizeKg} kg cylinder</Text>
+                  {suggestion.options.map((o) => (
+                    <TouchableOpacity key={o.listingId} style={s.suggestRow} activeOpacity={0.7} onPress={() => pickSuggestion(o)}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.suggestName} numberOfLines={1}>{o.vendorName}{o.branchName ? ` · ${o.branchName}` : ''}</Text>
+                        <Text style={s.suggestSub}>{o.previous ? 'You have ordered here before' : o.city ?? 'Available now'}</Text>
+                      </View>
+                      <Text style={s.suggestPrice}>{fmtPrice(o.total)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={s.suggestNote}>Prices include the delivery fee.</Text>
+                </>
+              )}
+            </View>
+          )}
           {filtered.length === 0 ? (
             <View style={s.emptyState}>
               <View style={s.emptyIconCircle}>
@@ -878,6 +930,13 @@ const s = StyleSheet.create({
   filterPillTextActive: { color: '#FFFFFF', fontWeight: '700', lineHeight: 18 },
 
   listContainer: { paddingHorizontal: 20, gap: 12 },
+  suggestCard: { backgroundColor: C.accentLight, borderRadius: 16, borderWidth: 1, borderColor: C.accent + '40', padding: 14, gap: 8 },
+  suggestTitle: { fontSize: 15, fontWeight: '700', color: C.text },
+  suggestSub: { fontSize: 12, color: C.muted },
+  suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border },
+  suggestName: { fontSize: 14, fontWeight: '600', color: C.text },
+  suggestPrice: { fontSize: 14, fontWeight: '700', color: C.accent },
+  suggestNote: { fontSize: 11, color: C.muted },
 
   supplierCard: {
     backgroundColor: C.card,

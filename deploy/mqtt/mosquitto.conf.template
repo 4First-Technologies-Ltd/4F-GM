@@ -1,0 +1,54 @@
+# Mosquitto for 4FG devices. start.sh fills the __PLACEHOLDERS__ from environment variables.
+# See README.md in this folder for what each part is for and how to run it.
+
+# ── Listener: TLS only. There is deliberately no plain-text listener. ─────────
+listener 8883
+protocol mqtt
+certfile /mosquitto/certs/server.crt
+keyfile /mosquitto/certs/server.key
+tls_version tlsv1.2
+allow_anonymous false
+# Client id is always the authenticated user name. Without this, a device holding a valid secret could
+# connect with ANOTHER device's client id and take over (or knock off) that device's session.
+use_username_as_clientid true
+
+# ── Sessions ─────────────────────────────────────────────────────────────────
+# Devices connect with clean_session=false, so the broker keeps their subscriptions and any
+# queued commands while they sleep. These limits stop one absent device from filling the disk.
+persistence true
+persistence_location /mosquitto/data/
+autosave_interval 60
+persistent_client_expiration 30d
+max_queued_messages 200
+max_inflight_messages 20
+# A full 48-reading batch is about 4 KB; leave headroom, refuse anything absurd.
+max_packet_size 16384
+
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+
+# ── Who may connect and what they may touch: asked of the 4FG API ────────────
+auth_plugin /mosquitto/go-auth.so
+auth_opt_log_level warn
+auth_opt_backends http
+auth_opt_http_host __API_HOST__
+auth_opt_http_port __API_PORT__
+auth_opt_http_getuser_uri /internal/mqtt/__TOKEN__/auth
+auth_opt_http_superuser_uri /internal/mqtt/__TOKEN__/superuser
+auth_opt_http_aclcheck_uri /internal/mqtt/__TOKEN__/acl
+auth_opt_http_method POST
+auth_opt_http_params_mode json
+auth_opt_http_response_mode status
+auth_opt_http_timeout 5
+
+# Answers are cached briefly so the API is not asked on every message. This is also the delay
+# before a revoked device that is already connected is cut off. Jitter spreads out the lookups
+# when many devices reconnect together.
+auth_opt_cache true
+auth_opt_cache_reset true
+auth_opt_auth_cache_seconds 30
+auth_opt_acl_cache_seconds 30
+auth_opt_auth_jitter_seconds 3
+auth_opt_acl_jitter_seconds 3
