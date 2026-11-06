@@ -11,7 +11,8 @@ export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER';
-export type AdminRoleValue = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
+export type AdminRoleValue = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT' | 'SOCIAL';
+export type SmosRoleValue = 'MANAGEMENT' | 'MANAGER' | 'REVIEWER' | 'VIEWER';
 
 export interface BranchRow {
   id: string;
@@ -310,6 +311,7 @@ export interface AdminUserRow {
   name: string;
   email: string;
   role: AdminRoleValue;
+  smosRole: SmosRoleValue | null;
   isActive: boolean;
   mfaEnabled: boolean;
   createdAt: string;

@@ -2,11 +2,16 @@
 
 import { createContext, useContext, ReactNode } from 'react';
 
-export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
+export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT' | 'SOCIAL';
+export type SmosRole = 'MANAGEMENT' | 'MANAGER' | 'REVIEWER' | 'VIEWER';
 
 export interface AdminSession {
+  /** The admin_users id, or "root" for the env login. */
+  adminId: string;
   name: string;
   role: AdminRole;
+  /** Social media operations role; null = none (SUPER_ADMIN and OPERATIONS default to management). */
+  smosRole: SmosRole | null;
   /** Named admins can set their own password; the shared env login cannot. */
   canChangePassword: boolean;
   /** Set by whoever created/reset the account; blocks everything but /dashboard/account. */

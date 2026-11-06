@@ -5,7 +5,7 @@ const SESSION_EXPIRES_IN = (process.env.ADMIN_SESSION_EXPIRES_IN ?? '12h') as jw
 
 export const ADMIN_SESSION_COOKIE = 'admin_session';
 
-export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
+export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT' | 'SOCIAL';
 
 export interface AdminSessionPayload {
   admin: true;

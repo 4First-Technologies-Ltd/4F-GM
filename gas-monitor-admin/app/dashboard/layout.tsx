@@ -43,8 +43,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (res.ok) {
           const data = await res.json();
           setSession({
+            adminId: data.adminId,
             name: data.name,
             role: data.role,
+            smosRole: data.smosRole ?? null,
             canChangePassword: !!data.canChangePassword,
             mustChangePassword: !!data.mustChangePassword,
             mfaEnabled: !!data.mfaEnabled,
@@ -52,6 +54,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           });
           if ((data.mustChangePassword || data.mfaEnrollRequired) && !window.location.pathname.startsWith('/dashboard/account')) {
             router.replace('/dashboard/account');
+          } else if (data.role === 'SOCIAL' && window.location.pathname === '/dashboard') {
+            // The platform overview is not theirs; their home is Social media.
+            router.replace('/dashboard/smois');
           }
         } else {
           router.replace('/login');
@@ -93,7 +98,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     // Every data route is refused while a password change is pending.
-    if (session && !session.mustChangePassword && !session.mfaEnrollRequired) loadBadges();
+    // Platform counts are refused to a SOCIAL admin, so do not ask.
+    if (session && session.role !== 'SOCIAL' && !session.mustChangePassword && !session.mfaEnrollRequired) loadBadges();
   }, [session, pathname, loadBadges]);
 
   if (!session) {

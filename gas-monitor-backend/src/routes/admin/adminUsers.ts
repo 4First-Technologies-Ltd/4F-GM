@@ -12,7 +12,10 @@ const router = Router();
 
 const SORTABLE = ['createdAt', 'name', 'email', 'role'] as const;
 
-const SELECT = { id: true, name: true, email: true, role: true, isActive: true, mfaEnabled: true, createdAt: true } as const;
+const SELECT = { id: true, name: true, email: true, role: true, smosRole: true, isActive: true, mfaEnabled: true, createdAt: true } as const;
+
+const ROLES = ['SUPER_ADMIN', 'OPERATIONS', 'SUPPORT', 'SOCIAL'] as const;
+const SMOS_ROLES = ['MANAGEMENT', 'MANAGER', 'REVIEWER', 'VIEWER'] as const;
 
 // Operations may view the list; every write below stays super admin only.
 router.get(
@@ -24,8 +27,8 @@ router.get(
     const active = req.query.active;
 
     const where: Prisma.AdminUserWhereInput = {};
-    if (role === 'SUPER_ADMIN' || role === 'OPERATIONS' || role === 'SUPPORT') {
-      where.role = role;
+    if (typeof role === 'string' && (ROLES as readonly string[]).includes(role)) {
+      where.role = role as (typeof ROLES)[number];
     }
     if (active === 'true' || active === 'false') {
       where.isActive = active === 'true';
@@ -56,7 +59,8 @@ const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['SUPER_ADMIN', 'OPERATIONS', 'SUPPORT'])
+  role: z.enum(ROLES),
+  smosRole: z.enum(SMOS_ROLES).nullable().optional()
 });
 
 router.post(
@@ -76,7 +80,15 @@ router.post(
 
     const passwordHash = await bcrypt.hash(result.data.password, 10);
     const adminUser = await prisma.adminUser.create({
-      data: { name: result.data.name, email, passwordHash, role: result.data.role, mustChangePassword: true },
+      data: {
+        name: result.data.name,
+        email,
+        passwordHash,
+        role: result.data.role,
+        // A social media account is useless without an SMOIS role.
+        smosRole: result.data.role === 'SOCIAL' ? (result.data.smosRole ?? 'MANAGER') : (result.data.smosRole ?? null),
+        mustChangePassword: true
+      },
       select: SELECT
     });
 
@@ -95,7 +107,8 @@ router.post(
 const patchSchema = z.object({
   isActive: z.boolean().optional(),
   password: z.string().min(8).optional(),
-  role: z.enum(['SUPER_ADMIN', 'OPERATIONS', 'SUPPORT']).optional()
+  role: z.enum(ROLES).optional(),
+  smosRole: z.enum(SMOS_ROLES).nullable().optional()
 });
 
 router.patch(
@@ -146,13 +159,16 @@ router.patch(
 
     const data: {
       isActive?: boolean;
-      role?: 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
+      role?: (typeof ROLES)[number];
+      smosRole?: (typeof SMOS_ROLES)[number] | null;
       passwordHash?: string;
       mustChangePassword?: boolean;
       tokenVersion?: { increment: number };
     } = {};
     if (result.data.isActive !== undefined) data.isActive = result.data.isActive;
     if (roleChanging) data.role = result.data.role;
+    const smosChanging = result.data.smosRole !== undefined && result.data.smosRole !== existing.smosRole;
+    if (smosChanging) data.smosRole = result.data.smosRole;
     if (result.data.password) {
       data.passwordHash = await bcrypt.hash(result.data.password, 10);
       // A reset password is known to the resetter: force the owner to replace it,
@@ -179,6 +195,15 @@ router.patch(
         resourceId: id,
         summary: `Role changed for ${existing.name} (${existing.email}): ${existing.role} → ${result.data.role}`,
         metadata: { email: existing.email, fields: ['role'], from: existing.role, to: result.data.role }
+      });
+    }
+    if (smosChanging) {
+      await writeAuditLog(req, {
+        action: 'ADMIN_UPDATED',
+        resource: 'admin',
+        resourceId: id,
+        summary: `Social media role changed for ${existing.name} (${existing.email}): ${existing.smosRole ?? 'none'} → ${result.data.smosRole ?? 'none'}`,
+        metadata: { email: existing.email, fields: ['smosRole'], from: existing.smosRole, to: result.data.smosRole ?? null }
       });
     }
     if (result.data.password) {

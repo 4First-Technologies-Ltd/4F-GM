@@ -10,15 +10,18 @@
  * See ADMIN_DASHBOARD_REPORT.md for the mapping.
  */
 
-export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT';
+export type AdminRole = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT' | 'SOCIAL';
 
 export const ROLE_RANK: Record<AdminRole, number> = {
+  // Below every platform guard; reaches only Social media operations (smois.*).
+  SOCIAL: -1,
   SUPPORT: 0,
   OPERATIONS: 1,
   SUPER_ADMIN: 2
 };
 
 export const ROLE_LABEL: Record<AdminRole, string> = {
+  SOCIAL: 'Social media',
   SUPPORT: 'Support',
   OPERATIONS: 'Operations',
   SUPER_ADMIN: 'Super admin'
@@ -46,6 +49,8 @@ export const ROLE_LABEL: Record<AdminRole, string> = {
 export const EXPLICIT_ONLY_READS: readonly string[] = ['audit.read', 'security.read', 'admins.read', 'logs.read', 'broadcasts.read'];
 
 export const ROLE_GRANTS: Record<AdminRole, string[]> = {
+  // Everything a SOCIAL admin can do comes from admin/permissions/smois.ts.
+  SOCIAL: [],
   // Answering customers is what SUPPORT is for, so support.reply is the one
   // write it holds. It mirrors the (deliberately) requireAdmin-level ticket routes.
   SUPPORT: ['*.read', 'support.reply', 'crm.note'],

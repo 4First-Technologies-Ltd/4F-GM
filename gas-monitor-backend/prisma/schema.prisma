@@ -68,6 +68,9 @@ enum AdminRole {
   SUPER_ADMIN
   OPERATIONS
   SUPPORT
+  // Social media team member. Ranks below SUPPORT, so every existing admin guard
+  // refuses it; it reaches only /api/admin/smois, through AdminUser.smosRole.
+  SOCIAL
 }
 
 model User {
@@ -225,27 +228,27 @@ model VendorDocument {
 /// can be assigned to any vendor's order, so this sits alongside
 /// VendorProfile rather than under it.
 model RiderProfile {
-  id          String      @id @default(uuid())
-  userId      String      @unique
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  phone       String
-  vehicleType String?
-  plateNumber String?
-  lat         Float?
-  lng         Float?
-  status      RiderStatus @default(PENDING)
+  id                 String            @id @default(uuid())
+  userId             String            @unique
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone              String
+  vehicleType        String?
+  plateNumber        String?
+  lat                Float?
+  lng                Float?
+  status             RiderStatus       @default(PENDING)
   /// The fleet this rider rides for, if any. A rider in a fleet is only
   /// assignable while the company is APPROVED (see lib/fleet.ts).
-  companyId   String?
-  company     LogisticsCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId          String?
+  company            LogisticsCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   /// True when joining the fleet is what approved this rider. Leaving the fleet
   /// then puts them back to PENDING instead of leaving an unvetted rider live.
-  approvedViaCompany Boolean @default(false)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  orders      Order[]     @relation("RiderOrders")
-  bankAccount RiderBankAccount?
-  earnings    RiderEarning[]
+  approvedViaCompany Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  orders             Order[]           @relation("RiderOrders")
+  bankAccount        RiderBankAccount?
+  earnings           RiderEarning[]
 
   @@index([companyId])
   @@map("rider_profiles")
@@ -261,17 +264,17 @@ enum CompanyStatus {
 /// riders it invites are approved by joining (RiderProfile.approvedViaCompany).
 /// Like a vendor, the company account is separate from its riders' accounts.
 model LogisticsCompany {
-  id          String        @id @default(uuid())
-  userId      String        @unique
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String         @id @default(uuid())
+  userId      String         @unique
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName String
   address     String
   state       String?
   city        String?
   phone       String
-  status      CompanyStatus @default(PENDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  status      CompanyStatus  @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   riders      RiderProfile[]
   invites     FleetInvite[]
 
@@ -303,29 +306,29 @@ model FleetInvite {
 /// Exactly one branch per vendor has `isMain` (partial unique index in the
 /// migration, which Prisma cannot express).
 model Branch {
-  id           String        @id @default(uuid())
-  vendorId     String
-  vendor       VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  name         String
-  address      String
+  id              String        @id @default(uuid())
+  vendorId        String
+  vendor          VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name            String
+  address         String
   /// Nullable because legacy vendors may have no state/city (see VendorProfile).
-  state        String?
-  city         String?
-  lat          Float?
-  lng          Float?
-  phone        String
-  isMain       Boolean       @default(false)
-  isActive     Boolean       @default(true)
+  state           String?
+  city            String?
+  lat             Float?
+  lng             Float?
+  phone           String
+  isMain          Boolean       @default(false)
+  isActive        Boolean       @default(true)
   /// Set by an admin: the vendor cannot sell from, reopen or promote the branch
   /// until an operator restores it. Distinct from `isActive`, which the vendor controls.
   suspendedAt     DateTime?
   suspendedReason String?
-  openingHours Json?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  listings     GasListing[]
-  orders       Order[]
-  staff        BranchStaff[]
+  openingHours    Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  listings        GasListing[]
+  orders          Order[]
+  staff           BranchStaff[]
 
   @@index([vendorId])
   @@index([state, city])
@@ -375,7 +378,7 @@ model GasListing {
   pricePerKg    Float
   cylinderSizes String[]
   /// Vendor can fill any quantity: customers may order by kg or by amount, not just by cylinder size.
-  sellsLoose    Boolean  @default(false)
+  sellsLoose    Boolean       @default(false)
   otherSizes    String?
   inStock       Boolean       @default(true)
   /// R2 key of the product photo (public bucket, see lib/storage.ts). Null = no photo.
@@ -409,46 +412,46 @@ model CylinderProfile {
 }
 
 model Order {
-  id              String         @id @default(uuid())
-  consumerId      String
-  consumer        User           @relation("ConsumerOrders", fields: [consumerId], references: [id])
-  vendorId        String?
-  vendor          VendorProfile? @relation("VendorOrders", fields: [vendorId], references: [id])
+  id                     String         @id @default(uuid())
+  consumerId             String
+  consumer               User           @relation("ConsumerOrders", fields: [consumerId], references: [id])
+  vendorId               String?
+  vendor                 VendorProfile? @relation("VendorOrders", fields: [vendorId], references: [id])
   /// Fulfilling branch. Derived server-side from the listing, never from the client.
-  branchId        String?
-  branch          Branch?        @relation(fields: [branchId], references: [id])
-  listingId       String?
-  listing         GasListing?    @relation(fields: [listingId], references: [id])
-  riderId         String?
-  rider           RiderProfile?  @relation("RiderOrders", fields: [riderId], references: [id])
+  branchId               String?
+  branch                 Branch?        @relation(fields: [branchId], references: [id])
+  listingId              String?
+  listing                GasListing?    @relation(fields: [listingId], references: [id])
+  riderId                String?
+  rider                  RiderProfile?  @relation("RiderOrders", fields: [riderId], references: [id])
   /// Set when a rider is assigned, cleared if unassigned. Distinct from
   /// createdAt/updatedAt so "how long has this sat unassigned" is answerable.
-  assignedAt      DateTime?
-  earning         Earning?
-  tickets         Ticket[]
-  supplierName    String?
-  cylinderSize    String
-  quantity        Int
-  totalAmount     Float
-  deliveryAddress String
-  status          OrderStatus    @default(PENDING)
+  assignedAt             DateTime?
+  earning                Earning?
+  tickets                Ticket[]
+  supplierName           String?
+  cylinderSize           String
+  quantity               Int
+  totalAmount            Float
+  deliveryAddress        String
+  status                 OrderStatus    @default(PENDING)
   /// Gateway the order was started with: PAYSTACK or MYIMO. `paystackRef` /
   /// `paystackStatus` hold that gateway's reference and status either way
   /// (column names predate MyIMO Pay and are kept to avoid a rename).
-  paymentProvider String         @default("PAYSTACK")
-  paystackRef     String?        @unique
-  paystackStatus  String?
+  paymentProvider        String         @default("PAYSTACK")
+  paystackRef            String?        @unique
+  paystackStatus         String?
   /// The flat delivery fee inside `totalAmount`, frozen at pricing time. It goes
   /// to the platform (and the rider's cut of it), never to the vendor. 0 on orders
   /// placed before this column existed, which keep the old all-to-vendor maths.
-  deliveryFee     Float          @default(0)
+  deliveryFee            Float          @default(0)
   /// True when the gateway paid the vendor's share out of this payment (split
   /// settlement). `vendorSplitAmount` is exactly what was sent, in naira.
-  vendorSettledByGateway Boolean @default(false)
+  vendorSettledByGateway Boolean        @default(false)
   vendorSplitAmount      Float?
-  riderEarning    RiderEarning?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  riderEarning           RiderEarning?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   @@index([branchId])
   @@map("orders")
@@ -473,6 +476,9 @@ model AdminUser {
   mfaLastStep        Int?
   // SHA-256 of unused single-use recovery codes.
   mfaRecoveryHashes  String[]
+  // SMOIS (social media operations) access. Null means none, except that
+  // SUPER_ADMIN and OPERATIONS are management by default (lib/smois.ts).
+  smosRole           SmosRole?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -648,6 +654,7 @@ enum AuditAction {
   VENDOR_RESTORED
   VENDOR_DELETED
   BROADCAST_SENT
+  SMOIS_ACTIVITY
 }
 
 // Append-only record of every mutating admin action.
@@ -1271,34 +1278,34 @@ enum DeviceRole {
 
 model Device {
   /// Factory-assigned id printed on the unit (e.g. FG-2024-0047). Never reused.
-  id            String           @id
+  id            String               @id
   /// sha256 of the device's MQTT secret. The secret is 32 random bytes, so a fast hash is enough.
   secretHash    String
   /// sha256 of the short claim code printed on the unit; cleared once claimed.
   claimCodeHash String?
   ownerId       String?
-  owner         User?            @relation("DeviceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  owner         User?                @relation("DeviceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   cylinderId    String?
-  cylinder      CylinderProfile? @relation(fields: [cylinderId], references: [id], onDelete: SetNull)
+  cylinder      CylinderProfile?     @relation(fields: [cylinderId], references: [id], onDelete: SetNull)
   nickname      String?
   /// Empty weight of the cylinder on the platform (the stamped TW), entered or learned.
   emptyWeightKg Float?
   /// Factory calibration version the device reported last.
-  platformCal   Int              @default(1)
+  platformCal   Int                  @default(1)
   fw            String?
   hwRev         String?
   imei          String?
   iccid         String?
-  provisionedAt DateTime         @default(now())
+  provisionedAt DateTime             @default(now())
   claimedAt     DateTime?
   /// Set to cut the device off at the broker.
   revokedAt     DateTime?
   /// Low-gas alert thresholds the owner sets. LOW fires when ANY configured one is met.
-  lowPercent    Float            @default(20)
+  lowPercent    Float                @default(20)
   lowKg         Float?
   lowDays       Float?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   state         DeviceState?
   config        DeviceConfig?
   members       DeviceMember[]
@@ -1453,4 +1460,550 @@ model DeviceAlertState {
 
   @@id([deviceId, rule])
   @@map("device_alert_states")
+}
+
+// ─── SMOIS: social media operations & intelligence ───────────────────────────
+// Admin actors are plain id + name snapshots, never a relation to AdminUser:
+// the env root login has no row, and history must outlive a deleted admin.
+
+enum SmosRole {
+  MANAGEMENT
+  MANAGER
+  REVIEWER
+  VIEWER
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  X
+  TIKTOK
+  YOUTUBE
+  WHATSAPP
+  PINTEREST
+  THREADS
+}
+
+enum SocialConnection {
+  MANUAL
+  CONNECTED
+  EXPIRED
+  DISCONNECTED
+}
+
+enum SmosContentStatus {
+  IDEA
+  PLANNED
+  IN_PRODUCTION
+  SUBMITTED
+  REVISION_REQUESTED
+  APPROVED
+  REJECTED
+  SCHEDULED
+  PUBLISHED
+  PUBLISH_FAILED
+  ARCHIVED
+  CANCELLED
+}
+
+enum SmosReviewDecision {
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
+enum SmosTaskStatus {
+  PENDING
+  ACCEPTED
+  IN_PROGRESS
+  SUBMITTED
+  REVISION_REQUIRED
+  COMPLETED
+  CANCELLED
+}
+
+enum SmosReportType {
+  WEEKLY
+  MONTHLY
+}
+
+enum SmosReportStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  RETURNED
+}
+
+enum SmosMetricSource {
+  MANUAL
+  ESTIMATED
+  API
+}
+
+model SocialAccount {
+  id            String           @id @default(uuid())
+  platform      SocialPlatform
+  name          String
+  handle        String
+  url           String?
+  category      String?
+  accountType   String           @default("BUSINESS")
+  description   String?
+  notes         String?
+  connection    SocialConnection @default(MANUAL)
+  lastSyncedAt  DateTime?
+  isActive      Boolean          @default(true)
+  createdById   String
+  createdByName String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  assignments SocialAccountAssignment[]
+  content     SmosContent[]
+  snapshots   SmosMetricSnapshot[]
+  tasks       SmosTask[]
+  kpis        SmosKpi[]
+
+  @@unique([platform, handle])
+  @@map("smois_accounts")
+}
+
+// One row per period of responsibility; ending an assignment keeps the row.
+model SocialAccountAssignment {
+  id             String        @id @default(uuid())
+  accountId      String
+  account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  adminId        String
+  adminName      String
+  isPrimary      Boolean       @default(false)
+  startsAt       DateTime      @default(now())
+  endsAt         DateTime?
+  assignedById   String
+  assignedByName String
+  reason         String?
+
+  @@index([accountId, endsAt])
+  @@index([adminId, endsAt])
+  @@map("smois_account_assignments")
+}
+
+model SmosContent {
+  id           String            @id @default(uuid())
+  title        String
+  objective    String?
+  category     String?
+  format       String            @default("TEXT")
+  caption      String            @default("")
+  hashtags     String?
+  mediaNotes   String?
+  accountId    String
+  account      SocialAccount     @relation(fields: [accountId], references: [id])
+  status       SmosContentStatus @default(IDEA)
+  /// Bumped on every edit that changes the copy; reviews point at the version they saw.
+  version      Int               @default(1)
+  creatorId    String
+  creatorName  String
+  reviewerId   String?
+  reviewerName String?
+  plannedAt    DateTime?
+  campaignId   String?
+  campaign     SmosCampaign?     @relation(fields: [campaignId], references: [id])
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  versions     SmosContentVersion[]
+  reviews      SmosContentReview[]
+  publications SmosPublication[]
+
+  @@index([status])
+  @@index([accountId, plannedAt])
+  @@index([creatorId])
+  @@map("smois_content")
+}
+
+model SmosContentVersion {
+  id         String      @id @default(uuid())
+  contentId  String
+  content    SmosContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  version    Int
+  title      String
+  caption    String
+  hashtags   String?
+  editorId   String
+  editorName String
+  reason     String?
+  createdAt  DateTime    @default(now())
+
+  @@unique([contentId, version])
+  @@map("smois_content_versions")
+}
+
+model SmosContentReview {
+  id           String             @id @default(uuid())
+  contentId    String
+  content      SmosContent        @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  version      Int
+  decision     SmosReviewDecision
+  comments     String?
+  reviewerId   String
+  reviewerName String
+  createdAt    DateTime           @default(now())
+
+  @@index([contentId])
+  @@map("smois_content_reviews")
+}
+
+// What was posted, where, and by whom. Entered by a person: nothing here comes
+// from a platform API, and the UI says so.
+model SmosPublication {
+  id             String      @id @default(uuid())
+  contentId      String
+  content        SmosContent @relation(fields: [contentId], references: [id])
+  accountId      String
+  url            String?
+  publishedAt    DateTime
+  recordedById   String
+  recordedByName String
+  /// The reviewer who cleared it; null only for an emergency bypass.
+  approvedByName String?
+  bypassReason   String?
+  createdAt      DateTime    @default(now())
+
+  metrics SmosPostMetric[]
+
+  @@index([accountId, publishedAt])
+  @@map("smois_publications")
+}
+
+// Append-only readings for one publication.
+model SmosPostMetric {
+  id             String           @id @default(uuid())
+  publicationId  String
+  publication    SmosPublication  @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  capturedAt     DateTime         @default(now())
+  reach          Int?
+  impressions    Int?
+  likes          Int?
+  comments       Int?
+  shares         Int?
+  clicks         Int?
+  videoViews     Int?
+  source         SmosMetricSource @default(MANUAL)
+  recordedById   String
+  recordedByName String
+
+  @@index([publicationId, capturedAt])
+  @@map("smois_post_metrics")
+}
+
+// One reading per account per day. A null metric means "not recorded", never zero.
+model SmosMetricSnapshot {
+  id             String           @id @default(uuid())
+  accountId      String
+  account        SocialAccount    @relation(fields: [accountId], references: [id])
+  date           DateTime         @db.Date
+  followers      Int?
+  reach          Int?
+  impressions    Int?
+  engagement     Int?
+  profileVisits  Int?
+  videoViews     Int?
+  websiteClicks  Int?
+  source         SmosMetricSource @default(MANUAL)
+  recordedById   String
+  recordedByName String
+  createdAt      DateTime         @default(now())
+
+  @@unique([accountId, date])
+  @@index([date])
+  @@map("smois_metric_snapshots")
+}
+
+model SmosTask {
+  id            String         @id @default(uuid())
+  title         String
+  description   String?
+  type          String         @default("GENERAL")
+  priority      String         @default("MEDIUM")
+  status        SmosTaskStatus @default(PENDING)
+  assigneeId    String
+  assigneeName  String
+  createdById   String
+  createdByName String
+  accountId     String?
+  account       SocialAccount? @relation(fields: [accountId], references: [id])
+  dueAt         DateTime?
+  completedAt   DateTime?
+  evidenceUrl   String?
+  evidenceNote  String?
+  reviewNote    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([assigneeId, status])
+  @@index([status, dueAt])
+  @@map("smois_tasks")
+}
+
+model SmosKpi {
+  id            String         @id @default(uuid())
+  name          String
+  /// FOLLOWER_GROWTH | REACH | IMPRESSIONS | ENGAGEMENT | POSTS_PUBLISHED | TASK_COMPLETION
+  metric        String
+  targetValue   Float
+  periodStart   DateTime       @db.Date
+  periodEnd     DateTime       @db.Date
+  accountId     String?
+  account       SocialAccount? @relation(fields: [accountId], references: [id])
+  assigneeId    String?
+  assigneeName  String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime       @default(now())
+
+  @@index([periodEnd])
+  @@map("smois_kpis")
+}
+
+model SmosReport {
+  id           String           @id @default(uuid())
+  type         SmosReportType
+  periodStart  DateTime         @db.Date
+  periodEnd    DateTime         @db.Date
+  authorId     String
+  authorName   String
+  status       SmosReportStatus @default(DRAFT)
+  /// Commentary typed by the author (challenges, recommendations, ...).
+  narrative    Json?
+  /// Figures frozen from system records when the report is submitted.
+  figures      Json?
+  reviewerName String?
+  reviewNote   String?
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([type, authorId, periodStart])
+  @@index([status])
+  @@map("smois_reports")
+}
+
+// ─── SMOIS phase 3: community, campaigns, listening, benchmarking, assets ────
+// Everything here is entered by people. No platform feeds these tables.
+
+enum SmosConversationStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum SmosMessageDirection {
+  INBOUND
+  OUTBOUND
+  NOTE
+}
+
+enum SmosSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  UNCERTAIN
+}
+
+enum SmosCampaignStatus {
+  PLANNING
+  BRIEFING
+  PREPARATION
+  APPROVAL
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+model SmosContact {
+  id             String         @id @default(uuid())
+  platform       SocialPlatform
+  displayName    String
+  username       String?
+  profileUrl     String?
+  email          String?
+  phone          String?
+  location       String?
+  category       String         @default("OTHER")
+  tags           String[]
+  notes          String?
+  /// How the person agreed to be contacted or recorded; empty means none on file.
+  consentNote    String?
+  assignedToId   String?
+  assignedToName String?
+  createdById    String
+  createdByName  String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  conversations SmosConversation[]
+
+  @@index([platform, username])
+  @@map("smois_contacts")
+}
+
+model SmosConversation {
+  id              String                 @id @default(uuid())
+  accountId       String
+  contactId       String?
+  contact         SmosContact?           @relation(fields: [contactId], references: [id])
+  /// DM | COMMENT | MENTION | ENQUIRY
+  kind            String                 @default("DM")
+  subject         String
+  status          SmosConversationStatus @default(NEW)
+  /// HIGH | NORMAL | LOW
+  priority        String                 @default("NORMAL")
+  ownerId         String?
+  ownerName       String?
+  receivedAt      DateTime
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  /// COMPLAINT | LEGAL | SECURITY | PRODUCT | MEDIA | PARTNERSHIP | SENSITIVE
+  escalationType  String?
+  escalationNote  String?
+  tags            String[]
+  createdById     String
+  createdByName   String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  messages SmosMessage[]
+
+  @@index([status, receivedAt])
+  @@index([ownerId, status])
+  @@map("smois_conversations")
+}
+
+model SmosMessage {
+  id             String               @id @default(uuid())
+  conversationId String
+  conversation   SmosConversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      SmosMessageDirection
+  body           String
+  authorId       String
+  authorName     String
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("smois_messages")
+}
+
+model SmosCampaign {
+  id              String             @id @default(uuid())
+  name            String
+  type            String             @default("BRAND_AWARENESS")
+  objective       String?
+  description     String?
+  status          SmosCampaignStatus @default(PLANNING)
+  ownerId         String
+  ownerName       String
+  startDate       DateTime           @db.Date
+  endDate         DateTime           @db.Date
+  targetAudience  String?
+  /// Whole naira.
+  budget          Int?
+  spend           Int?
+  expectedResults String?
+  actualResults   String?
+  leads           Int?
+  lessons         String?
+  trackingLinks   String[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  content SmosContent[]
+
+  @@index([status])
+  @@map("smois_campaigns")
+}
+
+model SmosMention {
+  id             String          @id @default(uuid())
+  term           String
+  platform       SocialPlatform?
+  sourceUrl      String?
+  excerpt        String
+  authorHandle   String?
+  /// Set by the person logging it. Never inferred by software.
+  sentiment      SmosSentiment   @default(UNCERTAIN)
+  mentionedAt    DateTime
+  recordedById   String
+  recordedByName String
+  createdAt      DateTime        @default(now())
+
+  @@index([mentionedAt])
+  @@index([sentiment, mentionedAt])
+  @@map("smois_mentions")
+}
+
+model SmosCompetitor {
+  id        String         @id @default(uuid())
+  name      String
+  website   String?
+  platform  SocialPlatform
+  handle    String
+  url       String?
+  industry  String?
+  notes     String?
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+
+  readings SmosCompetitorReading[]
+
+  @@unique([platform, handle])
+  @@map("smois_competitors")
+}
+
+model SmosCompetitorReading {
+  id             String         @id @default(uuid())
+  competitorId   String
+  competitor     SmosCompetitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  date           DateTime       @db.Date
+  followers      Int?
+  postsLastWeek  Int?
+  avgEngagement  Int?
+  notes          String?
+  /// PUBLIC_OBSERVATION | ESTIMATE | THIRD_PARTY
+  basis          String         @default("PUBLIC_OBSERVATION")
+  recordedById   String
+  recordedByName String
+  createdAt      DateTime       @default(now())
+
+  @@unique([competitorId, date])
+  @@map("smois_competitor_readings")
+}
+
+// A link to where the file lives (drive, design tool). Files are not uploaded here.
+model SmosAsset {
+  id             String    @id @default(uuid())
+  name           String
+  description    String?
+  category       String    @default("OTHER")
+  fileType       String?
+  url            String
+  version        Int       @default(1)
+  approved       Boolean   @default(false)
+  restrictions   String?
+  expiresAt      DateTime? @db.Date
+  archived       Boolean   @default(false)
+  uploadedById   String
+  uploadedByName String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([category])
+  @@map("smois_assets")
 }
