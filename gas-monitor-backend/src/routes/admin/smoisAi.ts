@@ -110,8 +110,8 @@ router.post(
     if (!parsed.success) return res.status(400).json({ error: 'Describe what you want help with' });
     const { task, platform, input } = parsed.data;
     return withAi(req, res, async () => {
-      const text = await askClaude(WRITER_SYSTEM, `${TASKS[task]}${platform ? `\nPlatform: ${platform}` : ''}\n\nText or topic:\n${input}`, 900);
       await logActivity(req, 'ai', 'content', `Used the AI assistant for ${task}`);
+      const text = await askClaude(WRITER_SYSTEM, `${TASKS[task]}${platform ? `\nPlatform: ${platform}` : ''}\n\nText or topic:\n${input}`, 900);
       return { text, note: DRAFT_NOTE };
     });
   })
@@ -175,8 +175,8 @@ router.post(
     return withAi(req, res, async () => {
       const context = await analystContext(req, from, to, days);
       const json = JSON.stringify(context);
-      const answer = await askClaude(ANALYST_SYSTEM, `Data:\n${json.length > 30000 ? json.slice(0, 30000) : json}\n\nQuestion: ${parsed.data.question}`, 900);
       await logActivity(req, 'ai', 'ask', 'Asked the AI analyst a question', { period: `${toDay(from)} to ${toDay(to)}` });
+      const answer = await askClaude(ANALYST_SYSTEM, `Data:\n${json.length > 30000 ? json.slice(0, 30000) : json}\n\nQuestion: ${parsed.data.question}`, 900);
       // The data used is returned so the reader can check the answer against it.
       return { answer, basis: context, note: DRAFT_NOTE };
     });
@@ -206,12 +206,12 @@ router.post(
         tasksByStatus: Object.fromEntries(tasks.map((t) => [t.status, t._count])), postsPublished: posts,
         accounts: accountIds.map((id) => ({ name: snaps.find((s) => s.accountId === id)?.account.name ?? id, ...summariseSnapshots(snaps.filter((s) => s.accountId === id), days) }))
       };
+      await logActivity(req, 'ai', report.id, 'Asked the AI for a report summary draft');
       const text = await askClaude(
         ANALYST_SYSTEM,
         `Write a first draft of the "summary and work completed" section of a ${report.type.toLowerCase()} social media report, in the first person, 4 to 6 sentences, from this data only. Leave challenges and recommendations to the author.\n\nData:\n${JSON.stringify(data)}`,
         700
       );
-      await logActivity(req, 'ai', report.id, 'Asked the AI for a report summary draft');
       return { text, note: DRAFT_NOTE };
     });
   })

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { RequirePermission } from '@/admin/permissions/require-permission';
 import { Can } from '@/admin/permissions/use-permission';
 import { StatusBadge } from '@/admin/primitives/status-badge';
@@ -48,8 +48,8 @@ export default function SocialAccountsPage() {
             ) : (
               <SimpleTable head={['Account', 'Platform', 'Connection', 'Team', '']}>
                 {page.data.map((a) => (
-                  <>
-                    <tr key={a.id} className="adm-tr">
+                  <Fragment key={a.id}>
+                    <tr className="adm-tr">
                       <Td sub={a.handle}>
                         {a.name}
                         {!a.isActive && <> <StatusBadge value="INACTIVE" /></>}
@@ -74,7 +74,7 @@ export default function SocialAccountsPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </SimpleTable>
             )

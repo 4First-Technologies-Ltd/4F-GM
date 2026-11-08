@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Dimensions, ScrollView, Platform, ImageBackground,
+  Dimensions, ScrollView, Platform, ImageBackground, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -156,6 +156,8 @@ export default function OnboardingScreen() {
   const [current, setCurrent] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+  // Live window size. The module-level value is read once at bundle load, which can be stale on a first launch.
+  const { width: W, height: H } = useWindowDimensions();
   const isHero = current === SLIDES.length - 1;
 
   function goNext() {

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NAVIGATION, isActive, type NavItem } from './navigation.config';
 import { usePermission } from '@/admin/permissions/use-permission';
+import { can } from '@/admin/permissions/can';
 import { useIsMobile } from '@/admin/primitives/use-is-mobile';
 import { useAdminSession } from '@/lib/admin-session-context';
 import { ROLE_LABEL } from '@/admin/permissions/permissions';
@@ -150,6 +151,9 @@ function NavGroup({
   badges: Partial<Record<string, number>>;
   onNavigate?: () => void;
 }) {
+  // A section whose every entry is denied would be a bare heading.
+  const session = useAdminSession();
+  if (!items.some((i) => can(session.role, i.permission, session.smosRole))) return null;
   return (
     <div className="adm-nav-group">
       {title && <div className="adm-micro-label adm-nav-group-title">{title}</div>}
