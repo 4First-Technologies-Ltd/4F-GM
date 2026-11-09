@@ -47,7 +47,7 @@ describe('provider switch', () => {
 
   it('lets the customer pick any enabled gateway, case-insensitively', () => {
     process.env.PAYMENT_PROVIDERS = 'paystack, myimo';
-    expect(enabledProviders()).toEqual(['PAYSTACK', 'MYIMO']);
+    expect(enabledProviders()).toEqual(['MYIMO', 'PAYSTACK']); // fixed display order, not env order
     expect(resolveProvider('MyIMO')).toBe('MYIMO');
     expect(resolveProvider('paystack')).toBe('PAYSTACK');
   });
@@ -57,7 +57,7 @@ describe('provider switch', () => {
     process.env.PAYMENT_PROVIDER = 'myimo';
     expect(resolveProvider()).toBe('MYIMO');
     process.env.PAYMENT_PROVIDER = 'stripe'; // junk falls back to the first enabled
-    expect(defaultProvider()).toBe('PAYSTACK');
+    expect(defaultProvider()).toBe('MYIMO');
   });
 
   it('refuses unknown gateways', () => {

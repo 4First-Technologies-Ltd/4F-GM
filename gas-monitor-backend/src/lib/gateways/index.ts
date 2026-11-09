@@ -1,5 +1,6 @@
 import { paystackGateway } from './paystackGateway';
 import { myimoGateway } from './myimoGateway';
+import { payfonteGateway } from './payfonteGateway';
 import type { PaymentGateway } from './types';
 
 export * from './types';
@@ -10,8 +11,8 @@ export * from './types';
  * A gateway whose credentials are missing is never offered to customers.
  *
  * Env:
- *  - `PAYMENT_PROVIDERS`  comma list of enabled gateway ids, e.g. `paystack,myimo`
- *    (default: Paystack only).
+ *  - `PAYMENT_PROVIDERS`  comma list of enabled gateway ids, e.g. `payfonte,myimo,paystack`
+ *    (default: Paystack only). Customers always see them as Payfonte, MyIMO, Paystack.
  *  - `PAYMENT_PROVIDER`   the one pre-selected, and the fallback for old clients
  *    that send no choice (default: the first enabled).
  *
@@ -21,7 +22,7 @@ export * from './types';
  * Vendor/rider payout transfers are a separate concern and still use Paystack
  * Transfers; see `lib/payouts.ts`.
  */
-const ALL: PaymentGateway[] = [paystackGateway, myimoGateway];
+const ALL: PaymentGateway[] = [payfonteGateway, myimoGateway, paystackGateway];
 
 const byId = new Map(ALL.map((g) => [g.id, g]));
 
@@ -32,8 +33,9 @@ export function getGateway(id: string): PaymentGateway | null {
 
 export function enabledGateways(): PaymentGateway[] {
   const raw = process.env.PAYMENT_PROVIDERS ?? process.env.PAYMENT_PROVIDER ?? 'paystack';
-  const wanted = raw.split(',').map((s) => getGateway(s)).filter((g): g is PaymentGateway => g !== null);
-  const usable = [...new Set(wanted)].filter((g) => g.isConfigured());
+  const wanted = new Set(raw.split(',').map((s) => getGateway(s)).filter((g): g is PaymentGateway => g !== null));
+  // Display order is fixed (Payfonte, MyIMO, Paystack), whatever order the env lists them in.
+  const usable = ALL.filter((g) => wanted.has(g) && g.isConfigured());
   return usable.length ? usable : [paystackGateway];
 }
 

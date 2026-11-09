@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { CALLBACK_URL } from '../lib/paystack';
 import { planVendorSplit } from '../lib/settlement';
+import { confirmOrder } from '../lib/orderPayment';
 import {
   GatewayError,
   defaultGateway,
@@ -131,18 +132,6 @@ async function priceOrRespond(item: OrderItem, res: Response): Promise<PricedOrd
   }
 }
 
-/**
- * Moves a paid order PENDING → CONFIRMED. Only a PENDING order moves (a later
- * verify call can no longer drag a delivered or cancelled order backwards).
- */
-async function confirmOrder(orderId: string) {
-  await prisma.order.updateMany({
-    where: { id: orderId, status: 'PENDING' },
-    data: { status: 'CONFIRMED', paystackStatus: 'success' }
-  });
-  return prisma.order.findUnique({ where: { id: orderId } });
-}
-
 type PaymentOutcome = { code: number; body: Record<string, unknown> };
 
 /**
@@ -185,7 +174,7 @@ async function verifyOrderPayment(reference: string, consumerId?: string): Promi
 async function startOrderPayment(
   gateway: PaymentGateway,
   order: { id: string; totalAmount: number; deliveryFee: number; vendorId: string | null },
-  customer: { email: string; name: string },
+  customer: { email: string; name: string; phone?: string | null },
   meta: { supplierName: string; cylinderSize: string; guestCheckout?: boolean }
 ): Promise<StartedPayment> {
   const input = {
@@ -272,7 +261,7 @@ router.post(
       const started = await startOrderPayment(
         gateway,
         order,
-        { email: user.email, name: user.name },
+        { email: user.email, name: user.name, phone: user.phone },
         { supplierName, cylinderSize }
       );
       return res.json({
@@ -365,7 +354,7 @@ router.post(
       const started = await startOrderPayment(
         gateway,
         order,
-        { email, name: user.name },
+        { email, name: user.name, phone: user.phone },
         { supplierName, cylinderSize, guestCheckout: true }
       );
       return res.json({

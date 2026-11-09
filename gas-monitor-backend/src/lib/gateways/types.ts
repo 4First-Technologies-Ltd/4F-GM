@@ -33,7 +33,7 @@ export interface InitializeInput {
   /** Our reference for the order. The gateway may return a different one; store what comes back. */
   reference: string;
   amountNaira: number;
-  customer: { email: string; name: string };
+  customer: { email: string; name: string; phone?: string | null };
   callbackUrl: string;
   /** Order details for the gateway's own dashboard. */
   meta: { orderId: string; supplierName: string; cylinderSize: string; guestCheckout?: boolean };
