@@ -8,6 +8,7 @@ installServerLogCapture();
 import { createApp } from './app';
 import { resumeCampaigns } from './lib/marketing';
 import { startOpsBriefingScheduler } from './lib/opsBriefing';
+import { startOrderReconciler } from './lib/orderPayment';
 
 process.on('uncaughtException', (err) => {
   console.error('uncaught exception', err);
@@ -30,5 +31,6 @@ app.listen(PORT, () => {
   void prune();
   setInterval(prune, 6 * 60 * 60 * 1000).unref();
   startOpsBriefingScheduler();
+  startOrderReconciler();
   resumeCampaigns().catch((err) => console.error('[marketing] resume failed', err));
 });

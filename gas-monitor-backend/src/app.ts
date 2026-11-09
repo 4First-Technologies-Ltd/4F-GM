@@ -21,6 +21,7 @@ import devicesRoutes from './routes/devices';
 import internalMqttRoutes from './routes/internalMqtt';
 import marketplaceRoutes from './routes/marketplace';
 import { paystackWebhookHandler } from './routes/ordersWebhook';
+import { payfonteWebhookHandler } from './routes/payfonteWebhook';
 import { sentryWebhookHandler } from './routes/internalSentryWebhook';
 import { Sentry } from './lib/sentry';
 import { contactLimiter, guestOrderLimiter } from './lib/security';
@@ -88,6 +89,7 @@ export function createApp() {
   // Paystack webhook needs the raw request body for HMAC verification —
   // must be registered before the global express.json() body parser.
   app.post('/api/orders/webhook', express.raw({ type: 'application/json' }), paystackWebhookHandler);
+  app.post('/api/orders/webhook/payfonte', express.raw({ type: 'application/json' }), payfonteWebhookHandler);
 
   // Sentry's issue-alert webhook — same raw-body-for-signature-verification need as above.
   app.post('/api/internal/sentry-webhook', express.raw({ type: 'application/json' }), sentryWebhookHandler);
