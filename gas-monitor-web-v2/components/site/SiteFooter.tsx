@@ -19,6 +19,13 @@ const groups = [
     ],
   },
   {
+    title: "Logistics Partner",
+    links: [
+      { href: "/logistics-partners", label: "Partner with us" },
+      { href: "/sign-in?role=rider", label: "Rider Sign in" },
+    ],
+  },
+  {
     title: "Company",
     links: [
       { href: "/newsletter", label: "Newsletter" },
@@ -33,7 +40,7 @@ const groups = [
 export function SiteFooter() {
   return (
     <footer className="relative z-10 border-t border-border bg-background/80 backdrop-blur">
-      <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 md:grid-cols-4">
+      <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <div>
           <LogoLockup width={168} className="-ml-1" />
           <p className="mt-4 max-w-xs text-sm text-muted-foreground">

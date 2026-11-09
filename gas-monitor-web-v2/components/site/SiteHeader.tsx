@@ -21,7 +21,7 @@ const links = [
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const authHref = user ? homeRouteFor(user) : "/sign-in";
   const authLabel = user ? "My Dashboard" : "Sign in";
 
@@ -64,9 +64,11 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <ButtonLink href={authHref} size="md">
-            {authLabel}
-          </ButtonLink>
+          {!loading && (
+            <ButtonLink href={authHref} size="md">
+              {authLabel}
+            </ButtonLink>
+          )}
           <ThemeToggle />
         </div>
 
@@ -101,13 +103,15 @@ export function SiteHeader() {
               {l.label}
             </Link>
           ))}
-          <Link
-            href={authHref}
-            onClick={() => setOpen(false)}
-            className="mt-1 rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
-          >
-            {authLabel}
-          </Link>
+          {!loading && (
+            <Link
+              href={authHref}
+              onClick={() => setOpen(false)}
+              className="mt-1 rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
+            >
+              {authLabel}
+            </Link>
+          )}
         </nav>
       </div>
     </header>

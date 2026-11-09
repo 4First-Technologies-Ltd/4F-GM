@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -28,6 +28,12 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // /sign-in?role=rider|vendor|consumer preselects a tab (used by footer links).
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get('role')?.toUpperCase();
+    if (r === 'CONSUMER' || r === 'VENDOR' || r === 'RIDER') setRole(r);
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
