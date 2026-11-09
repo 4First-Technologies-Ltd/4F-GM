@@ -7,6 +7,8 @@ import { ButtonLink } from "@/components/motion/button/base";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { LogoEmblem } from "@/components/site/Logo";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import { homeRouteFor } from "@/lib/home-route";
 
 const links = [
   { href: "/product", label: "Product" },
@@ -19,6 +21,9 @@ const links = [
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { user } = useAuth();
+  const authHref = user ? homeRouteFor(user) : "/sign-in";
+  const authLabel = user ? "My Dashboard" : "Sign in";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -59,8 +64,8 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <ButtonLink href="/sign-in" size="md">
-            Sign in
+          <ButtonLink href={authHref} size="md">
+            {authLabel}
           </ButtonLink>
           <ThemeToggle />
         </div>
@@ -97,11 +102,11 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link
-            href="/sign-in"
+            href={authHref}
             onClick={() => setOpen(false)}
             className="mt-1 rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
           >
-            Sign in
+            {authLabel}
           </Link>
         </nav>
       </div>
