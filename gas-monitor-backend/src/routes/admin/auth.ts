@@ -220,11 +220,13 @@ router.get(
     if (!resolved) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
-    const { session, mustChangePassword, mfaEnabled, mfaEnrollRequired } = resolved;
+    const { session, mustChangePassword, mfaEnabled, mfaEnrollRequired, smosRole } = resolved;
     return res.json({
       ok: true,
       name: session.name,
+      adminId: session.adminId,
       role: session.role,
+      smosRole,
       mustChangePassword,
       mfaEnabled,
       mfaEnrollRequired,

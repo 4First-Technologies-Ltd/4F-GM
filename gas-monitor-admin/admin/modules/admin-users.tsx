@@ -2,7 +2,8 @@ import type { ResourceConfig } from '@/admin/resource/types';
 import { createDataSource } from '@/admin/data/source';
 import { sendJson } from '@/lib/post';
 import { formatDateTime, formatRelative } from '@/admin/primitives/format';
-import type { AdminUserRow } from './types';
+import type { AdminUserRow, SmosRoleValue } from './types';
+import { SMOS_ROLE_LABEL } from '@/admin/permissions/smois';
 
 /**
  * Admin users — who can get into this panel.
@@ -22,6 +23,24 @@ const data = createDataSource<AdminUserRow>({
 
 export const adminUsersData = data;
 
+/** One action per social media role, so a team member's access is one click to change. */
+const SMOS_ROLE_ACTIONS = (['MANAGER', 'REVIEWER', 'VIEWER', 'MANAGEMENT'] as SmosRoleValue[]).map((r) => ({
+  key: `smos-${r.toLowerCase()}`,
+  label: `Social media: ${SMOS_ROLE_LABEL[r]}`,
+  permission: 'admins.update',
+  visible: (a: AdminUserRow) => a.role !== 'SUPER_ADMIN' && a.smosRole !== r,
+  confirm: {
+    title: `Make ${SMOS_ROLE_LABEL[r].toLowerCase()}?`,
+    body: 'Sets what they can do in Social media operations. A Support or Operations admin keeps their platform access; a Social media admin has no other access. Recorded in the audit log.',
+    confirmLabel: 'Change social media role'
+  },
+  run: async (admin: AdminUserRow, h: { toast: (m: string) => void; refresh: () => void }) => {
+    await data.update!(admin.id, { smosRole: r });
+    h.toast(`${admin.name} is now: ${SMOS_ROLE_LABEL[r]}`);
+    h.refresh();
+  }
+}));
+
 export const adminUsersModule: ResourceConfig<AdminUserRow> = {
   resource: 'admins',
   label: 'Admin users',
@@ -40,7 +59,10 @@ export const adminUsersModule: ResourceConfig<AdminUserRow> = {
       render: (a) => (
         <>
           {a.name}
-          <span className="adm-td-sub">{a.email}</span>
+          <span className="adm-td-sub">
+            {a.email}
+            {a.smosRole ? ` · Social: ${SMOS_ROLE_LABEL[a.smosRole]}` : ''}
+          </span>
         </>
       )
     },
@@ -78,7 +100,8 @@ export const adminUsersModule: ResourceConfig<AdminUserRow> = {
       options: [
         { value: 'SUPER_ADMIN', label: 'Super admin' },
         { value: 'OPERATIONS', label: 'Operations' },
-        { value: 'SUPPORT', label: 'Support' }
+        { value: 'SUPPORT', label: 'Support' },
+        { value: 'SOCIAL', label: 'Social media' }
       ]
     },
     {
@@ -145,6 +168,23 @@ export const adminUsersModule: ResourceConfig<AdminUserRow> = {
         h.refresh();
       }
     },
+    {
+      key: 'role-social',
+      label: 'Make social media team member',
+      permission: 'admins.update',
+      visible: (a) => a.role !== 'SOCIAL' && a.role !== 'SUPER_ADMIN',
+      confirm: {
+        title: 'Make social media team member?',
+        body: 'They lose access to vendors, orders, payouts and every other platform module and keep only Social media operations (as a manager unless you change it). Recorded in the audit log.',
+        confirmLabel: 'Make social media'
+      },
+      run: async (admin, h) => {
+        await data.update!(admin.id, { role: 'SOCIAL', smosRole: admin.smosRole ?? 'MANAGER' });
+        h.toast(`${admin.name} is now a social media team member`);
+        h.refresh();
+      }
+    },
+    ...SMOS_ROLE_ACTIONS,
     {
       key: 'mfa-reset',
       label: 'Reset 2FA',

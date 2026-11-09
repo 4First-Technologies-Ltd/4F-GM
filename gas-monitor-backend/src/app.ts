@@ -55,6 +55,10 @@ import adminVendorsRoutes from './routes/admin/vendors';
 import adminBroadcastsRoutes from './routes/admin/broadcasts';
 import notificationsRoutes from './routes/notifications';
 import adminBranchStaffRoutes from './routes/admin/branchStaff';
+import adminSmoisRoutes from './routes/admin/smois';
+import adminSmoisInsightsRoutes from './routes/admin/smoisInsights';
+import adminSmoisCommunityRoutes from './routes/admin/smoisCommunity';
+import adminSmoisAiRoutes from './routes/admin/smoisAi';
 
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
   .split(',')
@@ -149,6 +153,10 @@ export function createApp() {
   app.use('/api/admin/vendors', adminVendorsRoutes);
   app.use('/api/admin/broadcasts', adminBroadcastsRoutes);
   app.use('/api/admin/branch-staff', adminBranchStaffRoutes);
+  app.use('/api/admin/smois', adminSmoisRoutes);
+  app.use('/api/admin/smois', adminSmoisInsightsRoutes);
+  app.use('/api/admin/smois', adminSmoisCommunityRoutes);
+  app.use('/api/admin/smois', adminSmoisAiRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });

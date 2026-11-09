@@ -26,9 +26,36 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   RIDER: { tone: 'info', label: 'Rider' },
 
   // AdminRole
+  SOCIAL: { tone: 'info', label: 'Social media' },
   SUPER_ADMIN: { tone: 'error', label: 'Super admin' },
   OPERATIONS: { tone: 'info', label: 'Operations' },
   SUPPORT: { tone: 'neutral', label: 'Support' },
+
+  // SMOIS: content, task, report, KPI and metric states
+  IDEA: { tone: 'neutral', label: 'Idea' },
+  PLANNED: { tone: 'neutral', label: 'Planned' },
+  IN_PRODUCTION: { tone: 'info', label: 'In production' },
+  SUBMITTED: { tone: 'warning', label: 'Awaiting review' },
+  REVISION_REQUESTED: { tone: 'warning', label: 'Revision requested' },
+  REVISION_REQUIRED: { tone: 'warning', label: 'Revision required' },
+  SCHEDULED: { tone: 'info', label: 'Scheduled' },
+  PUBLISHED: { tone: 'success', label: 'Published' },
+  ARCHIVED: { tone: 'neutral', label: 'Archived' },
+  ACCEPTED: { tone: 'info', label: 'Accepted' },
+  IN_PROGRESS: { tone: 'info', label: 'In progress' },
+  COMPLETED: { tone: 'success', label: 'Completed' },
+  RETURNED: { tone: 'warning', label: 'Returned' },
+  MANUAL: { tone: 'neutral', label: 'Entered by hand' },
+  ESTIMATED: { tone: 'warning', label: 'Estimated' },
+  CONNECTED: { tone: 'success', label: 'Connected' },
+  DISCONNECTED: { tone: 'error', label: 'Disconnected' },
+  NOT_STARTED: { tone: 'neutral', label: 'Not started' },
+  NO_DATA: { tone: 'neutral', label: 'No data yet' },
+  ON_TRACK: { tone: 'success', label: 'On track' },
+  AT_RISK: { tone: 'warning', label: 'At risk' },
+  ACHIEVED: { tone: 'success', label: 'Achieved' },
+  EXCEEDED: { tone: 'success', label: 'Exceeded' },
+  MISSED: { tone: 'error', label: 'Missed' },
 
   // PayoutStatus / EarningStatus (PAID, PENDING, CANCELLED are shared above)
   PROCESSING: { tone: 'info', label: 'Processing' },

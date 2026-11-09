@@ -9,8 +9,8 @@ import { can } from './can';
  * no auth library added.
  */
 export function usePermission(permission: string | undefined): boolean {
-  const { role } = useAdminSession();
-  return can(role, permission);
+  const { role, smosRole } = useAdminSession();
+  return can(role, permission, smosRole);
 }
 
 /**

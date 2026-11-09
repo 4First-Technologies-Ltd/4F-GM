@@ -5,6 +5,10 @@ import {
   IconChecklist,
   IconClipboardList,
   IconActivity,
+  IconCalendar,
+  IconTarget,
+  IconShare,
+  IconPencil,
   IconBriefing,
   IconTerminal,
   IconFunnel,
@@ -52,7 +56,29 @@ export interface NavSection {
 
 export const NAVIGATION: NavSection[] = [
   {
-    items: [{ label: 'Overview', route: '/dashboard', icon: IconGrid, exact: true }]
+    items: [{ label: 'Overview', route: '/dashboard', icon: IconGrid, exact: true, permission: 'overview.read' }]
+  },
+  {
+    section: 'Social media',
+    items: [
+      { label: 'Social overview', route: '/dashboard/smois', icon: IconShare, permission: 'smois.read', exact: true },
+      { label: 'Social accounts', route: '/dashboard/smois/accounts', icon: IconUsers, permission: 'smois.read' },
+      { label: 'Content', route: '/dashboard/smois/content', icon: IconPencil, permission: 'smois.read' },
+      { label: 'Calendar', route: '/dashboard/smois/calendar', icon: IconCalendar, permission: 'smois.read' },
+      { label: 'Publishing', route: '/dashboard/smois/publishing', icon: IconMegaphone, permission: 'smois.read' },
+      { label: 'Social tasks', route: '/dashboard/smois/tasks', icon: IconChecklist, permission: 'smois.read' },
+      { label: 'Social inbox', route: '/dashboard/smois/inbox', icon: IconInbox, permission: 'smois.inbox.work' },
+      { label: 'Contacts', route: '/dashboard/smois/contacts', icon: IconUserCircle, permission: 'smois.inbox.work' },
+      { label: 'Campaigns', route: '/dashboard/smois/campaigns', icon: IconFunnel, permission: 'smois.read' },
+      { label: 'Listening', route: '/dashboard/smois/listening', icon: IconBell, permission: 'smois.analytics.read' },
+      { label: 'Asset library', route: '/dashboard/smois/library', icon: IconPackage, permission: 'smois.read' },
+      { label: 'Growth analytics', route: '/dashboard/smois/analytics', icon: IconChartBar, permission: 'smois.analytics.read' },
+      { label: 'Targets', route: '/dashboard/smois/kpis', icon: IconTarget, permission: 'smois.read' },
+      { label: 'Staff performance', route: '/dashboard/smois/performance', icon: IconActivity, permission: 'smois.performance.own' },
+      { label: 'Reports', route: '/dashboard/smois/reports', icon: IconClipboardList, permission: 'smois.reports.write' },
+      { label: 'AI assistant', route: '/dashboard/smois/assistant', icon: IconBriefing, permission: 'smois.read' },
+      { label: 'Social activity', route: '/dashboard/smois/activity', icon: IconScroll, permission: 'smois.activity.own' }
+    ]
   },
   {
     section: 'Directory',

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAdminSession } from '@/lib/admin-session-context';
 import { getJson } from '@/admin/data/source';
 import { formatNaira, formatNairaCompact, formatNumber, formatRelative, shortId } from '@/admin/primitives/format';
 import { StatCard, StatGrid } from '@/admin/primitives/stat-card';
@@ -29,6 +31,12 @@ interface Paginated<T> {
 }
 
 export default function OverviewPage() {
+  const { role } = useAdminSession();
+  const router = useRouter();
+  useEffect(() => {
+    // The platform overview is not for social-media-only accounts.
+    if (role === 'SOCIAL') router.replace('/dashboard/smois');
+  }, [role, router]);
   const canSeeVendors = usePermission('vendors.read');
   const canSeeOrders = usePermission('orders.read');
   const canApprove = usePermission('vendors.approve');
