@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NAVIGATION, isActive, type NavItem } from './navigation.config';
@@ -10,9 +10,37 @@ import { useIsMobile } from '@/admin/primitives/use-is-mobile';
 import { useAdminSession } from '@/lib/admin-session-context';
 import { ROLE_LABEL } from '@/admin/permissions/permissions';
 import { adminFetch } from '@/lib/api';
-import { IconLogout, IconMoon, IconSun } from '@/components/icons';
+import {
+  IconChevronDown,
+  IconChevronsLeft,
+  IconChevronsRight,
+  IconLogout,
+  IconMoon,
+  IconSun
+} from '@/components/icons';
 import { BrandMark } from '@/components/BrandMark';
 import { useTheme } from './theme';
+
+const OPEN_KEY = 'adm-nav-open';
+const RAIL_KEY = 'adm-nav-rail';
+
+/** Browser storage can throw (private window, blocked site data): never rely on it. */
+function readOpen(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(OPEN_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function readRail(): boolean {
+  try {
+    return window.localStorage.getItem(RAIL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Config-driven, permission-filtered, badge-aware.
@@ -37,6 +65,36 @@ export function AdminSidebar({
   const router = useRouter();
   const { name, role } = useAdminSession();
   const { theme, toggle } = useTheme();
+
+  // The shell only mounts this after the session loads on the client, so
+  // reading storage in the initialiser cannot cause a hydration mismatch.
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>(readOpen);
+  const [railPref, setRailPref] = useState<boolean>(readRail);
+  // The drawer on mobile always shows full labels; icon-only is a desktop mode.
+  const rail = railPref && !isMobile;
+
+  // Landing on a page opens its section, so the current page is never hidden.
+  // Depends on the path only: the operator can still collapse it afterwards.
+  useEffect(() => {
+    const current = NAVIGATION.find((s) => s.section && s.items.some((i) => isActive(i, pathname)))?.section;
+    if (current) setOpenMap((m) => (m[current] ? m : { ...m, [current]: true }));
+  }, [pathname]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OPEN_KEY, JSON.stringify(openMap));
+    } catch {
+      /* ignore */
+    }
+  }, [openMap]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(RAIL_KEY, railPref ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [railPref]);
 
   useEffect(() => {
     if (!isMobile || !open) return;
@@ -72,6 +130,7 @@ export function AdminSidebar({
         className={[
           'adm-sidebar',
           isMobile ? 'adm-sidebar--drawer' : '',
+          rail ? 'adm-sidebar--rail' : '',
           isMobile && open ? 'is-open' : ''
         ]
           .filter(Boolean)
@@ -105,6 +164,12 @@ export function AdminSidebar({
               items={section.items}
               pathname={pathname}
               badges={badges}
+              rail={rail}
+              open={!!(section.section && openMap[section.section])}
+              onToggle={() =>
+                section.section &&
+                setOpenMap((m) => ({ ...m, [section.section as string]: !m[section.section as string] }))
+              }
               onNavigate={isMobile ? onClose : undefined}
             />
           ))}
@@ -121,15 +186,45 @@ export function AdminSidebar({
             </span>
           </div>
 
-          <button type="button" className="adm-sidebar-btn" onClick={toggle}>
+          <button
+            type="button"
+            className="adm-sidebar-btn"
+            onClick={toggle}
+            title={rail ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
+            aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
             {theme === 'dark' ? <IconSun className="adm-nav-icon" /> : <IconMoon className="adm-nav-icon" />}
-            <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            <span className="adm-sidebar-btn-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
           </button>
 
-          <button type="button" className="adm-sidebar-btn" onClick={handleLogout}>
+          <button
+            type="button"
+            className="adm-sidebar-btn"
+            onClick={handleLogout}
+            title={rail ? 'Sign out' : undefined}
+            aria-label="Sign out"
+          >
             <IconLogout className="adm-nav-icon" />
-            <span>Sign out</span>
+            <span className="adm-sidebar-btn-label">Sign out</span>
           </button>
+
+          {!isMobile && (
+            <button
+              type="button"
+              className="adm-sidebar-btn"
+              onClick={() => setRailPref((v) => !v)}
+              aria-pressed={railPref}
+              aria-label={railPref ? 'Expand sidebar' : 'Collapse sidebar to icons'}
+              title={railPref ? 'Expand sidebar' : undefined}
+            >
+              {railPref ? (
+                <IconChevronsRight className="adm-nav-icon" />
+              ) : (
+                <IconChevronsLeft className="adm-nav-icon" />
+              )}
+              <span className="adm-sidebar-btn-label">Collapse sidebar</span>
+            </button>
+          )}
         </div>
       </aside>
     </>
@@ -143,31 +238,73 @@ function NavGroup({
   items,
   pathname,
   badges,
+  rail,
+  open,
+  onToggle,
   onNavigate
 }: {
   title?: string;
   items: NavItem[];
   pathname: string;
   badges: Partial<Record<string, number>>;
+  rail: boolean;
+  open: boolean;
+  onToggle: () => void;
   onNavigate?: () => void;
 }) {
   // A section whose every entry is denied would be a bare heading.
   const session = useAdminSession();
-  if (!items.some((i) => can(session.role, i.permission, session.smosRole))) return null;
+  const visible = items.filter((i) => can(session.role, i.permission, session.smosRole));
+  if (visible.length === 0) return null;
+
+  // Untitled sections (Overview) have nothing to collapse, and the icon-only
+  // rail shows every icon so nothing is hidden behind a closed section.
+  const collapsible = !!title && !rail;
+  const expanded = !collapsible || open;
+  const listId = `adm-nav-${(title ?? 'top').toLowerCase().replace(/\W+/g, '-')}`;
+
+  // A closed section still has to flag work waiting inside it.
+  const hiddenCount = expanded
+    ? 0
+    : visible.reduce((n, i) => n + (i.badge ? (badges[i.badge.key] ?? 0) : 0), 0);
+  const hiddenHasError = !expanded && visible.some((i) => i.badge?.tone === 'error' && (badges[i.badge.key] ?? 0) > 0);
+
   return (
     <div className="adm-nav-group">
-      {title && <div className="adm-micro-label adm-nav-group-title">{title}</div>}
-      <ul className="adm-nav-list">
-        {items.map((item) => (
-          <NavLink
-            key={item.route}
-            item={item}
-            pathname={pathname}
-            badges={badges}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </ul>
+      {title && collapsible && (
+        <button
+          type="button"
+          className="adm-nav-group-toggle"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={listId}
+        >
+          <span className="adm-micro-label">{title}</span>
+          {hiddenCount > 0 && (
+            <span
+              className={`adm-nav-badge${hiddenHasError ? ' adm-nav-badge--error' : ''}`}
+              aria-label={`${hiddenCount} pending in ${title}`}
+            >
+              {hiddenCount > 99 ? '99+' : hiddenCount}
+            </span>
+          )}
+          <IconChevronDown className={`adm-nav-chevron${open ? ' is-open' : ''}`} />
+        </button>
+      )}
+      {expanded && (
+        <ul className="adm-nav-list" id={listId}>
+          {items.map((item) => (
+            <NavLink
+              key={item.route}
+              item={item}
+              pathname={pathname}
+              badges={badges}
+              rail={rail}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -176,11 +313,13 @@ function NavLink({
   item,
   pathname,
   badges,
+  rail,
   onNavigate
 }: {
   item: NavItem;
   pathname: string;
   badges: Partial<Record<string, number>>;
+  rail: boolean;
   onNavigate?: () => void;
 }) {
   // Navigation entries are HIDDEN when denied — unlike a row action, an entry
@@ -198,6 +337,8 @@ function NavLink({
         href={item.route}
         className={`adm-nav-item${active ? ' is-active' : ''}`}
         aria-current={active ? 'page' : undefined}
+        aria-label={rail ? item.label : undefined}
+        title={rail ? item.label : undefined}
         onClick={onNavigate}
       >
         <Icon className="adm-nav-icon" />
