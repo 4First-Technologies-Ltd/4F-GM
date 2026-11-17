@@ -65,3 +65,7 @@ export const documentUploadLimiter = limiter(60 * MIN, 30);
 export const deviceClaimLimiter = limiter(15 * MIN, 10, (req: Request) => (req.user?.sub ?? (ipKey(req) || 'anon')));
 export const bankAccountLimiter = limiter(60 * MIN, 10, (req: Request) => (req.user?.sub ?? (ipKey(req) || 'anon')));
 export const newsletterLimiter = limiter(60 * MIN, 8);
+/** Each call mints an upload link for a tester's screenshot or recording. */
+export const testerUploadLimiter = limiter(60 * MIN, 60, (req: Request) => (req.tester?.id ?? (ipKey(req) || 'anon')));
+/** Filing reports and comments: generous for real testers, stops a runaway script. */
+export const testerWriteLimiter = limiter(60 * MIN, 60, (req: Request) => (req.tester?.id ?? (ipKey(req) || 'anon')));

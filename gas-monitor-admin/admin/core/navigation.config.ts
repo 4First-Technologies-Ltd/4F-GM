@@ -133,7 +133,8 @@ export const NAVIGATION: NavSection[] = [
         permission: 'payouts.read',
         badge: { key: 'payoutIssues', tone: 'error' }
       },
-      { label: 'Error logs', route: '/dashboard/error-logs', icon: IconBug, permission: 'errors.read' }
+      { label: 'Error logs', route: '/dashboard/error-logs', icon: IconBug, permission: 'errors.read' },
+      { label: 'Bug reports', route: '/dashboard/bugs', icon: IconChecklist, permission: 'bugs.read' }
     ]
   },
   {

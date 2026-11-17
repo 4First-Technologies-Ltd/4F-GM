@@ -64,6 +64,12 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   IN_PAYOUT: { tone: 'info', label: 'In payout' },
   SETTLED: { tone: 'success', label: 'Settled at checkout' },
 
+  // BugStatus (NEW, CONFIRMED, IN_PROGRESS, VERIFIED are shared)
+  NEEDS_INFO: { tone: 'warning', label: 'Needs info' },
+  FIXED: { tone: 'info', label: 'Fixed, retest' },
+  WONT_FIX: { tone: 'neutral', label: "Won't fix" },
+  DUPLICATE: { tone: 'neutral', label: 'Duplicate' },
+
   // TicketStatus (PENDING = waiting on the customer)
   OPEN: { tone: 'warning', label: 'Open' },
   CLOSED: { tone: 'neutral', label: 'Closed' },

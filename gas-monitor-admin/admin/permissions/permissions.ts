@@ -53,7 +53,8 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
   SOCIAL: [],
   // Answering customers is what SUPPORT is for, so support.reply is the one
   // write it holds. It mirrors the (deliberately) requireAdmin-level ticket routes.
-  SUPPORT: ['*.read', 'support.reply', 'crm.note'],
+  // bugs.work: triaging beta-tester bug reports (mirrors the requireAdmin-level routes).
+  SUPPORT: ['*.read', 'support.reply', 'crm.note', 'bugs.work'],
   OPERATIONS: [
     '*.read',
     'vendors.approve',
@@ -70,6 +71,9 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
     'settings.update',
     'support.reply',
     'support.manage',
+    'bugs.work',
+    // Adding, deactivating and re-activating beta testers.
+    'bugs.testers',
     // Pipeline leads and tasks; notes/tags (crm.note) are open to SUPPORT too.
     'crm.manage',
     // Creating and SENDING campaigns. marketing.unsuppress (re-subscribing an
