@@ -55,6 +55,8 @@ import adminUsersRoutes from './routes/admin/users';
 import adminVendorsRoutes from './routes/admin/vendors';
 import adminBroadcastsRoutes from './routes/admin/broadcasts';
 import notificationsRoutes from './routes/notifications';
+import testersRoutes from './routes/testers';
+import adminBugsRoutes from './routes/admin/bugs';
 import adminBranchStaffRoutes from './routes/admin/branchStaff';
 import adminSmoisRoutes from './routes/admin/smois';
 import adminSmoisInsightsRoutes from './routes/admin/smoisInsights';
@@ -123,6 +125,8 @@ export function createApp() {
   app.use('/api/app-version', appVersionRoutes);
   // A signed-in user's inbox and push token.
   app.use('/api/notifications', notificationsRoutes);
+  // Beta-tester bug tracker: invited testers sign in with an emailed code.
+  app.use('/api/testers', testersRoutes);
   app.use('/api/device', deviceRoutes);
   app.use('/api/devices', devicesRoutes);
   // Called by the MQTT broker over the internal network only; off unless MQTT_AUTH_TOKEN is set.
@@ -155,6 +159,7 @@ export function createApp() {
   app.use('/api/admin/vendors', adminVendorsRoutes);
   app.use('/api/admin/broadcasts', adminBroadcastsRoutes);
   app.use('/api/admin/branch-staff', adminBranchStaffRoutes);
+  app.use('/api/admin/bugs', adminBugsRoutes);
   app.use('/api/admin/smois', adminSmoisRoutes);
   app.use('/api/admin/smois', adminSmoisInsightsRoutes);
   app.use('/api/admin/smois', adminSmoisCommunityRoutes);

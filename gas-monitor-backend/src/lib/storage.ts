@@ -182,3 +182,26 @@ export async function deleteDocument(key: string): Promise<void> {
     console.warn('Could not delete document', key, err instanceof Error ? err.message : err);
   }
 }
+
+// ── Bug-report evidence (private bucket) ─────────────────────────────────────
+//
+// Screenshots and screen recordings from beta testers. Same private bucket as
+// KYC documents, never public; the admin panel and the reporting tester read
+// them through short-lived presigned links (`presignView`).
+
+export const ALLOWED_EVIDENCE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm'
+};
+export const MAX_EVIDENCE_BYTES = 50 * 1024 * 1024;
+
+/** `bug-evidence/<testerId>/` — every key a tester may attach starts with their own prefix. */
+export const evidencePrefix = (testerId: string) => `bug-evidence/${testerId}/`;
+
+/** Keys are generated here, never taken from the client. */
+export function newEvidenceKey(testerId: string, contentType: string): string {
+  return `${evidencePrefix(testerId)}${crypto.randomUUID()}.${ALLOWED_EVIDENCE_TYPES[contentType]}`;
+}

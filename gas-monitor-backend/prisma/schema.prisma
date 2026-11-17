@@ -655,6 +655,8 @@ enum AuditAction {
   VENDOR_DELETED
   BROADCAST_SENT
   SMOIS_ACTIVITY
+  TESTER_CHANGED
+  BUG_CHANGED
 }
 
 // Append-only record of every mutating admin action.
@@ -2006,4 +2008,130 @@ model SmosAsset {
 
   @@index([category])
   @@map("smois_assets")
+}
+
+
+// ── Beta-test bug tracker ────────────────────────────────────────────────────
+//
+// Invited testers sign in with an emailed code (no User account, no role) and
+// file bug reports from the website. Admins triage them in the admin panel.
+// Evidence (screenshots, screen recordings) lives in the PRIVATE R2 bucket
+// under `bug-evidence/<testerId>/` and is only ever read through short-lived
+// presigned links.
+
+enum BugStatus {
+  NEW
+  NEEDS_INFO
+  CONFIRMED
+  IN_PROGRESS
+  FIXED
+  VERIFIED
+  WONT_FIX
+  DUPLICATE
+}
+
+enum BugSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum BugFrequency {
+  ALWAYS
+  SOMETIMES
+  ONCE
+}
+
+enum BugAuthor {
+  TESTER
+  ADMIN
+}
+
+model Tester {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  name          String
+  /// Deactivating signs the tester out and stops new sign-ins; their reports are kept.
+  isActive      Boolean     @default(true)
+  invitedByName String?
+  lastLoginAt   DateTime?
+  otpCodeHash   String?
+  otpExpiresAt  DateTime?
+  otpAttempts   Int         @default(0)
+  /// Bumped on deactivation so existing sessions stop working at once.
+  tokenVersion  Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  bugs          BugReport[]
+
+  @@map("testers")
+}
+
+model BugReport {
+  id                String          @id @default(uuid())
+  number            Int             @unique @default(autoincrement())
+  testerId          String
+  tester            Tester          @relation(fields: [testerId], references: [id], onDelete: Restrict)
+  title             String
+  /// CONSUMER | VENDOR | RIDER | COMPANY | MANAGER | GENERAL
+  area              String
+  screen            String?
+  steps             String
+  expected          String
+  actual            String
+  severity          BugSeverity     @default(MEDIUM)
+  frequency         BugFrequency    @default(ALWAYS)
+  status            BugStatus       @default(NEW)
+  deviceModel       String?
+  androidVersion    String?
+  appVersion        String?
+  network           String?
+  /// The test account the tester used (never a password).
+  accountEmail      String?
+  /// Admin snapshot, not a relation: the env root admin has no row.
+  assigneeId        String?
+  assigneeName      String?
+  fixedInBuild      String?
+  duplicateOfNumber Int?
+  resolvedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  attachments       BugAttachment[]
+  comments          BugComment[]
+
+  @@index([status, updatedAt])
+  @@index([testerId])
+  @@index([assigneeId])
+  @@map("bug_reports")
+}
+
+model BugAttachment {
+  id          String    @id @default(uuid())
+  bugId       String
+  bug         BugReport @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  /// Object key in the private bucket.
+  key         String    @unique
+  fileName    String
+  contentType String
+  size        Int
+  createdAt   DateTime  @default(now())
+
+  @@index([bugId])
+  @@map("bug_attachments")
+}
+
+model BugComment {
+  id         String    @id @default(uuid())
+  bugId      String
+  bug        BugReport @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  author     BugAuthor
+  authorName String
+  body       String
+  /// Internal notes are for the team only; testers never see them.
+  internal   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([bugId, createdAt])
+  @@map("bug_comments")
 }

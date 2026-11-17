@@ -303,7 +303,7 @@ function telegramText(m: OpsMetrics, flags: OpsFlag[], status: BriefingStatus): 
   return lines.join('\n');
 }
 
-async function sendTelegram(text: string): Promise<string | null> {
+export async function sendTelegram(text: string): Promise<string | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return 'Telegram is not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)';
