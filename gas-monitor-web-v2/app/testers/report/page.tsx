@@ -72,11 +72,14 @@ function ReportForm() {
   // Device details barely change between reports, so start from the last ones used.
   useEffect(() => {
     const saved = getSavedDevice();
+    // The app's "Report a bug" button passes the phone's real details; they win over remembered ones.
+    const q = new URLSearchParams(window.location.search);
+    const fromApp = (key: string, max: number) => (q.get(key) ?? '').slice(0, max);
     setForm((f) => ({
       ...f,
-      deviceModel: saved.deviceModel ?? '',
-      androidVersion: saved.androidVersion ?? '',
-      appVersion: saved.appVersion ?? '',
+      deviceModel: fromApp('model', 80) || (saved.deviceModel ?? ''),
+      androidVersion: fromApp('android', 40) || (saved.androidVersion ?? ''),
+      appVersion: fromApp('app', 40) || (saved.appVersion ?? ''),
       accountEmail: saved.accountEmail ?? ''
     }));
   }, []);

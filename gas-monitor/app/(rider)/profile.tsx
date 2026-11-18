@@ -10,6 +10,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, riderApi, ApiUser, RiderProfile } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
 import { DeleteAccountLink } from '@/components/delete-account';
+import { ReportBugLink } from '@/components/report-bug';
 import { PayoutAccountCard } from '@/components/payout-account';
 
 const C = {
@@ -198,6 +199,7 @@ export default function RiderProfileScreen() {
             <Text style={s.signOutText}>Sign Out</Text>
           </TouchableOpacity>
 
+          <ReportBugLink />
           <DeleteAccountLink />
 
           <View style={{ height: 24 }} />

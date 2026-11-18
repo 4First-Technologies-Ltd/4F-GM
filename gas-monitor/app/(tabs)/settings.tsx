@@ -10,6 +10,7 @@ import { getSavedUser } from '@/lib/storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DeleteAccountLink } from '@/components/delete-account';
+import { ReportBugLink } from '@/components/report-bug';
 
 const C = {
   bg: '#EDF7ED',
@@ -206,6 +207,7 @@ export default function SettingsScreen() {
             : <Text style={s.dangerText}>Sign Out</Text>}
         </TouchableOpacity>
 
+        <ReportBugLink />
         <DeleteAccountLink />
 
         <View style={{ height: 32 }} />

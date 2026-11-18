@@ -11,6 +11,7 @@ import { authApi, vendorApi, ApiUser, VendorProfile, VendorStatus, UnitPreferenc
 import { getSavedUser } from '@/lib/storage';
 import { useDrawer } from './_layout';
 import { DeleteAccountLink } from '@/components/delete-account';
+import { ReportBugLink } from '@/components/report-bug';
 
 const C = {
   bg: '#EDF7ED',
@@ -362,6 +363,7 @@ export default function VendorSettingsScreen() {
           <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
+        <ReportBugLink />
         <DeleteAccountLink businessAccount />
 
         <View style={{ height: 32 }} />
