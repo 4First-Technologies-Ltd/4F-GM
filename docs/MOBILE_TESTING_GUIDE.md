@@ -56,7 +56,7 @@ Vendors, riders and companies need **admin approval** before they appear in the 
 ## 3. How to test
 
 1. Work through the **test cases in Section 5** for the role(s) assigned to you.
-2. For each case, mark **Pass**, **Fail** or **Blocked** (could not do it) in the tracking sheet: `<link>`.
+2. For each case, note **Pass**, **Fail** or **Blocked** (could not do it). There is no sheet to fill in: every **Fail** and **Blocked** becomes a report in the bug tracker (`https://4fgmonitor.com/testers`), and anything that passes needs no report.
 3. While doing the cases, also **explore freely** for 10–15 minutes per role. Tap everything, go back, rotate the phone, switch apps. Many real bugs are found this way.
 4. Report every Fail (and anything that merely feels wrong) using Section 7.
 
@@ -200,6 +200,8 @@ Run these once, regardless of role.
 ## 7. How to report a bug
 
 ### 7.1 Signing in to the bug tracker
+
+**Quickest way, from the app:** open **Settings** (consumer), **Profile** (rider), **Account** (branch manager or logistics company) or **Settings** (vendor), scroll to the bottom and tap **Report a bug**. The form opens with your phone model, Android version and app version already filled in. This needs a build that has the button; on an older build, use the link below.
 
 1. Open **`https://4fgmonitor.com/testers`** (on your phone or a computer).
 2. Enter the email address you were invited with. Check that inbox for a **6-digit code** (valid for 10 minutes) and enter it. There is no password.

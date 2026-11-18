@@ -54,3 +54,8 @@ Thumbs.db
 
 # Firebase client config: supplied to EAS builds by the GOOGLE_SERVICES_JSON file variable
 /gas-monitor/google-services.json
+
+# Markdown notes stay local; only READMEs are shared
+*.md
+!README.md
+!**/README.md
