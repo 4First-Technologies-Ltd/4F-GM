@@ -8,6 +8,7 @@ import {
   MAX_ATTACHMENTS,
   MAX_EVIDENCE_BYTES,
   getSavedDevice,
+  getTesterSession,
   saveDevice,
   testersApi,
   uploadEvidence,
@@ -39,6 +40,15 @@ interface Pending {
 }
 
 export default function ReportBugPage() {
+  // Opened from the app but not signed in yet: keep the phone details and come back here after sign-in.
+  useEffect(() => {
+    if (getTesterSession()) return;
+    try {
+      const q = window.location.search;
+      if (q) sessionStorage.setItem('tester-device', q);
+      sessionStorage.setItem('tester-next', 'report');
+    } catch {}
+  }, []);
   return (
     <TesterShell title="Report a bug" back={{ href: '/testers/reports', label: 'My reports' }}>
       {() => <ReportForm />}
@@ -73,7 +83,13 @@ function ReportForm() {
   useEffect(() => {
     const saved = getSavedDevice();
     // The app's "Report a bug" button passes the phone's real details; they win over remembered ones.
-    const q = new URLSearchParams(window.location.search);
+    let search = window.location.search;
+    try {
+      search = search || sessionStorage.getItem('tester-device') || '';
+      sessionStorage.removeItem('tester-device');
+      sessionStorage.removeItem('tester-next');
+    } catch {}
+    const q = new URLSearchParams(search);
     const fromApp = (key: string, max: number) => (q.get(key) ?? '').slice(0, max);
     setForm((f) => ({
       ...f,

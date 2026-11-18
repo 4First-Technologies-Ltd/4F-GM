@@ -27,7 +27,7 @@ Your goal is to **find problems before real customers do**: things that crash, c
 ## 2. Before you start
 
 ### 2.1 Install the build
-1. Open `<install link / Play Store internal-testing link / APK link>` on your Android phone.
+1. Open https://play.google.com/store/apps/details?id=com.fourfirsttechnologies.gasmonitor on your Android phone.
 2. If installing an APK, allow "Install unknown apps" for your browser when asked.
 3. Open the app. You should see the animated splash, then onboarding.
 
@@ -51,11 +51,11 @@ Create your own accounts using the sign-up screens (that is part of the test). U
 - Email: `yourname+consumer@gmail.com`, `yourname+vendor@gmail.com`, `yourname+rider@gmail.com` (Gmail ignores the `+tag`, so all mail arrives in one inbox)
 - Name: prefix with `TEST`, e.g. `TEST Ada Consumer`
 
-Vendors, riders and companies need **admin approval** before they appear in the marketplace. Tell the coordinator your account email when you have signed up and they will approve it. Pre-approved accounts: `<list if any>`.
+Vendors, riders and companies need **admin approval** before they appear in the marketplace. Tell the coordinator your account email when you have signed up and they will approve it. Pre-approved accounts: 0.
 
 ## 3. How to test
 
-1. Work through the **test cases in Section 5** for the role(s) assigned to you: `<assignment table or "see sheet">`.
+1. Work through the **test cases in Section 5** for the role(s) assigned to you.
 2. For each case, mark **Pass**, **Fail** or **Blocked** (could not do it) in the tracking sheet: `<link>`.
 3. While doing the cases, also **explore freely** for 10–15 minutes per role. Tap everything, go back, rotate the phone, switch apps. Many real bugs are found this way.
 4. Report every Fail (and anything that merely feels wrong) using Section 7.

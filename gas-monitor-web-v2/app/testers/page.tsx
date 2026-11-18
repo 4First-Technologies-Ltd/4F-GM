@@ -6,6 +6,17 @@ import { getTesterSession, saveTesterSession, testersApi } from '@/lib/testers';
 import { LogoEmblem } from '@/components/site/Logo';
 import { helpCls, inputCls, labelCls, primaryBtn, secondaryBtn } from '@/components/testers/shell';
 
+/** Where to go after signing in: the bug form if the app sent them here, else their reports. */
+function takeNext() {
+  try {
+    if (sessionStorage.getItem('tester-next') === 'report') {
+      sessionStorage.removeItem('tester-next');
+      return '/testers/report';
+    }
+  } catch {}
+  return '/testers/reports';
+}
+
 /** Sign-in for invited beta testers: an emailed one-time code, no password. */
 export default function TesterSignInPage() {
   const router = useRouter();
@@ -17,7 +28,7 @@ export default function TesterSignInPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (getTesterSession()) router.replace('/testers/reports');
+    if (getTesterSession()) router.replace(takeNext());
   }, [router]);
 
   async function requestCode(e?: FormEvent) {
@@ -44,7 +55,7 @@ export default function TesterSignInPage() {
     try {
       const session = await testersApi.verifyCode(email.trim(), code.trim());
       saveTesterSession(session);
-      router.replace('/testers/reports');
+      router.replace(takeNext());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in.');
       setBusy(false);
