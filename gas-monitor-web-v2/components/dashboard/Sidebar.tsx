@@ -21,7 +21,8 @@ import {
   Wallet,
   Truck,
   ClipboardList,
-  Gauge
+  Gauge,
+  Bookmark
 } from 'lucide-react';
 
 const CONSUMER_NAV_ITEMS = [
@@ -29,6 +30,7 @@ const CONSUMER_NAV_ITEMS = [
   { href: '/dashboard/device', label: 'Device', icon: Smartphone, exact: false },
   { href: '/dashboard/overview', label: 'Overview', icon: Grid3x3, exact: false },
   { href: '/dashboard/orders', label: 'Orders', icon: Package, exact: false },
+  { href: '/dashboard/saved', label: 'Saved items', icon: Bookmark, exact: false },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3, exact: false },
   { href: '/dashboard/addresses', label: 'Addresses', icon: MapPin, exact: false },
   { href: '/dashboard/profile', label: 'Profile', icon: User, exact: false },

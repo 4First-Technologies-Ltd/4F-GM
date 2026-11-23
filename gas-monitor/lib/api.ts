@@ -912,6 +912,29 @@ export const marketplaceApi = {
   },
 };
 
+/** A saved marketplace listing: the public listing plus when it was saved. */
+export type SavedListing = MarketplaceListing & { savedAt: string };
+
+/** A signed-in customer's saved listings ("Save & continue shopping"). */
+export const savedApi = {
+  /** Ids only, to show "saved" on an order screen without loading the list. */
+  async ids(): Promise<string[]> {
+    const data = await request<{ ids: string[] }>('/api/saved/ids', { auth: true });
+    return data.ids;
+  },
+  /** Newest first. Listings that have left the marketplace are left out until they are back. */
+  async list(): Promise<SavedListing[]> {
+    const data = await request<{ listings: SavedListing[] }>('/api/saved', { auth: true });
+    return data.listings;
+  },
+  async save(listingId: string): Promise<void> {
+    await request(`/api/saved/${encodeURIComponent(listingId)}`, { method: 'PUT', auth: true });
+  },
+  async remove(listingId: string): Promise<void> {
+    await request(`/api/saved/${encodeURIComponent(listingId)}`, { method: 'DELETE', auth: true });
+  },
+};
+
 /** One suggested way to refill a monitor's cylinder (`GET /api/devices/:id/reorder`). */
 export interface ReorderOption {
   listingId: string;

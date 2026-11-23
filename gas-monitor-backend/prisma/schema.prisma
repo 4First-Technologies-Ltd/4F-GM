@@ -118,6 +118,7 @@ model User {
   pushTokens        PushToken[]
   ownedDevices      Device[]          @relation("DeviceOwner")
   deviceMemberships DeviceMember[]
+  savedListings     SavedListing[]
 
   @@map("users")
 }
@@ -394,9 +395,26 @@ model GasListing {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   orders        Order[]
+  savedBy       SavedListing[]
 
   @@index([branchId])
   @@map("gas_listings")
+}
+
+/// A listing a signed-in user saved to come back to ("Save & continue shopping").
+/// One row per user and listing. Rows go when either side is deleted, and with the
+/// user's account erasure. A listing that later leaves the marketplace stays saved
+/// but is not shown until it is back (see routes/saved.ts).
+model SavedListing {
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   GasListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([userId, listingId])
+  @@index([userId, createdAt])
+  @@map("saved_listings")
 }
 
 model CylinderProfile {

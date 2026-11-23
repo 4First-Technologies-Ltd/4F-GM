@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/motion/button/base";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
 import {
   CATEGORY_LABEL,
+  getListing,
   isPurchasable,
   sellerRoleOf,
   SELLER_ROLE_LABEL,
@@ -17,6 +18,7 @@ import {
 import { findListing, kgOf, priceFor } from "@/lib/marketplace";
 import { LocationMap } from "@/components/marketplace/LocationMap";
 import { SellerMark } from "@/components/marketplace/SellerMark";
+import { SaveListing } from "@/components/marketplace/SaveListing";
 import { formatNaira } from "@/lib/format";
 
 // Vendor listings come and go as vendors add, edit or lose approval, so the
@@ -256,9 +258,8 @@ export default async function ListingPage({
                     Out of stock
                   </p>
                 )}
-                <ButtonLink href="/sign-in" variant="outline" size="lg">
-                  Sign in to save
-                </ButtonLink>
+                {/* Only vendor listings live in the database; platform ones (like the 4FG Monitor) cannot be saved. */}
+                {!getListing(listing.id) && <SaveListing listingId={listing.id} />}
               </div>
               <p className="mt-4 text-xs text-muted-foreground">
                 Payment is held until the delivery is confirmed in the app.

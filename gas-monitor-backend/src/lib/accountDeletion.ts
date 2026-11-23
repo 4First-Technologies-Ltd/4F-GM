@@ -112,6 +112,7 @@ async function anonymise(user: User): Promise<void> {
     prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
     prisma.address.deleteMany({ where: { userId: user.id } }),
     prisma.cylinderProfile.deleteMany({ where: { userId: user.id } }),
+    prisma.savedListing.deleteMany({ where: { userId: user.id } }),
     prisma.marketingSuppression.upsert({
       where: { email },
       create: { email, reason: 'account_deleted' },
