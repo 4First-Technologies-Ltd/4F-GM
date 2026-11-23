@@ -187,13 +187,23 @@ describe('company routes', () => {
   });
 
   it.each([
-    ['a rider', { role: 'RIDER', emailVerified: true, isSuspended: false }],
-    ['a vendor', { role: 'VENDOR', emailVerified: true, isSuspended: false }],
     ['an unverified account', { role: 'LOGISTICS_COMPANY', emailVerified: false, isSuspended: false }],
     ['a suspended account', { role: 'LOGISTICS_COMPANY', emailVerified: true, isSuspended: true }]
   ])('403s %s', async (_n, user) => {
     db.user.findUnique.mockResolvedValue(user);
     expect((await call('/riders')).status).toBe(403);
+    expect(db.riderProfile.findMany).not.toHaveBeenCalled();
+  });
+
+  // Access follows the company profile, not User.role (an account can hold several roles),
+  // so a rider or vendor with no company simply has no fleet to see.
+  it.each([
+    ['a rider', { role: 'RIDER', emailVerified: true, isSuspended: false, logisticsCompany: null }],
+    ['a vendor', { role: 'VENDOR', emailVerified: true, isSuspended: false, logisticsCompany: null }]
+  ])('404s %s that has no company profile', async (_n, user) => {
+    db.user.findUnique.mockResolvedValue(user);
+    db.logisticsCompany.findUnique.mockResolvedValue(null);
+    expect((await call('/riders')).status).toBe(404);
     expect(db.riderProfile.findMany).not.toHaveBeenCalled();
   });
 

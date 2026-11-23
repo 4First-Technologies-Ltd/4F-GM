@@ -161,13 +161,30 @@ describe('POST /staff/invite/:token/accept', () => {
     expect(db.user.create).not.toHaveBeenCalled();
   });
 
-  it('refuses an email that already belongs to another kind of account', async () => {
+  // An account can hold several roles, so an email that already belongs to another kind
+  // of account takes the branch as an extra role to switch into (the link went to its inbox).
+  it.each(['CONSUMER', 'VENDOR', 'RIDER', 'LOGISTICS_COMPANY'])(
+    'adds the branch to an existing %s account without a new password or session',
+    async (role) => {
+      db.user.findFirst.mockResolvedValue({ id: 'x', role });
+      const res = await accept({}); // no password needed
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ status: 'LINKED', branchName: 'Lekki' });
+      expect(db.branchStaff.updateMany).toHaveBeenCalledWith({
+        where: { id: 'i1', status: 'INVITED' },
+        data: { status: 'ACTIVE', userId: 'x', tokenHash: null }
+      });
+      expect(issue).not.toHaveBeenCalled();
+      expect(db.user.create).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not link an existing account when the invite was already used', async () => {
     db.user.findFirst.mockResolvedValue({ id: 'x', role: 'CONSUMER' });
-    const res = await accept();
-    expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe('EMAIL_IN_USE');
-    expect(db.user.create).not.toHaveBeenCalled();
-    expect(db.branchStaff.updateMany).not.toHaveBeenCalled();
+    db.branchStaff.updateMany.mockResolvedValue({ count: 0 });
+    const res = await accept({});
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('INVITE_INVALID');
   });
 
   it('links an existing manager without a new password or session', async () => {
