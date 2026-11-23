@@ -49,7 +49,8 @@ router.get(
         businessName: invite.branch.vendor.businessName,
         // Tells the page whether to ask for a password or just link the branch.
         accountExists: !!existing,
-        canLink: existing?.role === 'BRANCH_MANAGER'
+        // Any existing account can take the branch as an extra role: the link went to its verified inbox.
+        canLink: !!existing
       }
     });
   })
@@ -76,24 +77,16 @@ router.post(
       select: { id: true, role: true }
     });
 
-    // Already a manager (for another branch or vendor): just add this branch. No
+    // Already has an account (a manager elsewhere, or a consumer, vendor, rider or
+    // company): just add this branch as an extra role they can switch into. No
     // session is issued: they sign in with the password they already have.
-    if (existing?.role === 'BRANCH_MANAGER') {
+    if (existing) {
       const claimed = await prisma.branchStaff.updateMany({
         where: { id: invite.id, status: 'INVITED' },
         data: { status: 'ACTIVE', userId: existing.id, tokenHash: null }
       });
       if (claimed.count === 0) return res.status(404).json({ error: INVALID, code: 'INVITE_INVALID' });
       return res.json({ status: 'LINKED', branchName: invite.branch.name });
-    }
-
-    // A consumer, vendor, rider or company account cannot also be a manager: one role per account.
-    if (existing) {
-      return res.status(409).json({
-        error:
-          'This email already has a 4FG account of a different type. Ask the vendor to invite a different email address.',
-        code: 'EMAIL_IN_USE'
-      });
     }
 
     const result = acceptSchema.safeParse(req.body);

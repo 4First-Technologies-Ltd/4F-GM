@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
 import { bankAccountLimiter } from '../lib/security';
+import { resolveActiveRole } from '../lib/roles';
 import { PaystackError, listBanks, resolveAccount } from '../lib/paystack';
 import { dispatchWaitingForRider, riderAutoPayoutEnabled } from '../lib/riderPayouts';
 
@@ -22,7 +23,10 @@ type Owner = { kind: 'VENDOR'; profileId: string } | { kind: 'RIDER'; profileId:
 
 /** The signed-in user's payout owner, or answers 403/404 and returns null. */
 async function loadOwner(userId: string, res: Response): Promise<Owner | null> {
-  const role = (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role;
+  // The payout account belongs to the experience the person is in; one holding both
+  // a vendor and a rider profile sets each from its own screen.
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, lastActiveRole: true } });
+  const role = u ? await resolveActiveRole(u) : undefined;
   if (role === 'VENDOR') {
     const p = await prisma.vendorProfile.findUnique({ where: { userId }, select: { id: true } });
     if (p) return { kind: 'VENDOR', profileId: p.id };

@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order } from '@/lib/api';
 import { formatNaira, STATUS_LABEL } from '@/lib/format';
 import { TiltCard } from '@/components/motion/tilt-card';
+import { HomeBento } from '@/components/dashboard/home/HomeBento';
 import { Package, Bell, Wallet, AlertCircle, ArrowRight } from 'lucide-react';
 
 const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
@@ -74,7 +75,10 @@ function ConsumerOverview() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome */}
+      {/* Home: same tiles as the mobile app */}
+      <HomeBento />
+
+      {/* Account summary */}
       <div>
         <h2 className="text-xl font-semibold text-foreground mb-1">
           Welcome back, {user?.name.split(' ')[0]}

@@ -25,6 +25,8 @@ interface AuthContextValue {
   updateProfile: (payload: UpdateProfilePayload) => Promise<ApiUser>;
   /** Re-fetches the user and persists it, so role-status changes (e.g. rider approval) take effect. */
   refreshUser: () => Promise<ApiUser>;
+  /** Switch into another role the account holds; resolves with the user as that role. */
+  switchRole: (role: UserRole) => Promise<ApiUser>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -100,9 +102,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return fresh;
   }, []);
 
+  const switchRole = useCallback(async (role: UserRole) => {
+    const updated = await authApi.switchRole(role);
+    setUser(updated);
+    const refreshToken = getRefreshToken();
+    const accessToken = getAccessToken();
+    if (refreshToken && accessToken) saveSession(accessToken, refreshToken, updated);
+    return updated;
+  }, []);
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, verifyOtp, resendOtp, acceptInvite, logout, updateProfile, refreshUser }}
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        verifyOtp,
+        resendOtp,
+        acceptInvite,
+        logout,
+        updateProfile,
+        refreshUser,
+        switchRole
+      }}
     >
       {children}
     </AuthContext.Provider>

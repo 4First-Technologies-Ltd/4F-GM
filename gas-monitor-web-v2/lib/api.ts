@@ -24,13 +24,26 @@ export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 
 export type UnitPreference = 'KG' | 'LBS';
 
+/** One experience an account holds or could register for. */
+export interface RoleInfo {
+  role: UserRole;
+  /** NOT_REGISTERED = no profile yet; otherwise the profile's approval status. */
+  status: 'NOT_REGISTERED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'ACTIVE';
+  canSwitch: boolean;
+}
+
 export interface ApiUser {
   id: string;
   name: string;
   email: string;
   phone?: string | null;
   avatarUrl?: string | null;
+  /** The ACTIVE role: what the app is showing right now (and what the next sign-in opens). */
   role: UserRole;
+  /** What the account signed up as. */
+  primaryRole?: UserRole;
+  /** Every role the account holds or could register for. Absent from older API builds. */
+  roles?: RoleInfo[];
   vendorStatus?: VendorStatus;
   /** True for a vendor who has not yet supplied the RC number admins need to approve them. */
   vendorRcNumberMissing?: boolean;
@@ -232,6 +245,16 @@ export const authApi = {
 
   async me(): Promise<ApiUser> {
     const data = await request<{ user: ApiUser }>('/api/auth/me', { auth: true });
+    return data.user;
+  },
+
+  /** Switch the experience the app opens. Nothing is granted: every route still checks the profile. */
+  async switchRole(role: UserRole): Promise<ApiUser> {
+    const data = await request<{ user: ApiUser }>('/api/auth/switch-role', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ role })
+    });
     return data.user;
   },
 

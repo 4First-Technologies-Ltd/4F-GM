@@ -26,9 +26,11 @@ declare global {
 async function requireCompanyUser(req: Request, res: Response, next: NextFunction) {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.sub },
-    select: { role: true, emailVerified: true, isSuspended: true }
+    select: { emailVerified: true, isSuspended: true, logisticsCompany: { select: { id: true } } }
   });
-  if (!user || user.role !== 'LOGISTICS_COMPANY' || !user.emailVerified || user.isSuspended) {
+  // Gated by the company profile, not User.role: an account can hold several roles.
+  // A caller with no profile yet is let through so sign-up can create it.
+  if (!user || !user.emailVerified || user.isSuspended) {
     return res.status(403).json({ error: 'Logistics company access required' });
   }
   next();

@@ -31,7 +31,8 @@ async function blocker(user: User, byAdmin = false): Promise<DeletionBlocked | n
   const open = await prisma.order.count({ where: { consumerId: user.id, status: { in: [...CONSUMER_OPEN] } } });
   if (open > 0) return new DeletionBlocked(say('You have an order in progress. Delete your account once it is complete.', 'This account has an order in progress as a customer. Wait until it is complete.'));
 
-  if (user.role === 'VENDOR') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     const vendor = await prisma.vendorProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
     if (vendor) {
       const [orders, earnings] = await Promise.all([
@@ -51,14 +52,16 @@ async function blocker(user: User, byAdmin = false): Promise<DeletionBlocked | n
     }
   }
 
-  if (user.role === 'RIDER') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     const rider = await prisma.riderProfile.findUnique({ where: { userId: user.id }, select: { id: true } });
     if (rider && (await prisma.order.count({ where: { riderId: rider.id, status: { in: [...IN_FLIGHT] } } })) > 0) {
       return new DeletionBlocked(say('You have deliveries in progress. Finish them before closing your account.', 'This rider has deliveries in progress. Wait until they are finished.'));
     }
   }
 
-  if (user.role === 'LOGISTICS_COMPANY') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     const company = await prisma.logisticsCompany.findUnique({ where: { userId: user.id }, select: { id: true } });
     if (
       company &&
@@ -116,7 +119,8 @@ async function anonymise(user: User): Promise<void> {
     })
   ];
 
-  if (user.role === 'VENDOR') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     const vendor = await prisma.vendorProfile.findUnique({
       where: { userId: user.id },
       include: { documents: { select: { url: true } }, listings: { select: { imageKey: true } } }
@@ -140,7 +144,8 @@ async function anonymise(user: User): Promise<void> {
     }
   }
 
-  if (user.role === 'RIDER') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     ops.push(
       prisma.riderProfile.updateMany({
         where: { userId: user.id },
@@ -158,7 +163,8 @@ async function anonymise(user: User): Promise<void> {
     );
   }
 
-  if (user.role === 'BRANCH_MANAGER') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     ops.push(
       prisma.branchStaff.updateMany({
         where: { userId: user.id },
@@ -167,7 +173,8 @@ async function anonymise(user: User): Promise<void> {
     );
   }
 
-  if (user.role === 'LOGISTICS_COMPANY') {
+  // Every profile the account holds is closed, whatever role it signed up as.
+  {
     const company = await prisma.logisticsCompany.findUnique({ where: { userId: user.id }, select: { id: true } });
     if (company) {
       ops.push(

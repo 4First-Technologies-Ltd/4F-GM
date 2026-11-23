@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { LogoEmblem } from '@/components/site/Logo';
+import { RoleSwitcher } from '@/components/dashboard/RoleSwitcher';
 import {
   Grid3x3,
   Package,
@@ -157,6 +158,8 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
             <Store className="h-5 w-5" />
             <span className="text-sm">Back to site</span>
           </Link>
+
+          <RoleSwitcher onDone={onClose} />
 
           {user && (
             <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/50">
