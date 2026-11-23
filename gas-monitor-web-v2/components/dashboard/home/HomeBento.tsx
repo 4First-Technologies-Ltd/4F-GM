@@ -4,10 +4,13 @@
  * Consumer home. Same tiles, same order and same data as the mobile home
  * (gas-monitor/app/(tabs)/index.tsx). Below `lg` it is the phone layout: two
  * columns, gauge tall on the left. From `lg` the same tiles spread over four.
+ *
+ * Only what the monitor reports is shown. With no linked device the gauge says
+ * "Device not synced yet"; with a device that has not reported, "No readings yet".
  */
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, Plus, RotateCcw, Store, Trash2, Check } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { ChevronDown, ChevronRight, Plus, Store, Trash2, Check } from 'lucide-react';
 import {
   ApiRequestError,
   cylinderApi,
@@ -16,12 +19,17 @@ import {
   type CylinderImageKey,
   type CylinderProfile,
   type Monitor,
-  type MonitorHourPoint,
+  type MonitorDayPoint,
   type Order
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { formatNaira } from '@/lib/format';
-import { estimateDays, fetchMarketplaceSummary, getStatus, type MarketplaceSummary } from '@/lib/home-data';
+import { fetchPublicListings, getStatus } from '@/lib/home-data';
+import { dateLabel, daysLeft, firstNameOf, greetingFor, weekBars } from '@/lib/home-content';
+import type { PublicListing } from '@/lib/marketplace';
 import { GaugeRing } from './GaugeRing';
+import { HomeStories } from './HomeStories';
+import { Sheet } from './Sheet';
 
 const REMINDER_OPTS = ['12 hrs before', '1 day before', '2 days before', '3 days before'];
 
@@ -53,7 +61,7 @@ const SUB = 'text-[11px] text-muted-foreground';
 const FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
-function Pill({ label, color, children }: { label: string; color: string; children?: ReactNode }) {
+function Pill({ label, color }: { label: string; color: string }) {
   return (
     <span
       className="inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
@@ -61,7 +69,6 @@ function Pill({ label, color, children }: { label: string; color: string; childr
     >
       <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ backgroundColor: color }} />
       <span className="truncate">{label}</span>
-      {children}
     </span>
   );
 }
@@ -87,67 +94,25 @@ function OrderSteps({ status }: { status: Order['status'] }) {
   );
 }
 
-function UsageBars({ points }: { points: MonitorHourPoint[] }) {
-  return (
-    <div className="mt-1.5 flex h-[54px] items-end gap-0.5" role="img" aria-label="Gas level over the last 24 hours">
-      {points.map((p, i) => (
-        <span
-          key={p.t}
-          className={`flex-1 rounded-t-[3px] ${i === points.length - 1 ? 'bg-primary' : 'bg-primary/25'}`}
-          style={{ height: Math.max(3, (Math.min(100, p.percent as number) / 100) * 54) }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-card p-5 pb-8 md:rounded-[28px]"
-      >
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border md:hidden" />
-        <h3 className="mb-4 text-lg font-extrabold text-foreground">{title}</h3>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 const INPUT =
   'w-full rounded-xl border border-border bg-background px-3.5 py-3 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
 // ── Home ──────────────────────────────────────────────────────────────────────
 
 export function HomeBento() {
-  // Demo level: used until a monitor reports, and while "Simulate drain" runs
-  const [gasLevel, setGasLevel] = useState(100);
-  const [simulating, setSimulating] = useState(false);
-  const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { user } = useAuth();
 
   // Reminder (local only, same as the app)
   const [selectedReminder, setSelectedReminder] = useState('1 day before');
   const [reminderSet, setReminderSet] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
 
-  // Live data. `undefined` means still loading.
+  // Live data. `null` listings means still loading or unreachable.
   const [orders, setOrders] = useState<Order[]>([]);
-  const [market, setMarket] = useState<MarketplaceSummary | null | undefined>(undefined);
+  const [listings, setListings] = useState<PublicListing[] | null>(null);
+  const [listingsLoaded, setListingsLoaded] = useState(false);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
-  const [points, setPoints] = useState<MonitorHourPoint[]>([]);
+  const [dayPoints, setDayPoints] = useState<MonitorDayPoint[]>([]);
 
   // Cylinder profiles
   const [profiles, setProfiles] = useState<CylinderProfile[]>([]);
@@ -166,7 +131,6 @@ export function HomeBento() {
     alive.current = true;
     return () => {
       alive.current = false;
-      if (simRef.current) clearInterval(simRef.current);
     };
   }, []);
 
@@ -183,18 +147,19 @@ export function HomeBento() {
 
   // Orders, marketplace and the monitor refresh on load and whenever the tab comes back into view.
   const refresh = useCallback(async () => {
-    const [o, m, d] = await Promise.allSettled([ordersApi.list(), fetchMarketplaceSummary(), monitorApi.list()]);
+    const [o, m, d] = await Promise.allSettled([ordersApi.list(), fetchPublicListings(), monitorApi.list()]);
     if (!alive.current) return;
     if (o.status === 'fulfilled') setOrders(o.value);
-    setMarket(m.status === 'fulfilled' ? m.value : null);
+    setListings(m.status === 'fulfilled' ? m.value : null);
+    setListingsLoaded(true);
     if (d.status === 'fulfilled') {
       setMonitors(d.value.devices);
       const first = d.value.devices[0];
       if (first) {
-        const h = await monitorApi.hourly(first.id).catch(() => ({ points: [] as MonitorHourPoint[] }));
-        if (alive.current) setPoints(h.points);
+        const r = await monitorApi.daily(first.id, 7).catch(() => ({ points: [] as MonitorDayPoint[] }));
+        if (alive.current) setDayPoints(r.points);
       } else {
-        setPoints([]);
+        setDayPoints([]);
       }
     }
   }, []);
@@ -207,34 +172,6 @@ export function HomeBento() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
-
-  // ── Demo controls ───────────────────────────────────────────────────────────
-  function stopDrain() {
-    if (simRef.current) {
-      clearInterval(simRef.current);
-      simRef.current = null;
-    }
-    setSimulating(false);
-  }
-  function startDrain() {
-    if (simulating) return;
-    setGasLevel(100);
-    setSimulating(true);
-    let current = 100;
-    simRef.current = setInterval(() => {
-      current -= 1;
-      setGasLevel(current);
-      if (current <= 0) {
-        if (simRef.current) clearInterval(simRef.current);
-        simRef.current = null;
-        setSimulating(false);
-      }
-    }, 240);
-  }
-  function resetLevel() {
-    stopDrain();
-    setGasLevel(100);
-  }
 
   // ── Cylinder profiles ───────────────────────────────────────────────────────
   async function activateProfile(id: string) {
@@ -296,40 +233,88 @@ export function HomeBento() {
   }
 
   // ── Derived values (same rules as the app) ──────────────────────────────────
-  const liveLevel =
-    monitor && !monitor.state.calibrating && monitor.state.percent != null ? Math.round(monitor.state.percent) : null;
-  const isLive = liveLevel != null && !simulating;
-  const level = isLive ? (liveLevel as number) : gasLevel;
+  // Only what the monitor reports. No reading means no level: nothing is made up.
+  const hasReading = !!monitor && !monitor.state.calibrating && monitor.state.percent != null;
+  const level: number | null = hasReading ? Math.round(monitor!.state.percent as number) : null;
   const maxKg = monitor?.cylinder?.sizeKg ?? activeProfile?.sizeKg ?? 12.5;
-  const kgLeft = isLive && monitor?.state.netKg != null ? monitor.state.netKg : (level / 100) * maxKg;
-  const status = getStatus(level);
+  const kgLeft: number | null = level == null ? null : (monitor!.state.netKg ?? (level / 100) * maxKg);
+  const status = level == null ? null : getStatus(level);
+  const offline = !!monitor && (!monitor.state.online || monitor.state.stale);
+  // Why there is nothing to show: no device linked, or a device that has not reported.
+  const emptyMsg = !monitor ? 'Device not synced yet' : 'No readings yet';
 
-  const days = isLive ? estimateDays(points, level) : Math.round((level / 100) * 30);
-  const daysText = days == null ? '—' : isLive ? `~${days}` : String(days);
-  const daysSub = isLive ? (days == null ? 'Not enough use yet' : 'at your recent use') : 'demo estimate';
+  const bars = useMemo(() => weekBars(dayPoints), [dayPoints]);
+  const hasUsage = bars.some((b) => b.kg != null);
+  const weekTotal = bars.reduce((sum, b) => sum + (b.kg ?? 0), 0);
+  const maxBar = Math.max(0.1, ...bars.map((b) => b.kg ?? 0));
+
+  const days = kgLeft == null ? null : daysLeft(kgLeft, bars);
+  const daysText = days == null ? '—' : `~${days}`;
+  const daysSub = level == null ? emptyMsg : days == null ? 'Not enough use yet' : 'at your recent use';
+
+  const inStock = useMemo(() => (listings ?? []).filter((l) => l.inStock), [listings]);
+  const best = useMemo(
+    () => inStock.reduce<PublicListing | null>((b, l) => (b == null || l.pricePerKg < b.pricePerKg ? l : b), null),
+    [inStock]
+  );
+  const supplierCount = useMemo(() => new Set(inStock.map((l) => l.vendor.id)).size, [inStock]);
 
   const activeOrder = useMemo(() => {
     const open = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY');
     return [...open].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
   }, [orders]);
 
-  const usagePoints = useMemo(() => points.filter((p) => p.percent != null), [points]);
-  const usedPct =
-    usagePoints.length >= 2
-      ? Math.max(0, Math.round((usagePoints[0].percent as number) - (usagePoints[usagePoints.length - 1].percent as number)))
-      : null;
+  const now = new Date();
+  const userName = firstNameOf(user?.name);
+
+  const weekContent = (
+    <>
+      <div className="flex items-center justify-between">
+        <span className={LABEL}>Last 7 days</span>
+        {hasUsage && <span className={`${LABEL} font-mono`}>{weekTotal.toFixed(1)} kg used</span>}
+      </div>
+      {hasUsage ? (
+        <>
+          <div className="mt-2 flex h-[54px] items-end gap-1.5" role="img" aria-label="Gas used each day over the last 7 days">
+            {bars.map((b) => (
+              <span
+                key={b.key}
+                className={`flex-1 rounded-t ${b.kg == null ? 'bg-border' : b.today ? 'bg-primary' : 'bg-primary/25'}`}
+                style={{ height: b.kg == null ? 3 : Math.max(4, (b.kg / maxBar) * 54) }}
+              />
+            ))}
+          </div>
+          <div className="mt-1 flex gap-1.5">
+            {bars.map((b) => (
+              <span
+                key={b.key}
+                className={`flex-1 text-center text-[10px] ${b.today ? 'font-extrabold text-primary' : 'font-semibold text-muted-foreground'}`}
+              >
+                {b.label}
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="py-5 text-center text-sm text-muted-foreground">No usage history yet</p>
+      )}
+    </>
+  );
 
   return (
     <section aria-label="Home" className="mx-auto max-w-lg space-y-3 lg:max-w-none">
-      {/* Header */}
+      {/* Greeting */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-[22px] font-extrabold tracking-tight text-foreground">4F G-Monitor</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            {monitor
-              ? `${monitor.nickname ?? monitor.id} · ${monitor.state.online ? 'Online' : 'Offline'}`
-              : 'No monitor connected yet'}
-          </p>
+          <p className="text-xs text-muted-foreground">{dateLabel(now)}</p>
+          <h2 className="mt-0.5 text-[21px] font-extrabold leading-[26px] tracking-tight text-foreground">
+            {greetingFor(now)}
+            {userName && (
+              <>
+                ,<br className="lg:hidden" /> {userName}
+              </>
+            )}
+          </h2>
         </div>
         <button
           type="button"
@@ -342,7 +327,10 @@ export function HomeBento() {
         </button>
       </div>
 
-      {level <= 25 && (
+      {/* Circular cards: Deals, Safety, Tips, Rewards, New */}
+      <HomeStories listings={listings} />
+
+      {level != null && level <= 25 && (
         <Link
           href="/marketplace"
           className={`flex items-center gap-2.5 rounded-2xl border border-destructive/30 bg-destructive/10 px-3.5 py-3 text-[13px] font-semibold text-destructive ${FOCUS}`}
@@ -362,12 +350,16 @@ export function HomeBento() {
         <div className={`${TILE} row-span-2 items-center gap-2 lg:col-span-2`}>
           <span className={LABEL}>Gas level</span>
           <GaugeRing percentage={level} maxKg={maxKg} kgLeft={kgLeft} />
-          {isLive ? (
-            <Pill label={`Live · ${status.label}`} color="var(--primary)" />
-          ) : (
+          {level == null ? (
             <Link href="/dashboard/monitors" className={`max-w-full rounded-full ${FOCUS}`}>
-              <Pill label={`Demo · ${status.label}`} color={status.color} />
+              <Pill label={emptyMsg} color="var(--muted-foreground)" />
             </Link>
+          ) : offline ? (
+            <Link href="/dashboard/monitors" className={`max-w-full rounded-full ${FOCUS}`}>
+              <Pill label="Offline · last reading" color="#B7791F" />
+            </Link>
+          ) : (
+            <Pill label={`Live · ${status!.label}`} color="var(--primary)" />
           )}
         </div>
 
@@ -384,14 +376,14 @@ export function HomeBento() {
         <Link href="/marketplace" className={`${TILE} ${FOCUS}`}>
           <span className={LABEL}>Best price</span>
           <p className="font-mono text-[28px] font-extrabold leading-tight tracking-tight text-foreground">
-            {market?.best ? formatNaira(market.best.pricePerKg) : '—'}
+            {best ? formatNaira(best.pricePerKg) : '—'}
           </p>
           <span className={`${SUB} truncate`}>
-            {market === undefined
+            {!listingsLoaded
               ? 'Loading…'
-              : market?.best
-                ? `per kg · ${market.best.vendorName}`
-                : market
+              : best
+                ? `per kg · ${best.vendor.businessName}`
+                : listings
                   ? 'No suppliers in stock'
                   : 'Could not load prices'}
           </span>
@@ -408,23 +400,21 @@ export function HomeBento() {
           <span className="min-w-0 flex-1">
             <span className="block text-base font-extrabold">Marketplace</span>
             <span className="block text-xs text-white/75">
-              {market && market.supplierCount > 0
-                ? `${market.supplierCount} supplier${market.supplierCount === 1 ? '' : 's'} with gas in stock`
+              {supplierCount > 0
+                ? `${supplierCount} supplier${supplierCount === 1 ? '' : 's'} with gas in stock`
                 : 'Find a supplier and order gas'}
             </span>
           </span>
           <span className="rounded-xl bg-white px-3.5 py-2 text-[13px] font-bold text-[#1A4730]">Browse</span>
         </Link>
 
-        {/* Usage, only when a monitor has readings */}
-        {usagePoints.length >= 2 && (
+        {/* Weekly usage */}
+        {monitor ? (
           <Link href="/dashboard/monitors" className={`${TILE} col-span-2 lg:col-span-2 ${FOCUS}`}>
-            <div className="flex items-center justify-between">
-              <span className={LABEL}>Last 24 hours</span>
-              {usedPct != null && <span className={`${LABEL} font-mono`}>{usedPct}% used</span>}
-            </div>
-            <UsageBars points={usagePoints} />
+            {weekContent}
           </Link>
+        ) : (
+          <div className={`${TILE} col-span-2 lg:col-span-2`}>{weekContent}</div>
         )}
 
         {/* Active order */}
@@ -469,28 +459,6 @@ export function HomeBento() {
           <span className="text-[15px] font-extrabold text-foreground">{reminderSet ? 'On' : 'Not set'}</span>
           <span className={SUB}>{reminderSet ? selectedReminder : 'Tap to get a refill nudge'}</span>
         </button>
-
-        {/* Demo controls */}
-        <div className={`${TILE} col-span-2 gap-2.5 lg:col-span-2`}>
-          <span className="text-[10px] font-bold tracking-[0.1em] text-muted-foreground/70">DEMO CONTROLS</span>
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={simulating ? stopDrain : startDrain}
-              className={`flex-1 rounded-[13px] py-3 text-sm font-bold text-white ${simulating ? 'bg-destructive' : 'bg-primary'} ${FOCUS}`}
-            >
-              {simulating ? '■  Stop' : '▶  Simulate drain'}
-            </button>
-            <button
-              type="button"
-              onClick={resetLevel}
-              aria-label="Reset level"
-              className={`flex h-12 w-12 items-center justify-center rounded-[13px] border border-border bg-primary/10 text-primary ${FOCUS}`}
-            >
-              <RotateCcw className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Reminder sheet */}

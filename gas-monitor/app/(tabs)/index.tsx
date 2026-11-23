@@ -1,5 +1,6 @@
 import { NotificationBell } from '@/components/notification-bell';
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { HomeStories } from '@/components/home-stories';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,13 +26,16 @@ import {
   marketplaceApi,
   monitorApi,
   ordersApi,
+  type ApiUser,
   type ConsumerOrder,
   type CylinderImageKey,
   type CylinderProfile,
   type MarketplaceListing,
   type Monitor,
-  type MonitorHourPoint,
+  type MonitorDayPoint,
 } from '@/lib/api';
+import { getSavedUser } from '@/lib/storage';
+import { dateLabel, daysLeft, firstNameOf, greetingFor, weekBars } from '@/lib/homeContent';
 
 const monoFont = Fonts?.mono ?? 'monospace';
 
@@ -52,6 +56,8 @@ const C = {
   clay: '#A9714C',
   clayLight: '#F3E6DB',
   red: '#D32F2F',
+  amber: '#B7791F',
+  amberLight: '#FBEFD5',
 };
 
 // ── Cylinder image map ────────────────────────────────────────────────────────
@@ -100,18 +106,6 @@ function getStatus(pct: number) {
 
 const naira = (n: number) => `₦${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 
-/** Days of gas left, from the drop over the readings we have. Null until there is enough history to say. */
-function estimateDays(points: MonitorHourPoint[], level: number): number | null {
-  const pts = points.filter((p) => p.percent != null);
-  if (pts.length < 2) return null;
-  const first = pts[0];
-  const last = pts[pts.length - 1];
-  const hours = (Date.parse(last.t) - Date.parse(first.t)) / 3_600_000;
-  const drop = (first.percent as number) - (last.percent as number);
-  if (!(hours >= 6) || drop <= 0.5) return null;
-  return Math.max(0, Math.round(level / (drop / hours) / 24));
-}
-
 // ── Segmented arc gauge (scales with `size`) ──────────────────────────────────
 const GAUGE_TOTAL = 48;
 const GAUGE_ARC = 300;
@@ -120,11 +114,13 @@ const GAUGE_BAR_H = 18;
 const GAUGE_BAR_W = 7;
 const GAUGE_BAR_R = 2;
 
-function GaugeRing({ percentage, maxKg, kgLeft, size = 210 }: { percentage: number; maxKg: number; kgLeft?: number | null; size?: number }) {
+/** `percentage` is null when there is no reading: the ring is empty and says so. */
+function GaugeRing({ percentage, maxKg, kgLeft, size = 210 }: { percentage: number | null; maxKg: number; kgLeft?: number | null; size?: number }) {
   const k = size / 210;
   const barH = GAUGE_BAR_H * k;
   const barW = GAUGE_BAR_W * k;
-  const p = Math.max(0, Math.min(100, percentage));
+  const empty = percentage == null;
+  const p = empty ? 0 : Math.max(0, Math.min(100, percentage));
   const midR = size / 2 - barH / 2;
   const innerD = 2 * (midR - barH / 2 - 4 * k);
   const activeCount = Math.round((p / 100) * GAUGE_TOTAL);
@@ -165,9 +161,13 @@ function GaugeRing({ percentage, maxKg, kgLeft, size = 210 }: { percentage: numb
           alignItems: 'center',
         }}
       >
-        <Text style={{ fontFamily: monoFont, color: C.text, fontSize: 46 * k, fontWeight: '800', letterSpacing: -2 * k }}>{Math.round(p)}%</Text>
-        <Text style={{ color: currentColor, fontSize: Math.max(10, 13 * k), fontWeight: '700' }}>Gas level</Text>
-        <Text style={{ fontFamily: monoFont, color: C.muted, fontSize: Math.max(10, 13 * k) }}>{kg.toFixed(1)} kg</Text>
+        <Text style={{ fontFamily: monoFont, color: empty ? C.dim : C.text, fontSize: 46 * k, fontWeight: '800', letterSpacing: -2 * k }}>
+          {empty ? '—' : `${Math.round(p)}%`}
+        </Text>
+        <Text style={{ color: empty ? C.muted : currentColor, fontSize: Math.max(10, 13 * k), fontWeight: '700' }}>Gas level</Text>
+        {!empty && (
+          <Text style={{ fontFamily: monoFont, color: C.muted, fontSize: Math.max(10, 13 * k) }}>{kg.toFixed(1)} kg</Text>
+        )}
       </View>
     </View>
   );
@@ -211,34 +211,13 @@ function OrderSteps({ status }: { status: ConsumerOrder['status'] }) {
   );
 }
 
-function UsageBars({ points }: { points: MonitorHourPoint[] }) {
-  const pts = points.filter((p) => p.percent != null);
-  return (
-    <View style={s.bars} accessibilityLabel="Gas level over the last 24 hours">
-      {pts.map((p, i) => (
-        <View
-          key={p.t}
-          style={[
-            s.bar,
-            { height: Math.max(3, (Math.min(100, p.percent as number) / 100) * 54) },
-            i === pts.length - 1 ? s.barNow : null,
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const colW = (width - 32 - 10) / 2;
   const gaugeSize = Math.max(120, Math.floor(colW - 28));
 
-  // Demo level (used until a monitor reports, and while "Simulate drain" runs)
-  const [gasLevel, setGasLevel] = useState(100);
-  const [simulating, setSimulating] = useState(false);
-  const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [userName, setUserName] = useState('');
 
   // Reminder (local only)
   const [selectedReminder, setSelectedReminder] = useState('1 day before');
@@ -249,7 +228,7 @@ export default function HomeScreen() {
   const [orders, setOrders] = useState<ConsumerOrder[]>([]);
   const [listings, setListings] = useState<MarketplaceListing[] | null>(null);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
-  const [points, setPoints] = useState<MonitorHourPoint[]>([]);
+  const [dayPoints, setDayPoints] = useState<MonitorDayPoint[]>([]);
 
   // Cylinder profiles
   const [profiles, setProfiles] = useState<CylinderProfile[]>([]);
@@ -273,6 +252,7 @@ export default function HomeScreen() {
       .then(setProfiles)
       .catch(() => {})
       .finally(() => setProfilesLoading(false));
+    getSavedUser<ApiUser>().then((u) => setUserName(firstNameOf(u?.name))).catch(() => {});
   }, []);
 
   // Orders, marketplace and the monitor refresh every time the tab is focused.
@@ -287,39 +267,16 @@ export default function HomeScreen() {
           setMonitors(d.value.devices);
           const first = d.value.devices[0];
           if (first) {
-            const h = await monitorApi.hourly(first.id).catch(() => ({ points: [] as MonitorHourPoint[] }));
-            if (!cancelled) setPoints(h.points);
+            const r = await monitorApi.daily(first.id, 7).catch(() => ({ points: [] as MonitorDayPoint[] }));
+            if (!cancelled) setDayPoints(r.points);
           } else {
-            setPoints([]);
+            setDayPoints([]);
           }
         }
       });
       return () => { cancelled = true; };
     }, []),
   );
-
-  useEffect(() => () => { if (simRef.current) clearInterval(simRef.current); }, []);
-
-  function startDrain() {
-    if (simulating) return;
-    setGasLevel(100);
-    setSimulating(true);
-    let current = 100;
-    simRef.current = setInterval(() => {
-      current -= 1;
-      setGasLevel(current);
-      if (current <= 0) {
-        clearInterval(simRef.current!);
-        simRef.current = null;
-        setSimulating(false);
-      }
-    }, 240);
-  }
-  function stopDrain() {
-    if (simRef.current) { clearInterval(simRef.current); simRef.current = null; }
-    setSimulating(false);
-  }
-  function resetLevel() { stopDrain(); setGasLevel(100); }
 
   async function activateProfile(id: string) {
     try {
@@ -380,17 +337,24 @@ export default function HomeScreen() {
   }
 
   // ── Derived values ──────────────────────────────────────────────────────────
-  const liveLevel =
-    monitor && !monitor.state.calibrating && monitor.state.percent != null ? Math.round(monitor.state.percent) : null;
-  const isLive = liveLevel != null && !simulating;
-  const level = isLive ? (liveLevel as number) : gasLevel;
+  // Only what the monitor reports. No reading means no level: nothing is made up.
+  const hasReading = !!monitor && !monitor.state.calibrating && monitor.state.percent != null;
+  const level: number | null = hasReading ? Math.round(monitor!.state.percent as number) : null;
   const maxKg = monitor?.cylinder?.sizeKg ?? activeProfile?.sizeKg ?? 12.5;
-  const kgLeft = isLive && monitor?.state.netKg != null ? monitor.state.netKg : (level / 100) * maxKg;
-  const status = getStatus(level);
+  const kgLeft: number | null = level == null ? null : (monitor!.state.netKg ?? (level / 100) * maxKg);
+  const status = level == null ? null : getStatus(level);
+  const offline = !!monitor && (!monitor.state.online || monitor.state.stale);
+  // Why there is nothing to show: no device linked, or a device that has not reported.
+  const emptyMsg = !monitor ? 'Device not synced yet' : 'No readings yet';
 
-  const days = isLive ? estimateDays(points, level) : Math.round((level / 100) * 30);
-  const daysText = days == null ? '—' : isLive ? `~${days}` : String(days);
-  const daysSub = isLive ? (days == null ? 'Not enough use yet' : 'at your recent use') : 'demo estimate';
+  const bars = useMemo(() => weekBars(dayPoints), [dayPoints]);
+  const hasUsage = bars.some((b) => b.kg != null);
+  const weekTotal = bars.reduce((sum, b) => sum + (b.kg ?? 0), 0);
+  const maxBar = Math.max(0.1, ...bars.map((b) => b.kg ?? 0));
+
+  const days = kgLeft == null ? null : daysLeft(kgLeft, bars);
+  const daysText = days == null ? '—' : `~${days}`;
+  const daysSub = level == null ? emptyMsg : days == null ? 'Not enough use yet' : 'at your recent use';
 
   const inStock = useMemo(() => (listings ?? []).filter((l) => l.inStock), [listings]);
   const best = useMemo(
@@ -404,22 +368,21 @@ export default function HomeScreen() {
     return open.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
   }, [orders]);
 
-  const usagePoints = points.filter((p) => p.percent != null);
-  const usedPct = usagePoints.length >= 2 ? Math.max(0, Math.round((usagePoints[0].percent as number) - (usagePoints[usagePoints.length - 1].percent as number))) : null;
-
   const goOrder = () => router.push('/order');
+  const goMonitors = () => router.push('/monitors' as never);
+  const goListing = (id: string) => router.navigate({ pathname: '/order', params: { listingId: id } });
+
+  const now = new Date();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* Greeting */}
         <View style={s.header}>
           <View style={{ flex: 1 }}>
-            <Text style={s.headerTitle}>4F G-Monitor</Text>
-            <Text style={s.headerSub} numberOfLines={1}>
-              {monitor
-                ? `${monitor.nickname ?? monitor.id} · ${monitor.state.online ? 'Online' : 'Offline'}`
-                : 'No monitor connected yet'}
+            <Text style={s.headerDate}>{dateLabel(now)}</Text>
+            <Text style={s.headerGreeting} numberOfLines={2}>
+              {greetingFor(now)}{userName ? `,\n${userName}` : ''}
             </Text>
           </View>
           <View style={s.headerRight}>
@@ -436,7 +399,12 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {level <= 25 && (
+        {/* Circular cards: Deals, Safety, Tips, Rewards, New */}
+        <View style={s.storiesWrap}>
+          <HomeStories listings={listings} onOrder={goListing} />
+        </View>
+
+        {level != null && level <= 25 && (
           <TouchableOpacity style={s.alertBanner} onPress={goOrder} activeOpacity={0.85}>
             <View style={s.alertIconBox}><Text style={s.alertIconText}>!</Text></View>
             <Text style={s.alertText}>
@@ -452,12 +420,13 @@ export default function HomeScreen() {
             <View style={[s.card, s.gaugeCard]}>
               <Text style={s.k}>Gas level</Text>
               <GaugeRing percentage={level} maxKg={maxKg} kgLeft={kgLeft} size={gaugeSize} />
-              <Pill
-                label={isLive ? `Live · ${status.label}` : `Demo · ${status.label}`}
-                color={isLive ? C.accent : status.color}
-                bg={isLive ? C.accentLight : status.color + '22'}
-                onPress={isLive ? undefined : () => router.push('/monitors' as never)}
-              />
+              {level == null ? (
+                <Pill label={emptyMsg} color={C.muted} bg={C.surface} onPress={goMonitors} />
+              ) : offline ? (
+                <Pill label="Offline · last reading" color={C.amber} bg={C.amberLight} onPress={goMonitors} />
+              ) : (
+                <Pill label={`Live · ${status!.label}`} color={C.accent} bg={C.accentLight} />
+              )}
             </View>
 
             <View style={s.col}>
@@ -486,16 +455,37 @@ export default function HomeScreen() {
             <View style={s.deepBtn}><Text style={s.deepBtnText}>Browse</Text></View>
           </TouchableOpacity>
 
-          {/* Usage, only when a monitor has readings */}
-          {usagePoints.length >= 2 && (
-            <TouchableOpacity style={s.card} onPress={() => router.push('/monitors' as never)} activeOpacity={0.85}>
-              <View style={s.between}>
-                <Text style={s.k}>Last 24 hours</Text>
-                {usedPct != null && <Text style={[s.k, { fontFamily: monoFont }]}>{usedPct}% used</Text>}
-              </View>
-              <UsageBars points={usagePoints} />
-            </TouchableOpacity>
-          )}
+          {/* Weekly usage */}
+          <TouchableOpacity style={s.card} onPress={monitor ? goMonitors : undefined} activeOpacity={monitor ? 0.85 : 1} disabled={!monitor}>
+            <View style={s.between}>
+              <Text style={s.k}>Last 7 days</Text>
+              {hasUsage && <Text style={[s.k, { fontFamily: monoFont }]}>{weekTotal.toFixed(1)} kg used</Text>}
+            </View>
+            {hasUsage ? (
+              <>
+                <View style={s.weekBars} accessibilityLabel="Gas used each day over the last 7 days">
+                  {bars.map((b) => (
+                    <View
+                      key={b.key}
+                      style={[
+                        s.weekBar,
+                        { height: b.kg == null ? 3 : Math.max(4, (b.kg / maxBar) * 54) },
+                        b.today && s.weekBarNow,
+                        b.kg == null && s.weekBarNone,
+                      ]}
+                    />
+                  ))}
+                </View>
+                <View style={s.dayLabels}>
+                  {bars.map((b) => (
+                    <Text key={b.key} style={[s.dayLabel, b.today && { color: C.accent, fontWeight: '800' }]}>{b.label}</Text>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <Text style={s.noUsage}>No usage history yet</Text>
+            )}
+          </TouchableOpacity>
 
           {/* Active order */}
           {activeOrder && (
@@ -537,23 +527,6 @@ export default function HomeScreen() {
               <Text style={s.tileTitle}>{reminderSet ? 'On' : 'Not set'}</Text>
               <Text style={s.sub}>{reminderSet ? selectedReminder : 'Tap to get a refill nudge'}</Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Demo controls */}
-          <View style={[s.card, s.demo]}>
-            <Text style={s.demoLabel}>DEMO CONTROLS</Text>
-            <View style={s.demoRow}>
-              <TouchableOpacity
-                style={[s.drainBtn, simulating && { backgroundColor: C.red }]}
-                activeOpacity={0.8}
-                onPress={simulating ? stopDrain : startDrain}
-              >
-                <Text style={s.drainBtnText}>{simulating ? '■  Stop' : '▶  Simulate drain'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.resetIconBtn} activeOpacity={0.7} onPress={resetLevel} accessibilityLabel="Reset level">
-                <IconSymbol name="arrow.clockwise" size={20} color={C.accent} />
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </ScrollView>
@@ -722,21 +695,23 @@ const cardShadow = Platform.select({
 });
 
 const s = StyleSheet.create({
-  container: { paddingHorizontal: 16, paddingBottom: 28, gap: 12 },
+  container: { paddingBottom: 28, gap: 12 },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, gap: 10 },
-  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
-  headerSub: { color: C.muted, fontSize: 12, marginTop: 2 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingHorizontal: 16, gap: 10 },
+  headerDate: { color: C.muted, fontSize: 12 },
+  headerGreeting: { color: C.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.4, lineHeight: 26, marginTop: 2 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   profilePill: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16,
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.border, maxWidth: 130,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border, maxWidth: 120,
   },
   profilePillText: { color: C.accent, fontSize: 12, fontWeight: '700', flexShrink: 1 },
 
+  storiesWrap: { marginTop: 2 },
+
   alertBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16,
     backgroundColor: C.red + '12', borderWidth: 1, borderColor: C.red + '30',
     borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12,
   },
@@ -745,7 +720,7 @@ const s = StyleSheet.create({
   alertText: { flex: 1, color: C.red, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
   // Bento
-  bento: { gap: 10 },
+  bento: { gap: 10, paddingHorizontal: 16 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
   col: { flex: 1, gap: 10 },
   fill: { flex: 1 },
@@ -772,9 +747,13 @@ const s = StyleSheet.create({
   deepBtn: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9 },
   deepBtnText: { color: C.deep, fontSize: 13, fontWeight: '700' },
 
-  bars: { flexDirection: 'row', alignItems: 'flex-end', height: 54, gap: 2, marginTop: 6 },
-  bar: { flex: 1, backgroundColor: C.accentLight, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
-  barNow: { backgroundColor: C.accent },
+  weekBars: { flexDirection: 'row', alignItems: 'flex-end', height: 54, gap: 6, marginTop: 8 },
+  weekBar: { flex: 1, backgroundColor: C.accent + '40', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  weekBarNow: { backgroundColor: C.accent },
+  weekBarNone: { backgroundColor: C.border },
+  dayLabels: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  dayLabel: { flex: 1, textAlign: 'center', color: C.muted, fontSize: 10, fontWeight: '600' },
+  noUsage: { color: C.muted, fontSize: 14, textAlign: 'center', paddingVertical: 22 },
 
   orderTitle: { color: C.text, fontSize: 14, fontWeight: '700', marginTop: 2, marginBottom: 8 },
   stepsRow: { flexDirection: 'row', alignItems: 'center' },
@@ -788,16 +767,6 @@ const s = StyleSheet.create({
   cylRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   cylImg: { width: 34, height: 44 },
   clayCard: { backgroundColor: C.clayLight, borderColor: 'transparent' },
-
-  demo: { gap: 10 },
-  demoLabel: { color: C.dim, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  demoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  drainBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accent, borderRadius: 13, paddingVertical: 13 },
-  drainBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  resetIconBtn: {
-    width: 48, height: 48, borderRadius: 13, backgroundColor: C.accentLight,
-    borderWidth: 1, borderColor: C.border, justifyContent: 'center', alignItems: 'center',
-  },
 
   // Sheets
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

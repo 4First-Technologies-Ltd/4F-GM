@@ -1,47 +1,19 @@
 /**
- * Data and maths for the consumer home (components/dashboard/home/HomeBento).
- * Mirrors the mobile home (gas-monitor/app/(tabs)/index.tsx) so both clients
- * say the same thing about the same account.
+ * Data and maths for the consumer home (components/dashboard/home/HomeBento). Mirrors the mobile
+ * home (gas-monitor/app/(tabs)/index.tsx) so both clients say the same thing about the same account.
  */
-import { API_BASE_URL, type MonitorHourPoint } from './api';
+import { API_BASE_URL } from './api';
 import type { PublicListing } from './marketplace';
 
-/** Cheapest in-stock listing and how many suppliers have gas in stock. */
-export interface MarketplaceSummary {
-  best: { pricePerKg: number; vendorName: string } | null;
-  supplierCount: number;
-}
-
-/** Null when the marketplace can't be reached. */
-export async function fetchMarketplaceSummary(): Promise<MarketplaceSummary | null> {
+/** The public marketplace feed, or null when it can't be reached. */
+export async function fetchPublicListings(): Promise<PublicListing[] | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/marketplace/listings`);
     if (!res.ok) return null;
-    const { listings } = (await res.json()) as { listings: PublicListing[] };
-    const inStock = listings.filter((l) => l.inStock);
-    const cheapest = inStock.reduce<PublicListing | null>(
-      (b, l) => (b == null || l.pricePerKg < b.pricePerKg ? l : b),
-      null
-    );
-    return {
-      best: cheapest ? { pricePerKg: cheapest.pricePerKg, vendorName: cheapest.vendor.businessName } : null,
-      supplierCount: new Set(inStock.map((l) => l.vendor.id)).size
-    };
+    return ((await res.json()) as { listings: PublicListing[] }).listings;
   } catch {
     return null;
   }
-}
-
-/** Days of gas left, from the drop over the readings we have. Null until there is enough history to say. */
-export function estimateDays(points: MonitorHourPoint[], level: number): number | null {
-  const pts = points.filter((p) => p.percent != null);
-  if (pts.length < 2) return null;
-  const first = pts[0];
-  const last = pts[pts.length - 1];
-  const hours = (Date.parse(last.t) - Date.parse(first.t)) / 3_600_000;
-  const drop = (first.percent as number) - (last.percent as number);
-  if (!(hours >= 6) || drop <= 0.5) return null;
-  return Math.max(0, Math.round(level / (drop / hours) / 24));
 }
 
 export function getStatus(pct: number): { label: string; color: string } {
