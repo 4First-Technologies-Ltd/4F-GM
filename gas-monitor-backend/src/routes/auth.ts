@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import type { Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { issueOtp, issueTokenPair, devOtp } from '../lib/auth';
 import { hashOtp, OTP_MAX_ATTEMPTS } from '../lib/otp';
@@ -12,6 +13,7 @@ import { loginLimiter, otpSendLimiter, otpVerifyLimiter, registerLimiter, sha256
 import { validatePassword } from '../lib/password';
 import { DeletionBlocked, eraseAccount } from '../lib/accountDeletion';
 import { claimFleetInvite, effectiveRiderStatus, RIDER_STATUS_SELECT } from '../lib/fleet';
+import { ALL_ROLES, canActAs, getRoleStatuses, roleFields } from '../lib/roles';
 
 const router = Router();
 
@@ -346,7 +348,7 @@ router.post(
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        ...(await roleFields(user)),
         vendorStatus: user.vendorProfile?.status ?? undefined,
         vendorRcNumberMissing: user.vendorProfile ? !user.vendorProfile.rcNumber : undefined,
         riderStatus: user.riderProfile ? effectiveRiderStatus(user.riderProfile) : undefined,
@@ -365,6 +367,7 @@ const SELECT = {
   phone: true,
   avatarUrl: true,
   role: true,
+  lastActiveRole: true,
   pushEnabled: true,
   emailNotifEnabled: true,
   smsAlertsEnabled: true,
@@ -376,16 +379,20 @@ const SELECT = {
   logisticsCompany: { select: { status: true } }
 } as const;
 
-function serialize<
+async function serialize<
   T extends {
+    id: string;
+    role: Role;
+    lastActiveRole: Role | null;
     vendorProfile: { status: string; rcNumber: string | null } | null;
     riderProfile: Parameters<typeof effectiveRiderStatus>[0] | null;
     logisticsCompany: { status: string } | null;
   }
 >(user: T) {
-  const { vendorProfile, riderProfile, logisticsCompany, ...userData } = user;
+  const { vendorProfile, riderProfile, logisticsCompany, lastActiveRole: _last, ...userData } = user;
   return {
     ...userData,
+    ...(await roleFields(user)),
     vendorStatus: vendorProfile?.status ?? undefined,
     vendorRcNumberMissing: vendorProfile ? !vendorProfile.rcNumber : undefined,
     riderStatus: riderProfile ? effectiveRiderStatus(riderProfile) : undefined,
@@ -405,13 +412,54 @@ router.get(
 
     // A rider invited to a fleet after signing up joins here, so the approval
     // the invite grants shows on their very next status check.
-    if (user.role === 'RIDER' && user.riderProfile) {
+    if (user.riderProfile) {
       const v = await prisma.user.findUnique({ where: { id: user.id }, select: { emailVerified: true } });
       const joined = await claimFleetInvite({ id: user.id, email: user.email, emailVerified: !!v?.emailVerified });
       if (joined) user = (await prisma.user.findUnique({ where: { id: req.user!.sub }, select: SELECT })) ?? user;
     }
 
-    return res.json({ user: serialize(user) });
+    return res.json({ user: await serialize(user) });
+  })
+);
+
+/** Every experience this account holds or could register for, and the one it is in now. */
+router.get(
+  '/roles',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.sub },
+      select: { id: true, role: true, lastActiveRole: true }
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const { role, primaryRole, roles } = await roleFields(user);
+    return res.json({ activeRole: role, primaryRole, roles });
+  })
+);
+
+const switchRoleSchema = z.object({ role: z.enum(ALL_ROLES as [Role, ...Role[]]) });
+
+/**
+ * Switch the experience the apps open. Nothing here grants access: every route
+ * is still gated by the profile it needs. It is remembered so the next sign-in
+ * opens the same experience.
+ */
+router.post(
+  '/switch-role',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const result = switchRoleSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: 'Invalid role' });
+
+    const id = req.user!.sub;
+    if (!(await canActAs(id, result.data.role))) {
+      return res.status(403).json({ error: 'You are not registered or approved for that role.', code: 'ROLE_UNAVAILABLE' });
+    }
+
+    await prisma.user.update({ where: { id }, data: { lastActiveRole: result.data.role } });
+    const user = await prisma.user.findUnique({ where: { id }, select: SELECT });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    return res.json({ user: await serialize(user) });
   })
 );
 
@@ -440,7 +488,7 @@ router.patch(
       select: SELECT
     });
 
-    return res.json({ user: serialize(user) });
+    return res.json({ user: await serialize(user) });
   })
 );
 

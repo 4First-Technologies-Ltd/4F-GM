@@ -12,6 +12,7 @@ import { getSavedUser } from '@/lib/storage';
 import { useDrawer } from './_layout';
 import { DeleteAccountLink } from '@/components/delete-account';
 import { ReportBugLink } from '@/components/report-bug';
+import { SwitchRoleLink } from '@/components/role-switcher';
 
 const C = {
   bg: '#EDF7ED',
@@ -363,6 +364,7 @@ export default function VendorSettingsScreen() {
           <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
+        <SwitchRoleLink />
         <ReportBugLink />
         <DeleteAccountLink businessAccount />
 

@@ -3,6 +3,7 @@ import type { OrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
+import { resolveActiveRole } from '../lib/roles';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.sub },
-      select: { role: true, vendorProfile: { select: { id: true } } }
+      select: { id: true, role: true, lastActiveRole: true, vendorProfile: { select: { id: true } } }
     });
 
     if (!user) {
@@ -52,7 +53,8 @@ router.get(
 
     const { since, keys } = monthsBack(6);
 
-    if (user.role === 'VENDOR' && user.vendorProfile) {
+    // Vendor numbers only in the vendor experience: the same account shopping as a customer sees its own spend.
+    if (user.vendorProfile && (await resolveActiveRole(user)) === 'VENDOR') {
       const vendorId = user.vendorProfile.id;
 
       const [allOrders, recentOrders, listings] = await Promise.all([

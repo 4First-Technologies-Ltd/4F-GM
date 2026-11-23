@@ -30,13 +30,18 @@ async function requireManager(req: Request, res: Response, next: NextFunction) {
     where: { id: req.user!.sub },
     select: { id: true, email: true, role: true, emailVerified: true, isSuspended: true }
   });
-  if (!user || user.role !== 'BRANCH_MANAGER' || !user.emailVerified || user.isSuspended) {
+  if (!user || !user.emailVerified || user.isSuspended) {
     return res.status(403).json({ error: 'Branch manager access required' });
   }
-  // Claiming here means a manager who signed up before being invited gets
-  // access on their next request, with no separate "accept" step.
+  // Claiming here means anyone invited by their verified email gets access on
+  // their next request, with no separate "accept" step.
   await claimInvites(user);
   req.managerBranchIds = await managedBranchIds(user.id);
+  // Gated by holding an active branch (or having signed up as a manager, so one whose
+  // branches were all revoked still sees an empty list): an account can hold several roles.
+  if (req.managerBranchIds.length === 0 && user.role !== 'BRANCH_MANAGER') {
+    return res.status(403).json({ error: 'Branch manager access required' });
+  }
   next();
 }
 

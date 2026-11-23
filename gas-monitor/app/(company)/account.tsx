@@ -6,6 +6,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { authApi, companyApi, CompanyProfile } from '@/lib/api';
 import { DeleteAccountLink } from '@/components/delete-account';
 import { ReportBugLink } from '@/components/report-bug';
+import { SwitchRoleLink } from '@/components/role-switcher';
 
 const C = {
   bg: '#EDF7ED', card: '#FFFFFF', border: '#E0EEE0', text: '#1A2E1A', muted: '#7A9A7A',
@@ -54,6 +55,7 @@ export default function CompanyAccountScreen() {
         <TouchableOpacity style={s.signOut} onPress={signOut} activeOpacity={0.85}>
           <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
+        <SwitchRoleLink />
         <ReportBugLink />
         <DeleteAccountLink businessAccount />
       </ScrollView>

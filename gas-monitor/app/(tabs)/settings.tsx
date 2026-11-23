@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DeleteAccountLink } from '@/components/delete-account';
 import { ReportBugLink } from '@/components/report-bug';
+import { SwitchRoleLink } from '@/components/role-switcher';
 
 const C = {
   bg: '#EDF7ED',
@@ -207,6 +208,7 @@ export default function SettingsScreen() {
             : <Text style={s.dangerText}>Sign Out</Text>}
         </TouchableOpacity>
 
+        <SwitchRoleLink />
         <ReportBugLink />
         <DeleteAccountLink />
 

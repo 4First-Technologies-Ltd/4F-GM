@@ -81,7 +81,11 @@ model User {
   devicePhone       String?
   avatarUrl         String?
   password          String
+  /// The role the account signed up as. Never changes; see `lib/roles.ts`.
   role              Role              @default(CONSUMER)
+  /// The experience the person last switched into, so the next sign-in opens it.
+  /// Validated against the profiles they still hold before it is used.
+  lastActiveRole    Role?
   emailVerified     Boolean           @default(false)
   isSuspended       Boolean           @default(false)
   /// Why an admin suspended this account (null for accounts suspended before reasons existed).

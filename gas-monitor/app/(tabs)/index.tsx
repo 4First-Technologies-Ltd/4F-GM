@@ -1,5 +1,5 @@
 import { NotificationBell } from '@/components/notification-bell';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,31 +7,36 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  Animated,
   Modal,
   TextInput,
   Image,
   ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
+  useWindowDimensions,
   type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Fonts } from '@/constants/theme';
-import { cylinderApi, CylinderProfile, CylinderImageKey } from '@/lib/api';
+import {
+  cylinderApi,
+  marketplaceApi,
+  monitorApi,
+  ordersApi,
+  type ConsumerOrder,
+  type CylinderImageKey,
+  type CylinderProfile,
+  type MarketplaceListing,
+  type Monitor,
+  type MonitorHourPoint,
+} from '@/lib/api';
 
 const monoFont = Fonts?.mono ?? 'monospace';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
 const C = {
-  hero: '#EDF7ED',
-  heroDark: '#2D7450',
-  heroText: '#1A2E1A',
-  heroSubText: '#7A9A7A',
-  gaugeOuter: '#FFFFFF',
-  gaugeTrack: '#C0DCC0',
   bg: '#EDF7ED',
   card: '#FFFFFF',
   surface: '#F5FBF5',
@@ -43,9 +48,10 @@ const C = {
   dim: '#AECAAE',
   accent: '#2D7450',
   accentLight: '#E8F5E8',
+  deep: '#1A4730',
+  clay: '#A9714C',
+  clayLight: '#F3E6DB',
   red: '#D32F2F',
-  orange: '#E65100',
-  yellow: '#F9A825',
 };
 
 // ── Cylinder image map ────────────────────────────────────────────────────────
@@ -61,7 +67,9 @@ const SIZE_OPTIONS: { label: string; kg: number; key: CylinderImageKey }[] = [
   { label: '50 kg', kg: 50, key: '50kg' },
 ];
 
-// ── Gauge helpers ─────────────────────────────────────────────────────────────
+const REMINDER_OPTS = ['12 hrs before', '1 day before', '2 days before', '3 days before'];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 }
@@ -84,228 +92,168 @@ function getBarColor(t: number): string {
 }
 
 function getStatus(pct: number) {
-  if (pct <= 10) return { label: 'Critical — Refill Now', color: '#FF3B30' };
-  if (pct <= 25) return { label: 'Low — Order Soon', color: '#FF9500' };
-  if (pct <= 60) return { label: 'Moderate Level', color: '#CC9A00' };
-  return { label: 'Good Level', color: '#34C759' };
+  if (pct <= 10) return { label: 'Critical', color: '#FF3B30' };
+  if (pct <= 25) return { label: 'Low', color: '#FF9500' };
+  if (pct <= 60) return { label: 'Moderate', color: '#CC9A00' };
+  return { label: 'Good', color: '#34C759' };
 }
 
-// ── Segmented arc gauge ───────────────────────────────────────────────────────
+const naira = (n: number) => `₦${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+
+/** Days of gas left, from the drop over the readings we have. Null until there is enough history to say. */
+function estimateDays(points: MonitorHourPoint[], level: number): number | null {
+  const pts = points.filter((p) => p.percent != null);
+  if (pts.length < 2) return null;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  const hours = (Date.parse(last.t) - Date.parse(first.t)) / 3_600_000;
+  const drop = (first.percent as number) - (last.percent as number);
+  if (!(hours >= 6) || drop <= 0.5) return null;
+  return Math.max(0, Math.round(level / (drop / hours) / 24));
+}
+
+// ── Segmented arc gauge (scales with `size`) ──────────────────────────────────
 const GAUGE_TOTAL = 48;
-const GAUGE_ARC   = 300;
+const GAUGE_ARC = 300;
 const GAUGE_START = 210;
 const GAUGE_BAR_H = 18;
 const GAUGE_BAR_W = 7;
 const GAUGE_BAR_R = 2;
 
-const innerDiskShadow = Platform.select({
-  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 14 },
-  android: { elevation: 8 },
-  default: {},
-});
-
-function GaugeRing({ percentage, maxKg, size = 210 }: { percentage: number; maxKg: number; size?: number }) {
+function GaugeRing({ percentage, maxKg, kgLeft, size = 210 }: { percentage: number; maxKg: number; kgLeft?: number | null; size?: number }) {
+  const k = size / 210;
+  const barH = GAUGE_BAR_H * k;
+  const barW = GAUGE_BAR_W * k;
   const p = Math.max(0, Math.min(100, percentage));
-  const midR  = size / 2 - GAUGE_BAR_H / 2;
-  const innerD = 2 * (midR - GAUGE_BAR_H / 2 - 4);
+  const midR = size / 2 - barH / 2;
+  const innerD = 2 * (midR - barH / 2 - 4 * k);
   const activeCount = Math.round((p / 100) * GAUGE_TOTAL);
   const currentColor = getBarColor(p / 100);
+  const kg = kgLeft ?? (p / 100) * maxKg;
 
   return (
     <View style={{ width: size, height: size }}>
       {Array.from({ length: GAUGE_TOTAL }, (_, i) => {
-        const t        = i / (GAUGE_TOTAL - 1);
+        const t = i / (GAUGE_TOTAL - 1);
         const angleDeg = GAUGE_START + (i / GAUGE_TOTAL) * GAUGE_ARC;
-        const isActive = i < activeCount;
         return (
           <View
             key={i}
             style={{
               position: 'absolute',
-              width: GAUGE_BAR_W,
-              height: GAUGE_BAR_H,
+              width: barW,
+              height: barH,
               borderRadius: GAUGE_BAR_R,
-              backgroundColor: isActive ? getBarColor(t) : '#C2D9C2',
-              top: (size - GAUGE_BAR_H) / 2,
-              left: (size - GAUGE_BAR_W) / 2,
+              backgroundColor: i < activeCount ? getBarColor(t) : '#C2D9C2',
+              top: (size - barH) / 2,
+              left: (size - barW) / 2,
               transform: [{ rotate: `${angleDeg}deg` }, { translateY: -midR }],
             }}
           />
         );
       })}
-      <View style={[
-        {
+      <View
+        style={{
           position: 'absolute',
           width: innerD,
           height: innerD,
           borderRadius: innerD / 2,
-          backgroundColor: C.gaugeOuter,
+          backgroundColor: C.card,
           top: (size - innerD) / 2,
           left: (size - innerD) / 2,
           justifyContent: 'center',
           alignItems: 'center',
-          gap: 2,
-        },
-        innerDiskShadow,
-      ]}>
-        <Text style={[s.gaugePercent, { fontFamily: monoFont }]}>{p}%</Text>
-        <Text style={[s.gaugeLabel, { color: currentColor }]}>Gas Level</Text>
-        <Text style={[s.gaugeKg, { fontFamily: monoFont }]}>{((p / 100) * maxKg).toFixed(1)} kg</Text>
+        }}
+      >
+        <Text style={{ fontFamily: monoFont, color: C.text, fontSize: 46 * k, fontWeight: '800', letterSpacing: -2 * k }}>{Math.round(p)}%</Text>
+        <Text style={{ color: currentColor, fontSize: Math.max(10, 13 * k), fontWeight: '700' }}>Gas level</Text>
+        <Text style={{ fontFamily: monoFont, color: C.muted, fontSize: Math.max(10, 13 * k) }}>{kg.toFixed(1)} kg</Text>
       </View>
     </View>
   );
 }
 
-// ── Cylinder profile card (back of flip) ──────────────────────────────────────
-const GAUGE_SIZE = 210;
-const CARD_W     = 310;
-const CARD_H     = 170;
+// ── Small pieces ──────────────────────────────────────────────────────────────
+function Pill({ label, color, bg, onPress }: { label: string; color: string; bg: string; onPress?: () => void }) {
+  const body = (
+    <View style={[s.pill, { backgroundColor: bg }]}>
+      <View style={[s.pillDot, { backgroundColor: color }]} />
+      <Text style={[s.pillText, { color }]} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+  return onPress ? <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{body}</TouchableOpacity> : body;
+}
 
-// Flip container must fit both faces: wide enough for the card, tall enough for the gauge
-const FLIP_W = CARD_W;
-const FLIP_H = Math.max(GAUGE_SIZE, CARD_H);
+const ORDER_STEPS: { status: ConsumerOrder['status']; label: string }[] = [
+  { status: 'CONFIRMED', label: 'Confirmed' },
+  { status: 'OUT_FOR_DELIVERY', label: 'On the way' },
+  { status: 'DELIVERED', label: 'Delivered' },
+];
 
-function CylinderProfileCard({ profile, level }: { profile: CylinderProfile | null; level: number }) {
-  const levelColor = getBarColor(level / 100);
+function OrderSteps({ status }: { status: ConsumerOrder['status'] }) {
+  const reached = ORDER_STEPS.findIndex((st) => st.status === status);
   return (
-    <View style={profileCard.card}>
-      {profile ? (
-        <>
-          {/* Left — large cylinder image */}
-          <View style={profileCard.imageCol}>
-            <Image
-              source={CYLINDER_IMAGES[profile.imageKey] ?? CYLINDER_IMAGES['12.5kg']}
-              style={profileCard.image}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* Divider */}
-          <View style={profileCard.divider} />
-
-          {/* Right — profile details */}
-          <View style={profileCard.detailCol}>
-            <Text style={profileCard.label}>PROFILE</Text>
-            <Text style={profileCard.name} numberOfLines={2}>{profile.name}</Text>
-
-            <View style={profileCard.sizeBadge}>
-              <Text style={profileCard.sizeText}>
-                {profile.customSizeLabel ?? `${profile.sizeKg} kg`}
-              </Text>
-            </View>
-
-            <Text style={profileCard.label}>GAS LEVEL</Text>
-            <View style={[profileCard.levelBar, { borderColor: levelColor + '40' }]}>
-              <View style={[profileCard.levelFill, { width: `${level}%` as any, backgroundColor: levelColor }]} />
-            </View>
-            <Text style={[profileCard.levelPct, { color: levelColor }]}>
-              {level}% · {((level / 100) * profile.sizeKg).toFixed(1)} kg left
-            </Text>
-          </View>
-        </>
-      ) : (
-        <View style={profileCard.emptyWrap}>
-          <Text style={{ fontSize: 36 }}>🪣</Text>
-          <Text style={profileCard.name}>No Profile Set</Text>
-          <Text style={profileCard.emptyHint}>Tap the dropdown above to add a cylinder</Text>
-        </View>
-      )}
+    <View>
+      <View style={s.stepsRow}>
+        {ORDER_STEPS.map((st, i) => (
+          <React.Fragment key={st.status}>
+            <View style={[s.stepDot, i <= reached ? s.stepDotOn : null]} />
+            {i < ORDER_STEPS.length - 1 && <View style={[s.stepLine, i < reached ? s.stepLineOn : null]} />}
+          </React.Fragment>
+        ))}
+      </View>
+      <View style={s.stepLabels}>
+        {ORDER_STEPS.map((st) => (
+          <Text key={st.status} style={s.stepLabel}>{st.label}</Text>
+        ))}
+      </View>
     </View>
   );
 }
 
-const profileCard = StyleSheet.create({
-  card: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 24,
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16 },
-      android: { elevation: 6 },
-      default: {},
-    }),
-  },
-  imageCol: {
-    width: 120,
-    backgroundColor: C.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  image: { width: 96, height: 130 },
-  divider: { width: 1, backgroundColor: C.border },
-  detailCol: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  label: { color: C.dim, fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
-  name: { color: C.text, fontSize: 15, fontWeight: '800', lineHeight: 20, marginBottom: 6 },
-  sizeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 20,
-    backgroundColor: C.accentLight,
-    borderWidth: 1,
-    borderColor: C.accent + '30',
-    marginBottom: 10,
-  },
-  sizeText: { color: C.accent, fontSize: 11, fontWeight: '700' },
-  levelBar: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginTop: 2,
-  },
-  levelFill: { height: '100%', borderRadius: 3 },
-  levelPct: { fontSize: 11, fontWeight: '700', marginTop: 3 },
-  emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, padding: 20 },
-  emptyHint: { color: C.muted, fontSize: 12, textAlign: 'center', lineHeight: 17 },
-});
-
-// ── Insight row ───────────────────────────────────────────────────────────────
-function InsightRow({ icon, label, value, valueColor }: {
-  icon: string; label: string; value: string; valueColor: string;
-}) {
+function UsageBars({ points }: { points: MonitorHourPoint[] }) {
+  const pts = points.filter((p) => p.percent != null);
   return (
-    <View style={s.insightRow}>
-      <View style={s.insightIconBox}>
-        <Text style={s.insightIcon}>{icon}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.insightLabel}>{label}</Text>
-        <Text style={[s.insightValue, { color: valueColor }]}>{value}</Text>
-      </View>
+    <View style={s.bars} accessibilityLabel="Gas level over the last 24 hours">
+      {pts.map((p, i) => (
+        <View
+          key={p.t}
+          style={[
+            s.bar,
+            { height: Math.max(3, (Math.min(100, p.percent as number) / 100) * 54) },
+            i === pts.length - 1 ? s.barNow : null,
+          ]}
+        />
+      ))}
     </View>
   );
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-const REMINDER_OPTS = ['12 hrs before', '1 day before', '2 days before', '3 days before'];
-
 export default function HomeScreen() {
+  const { width } = useWindowDimensions();
+  const colW = (width - 32 - 10) / 2;
+  const gaugeSize = Math.max(120, Math.floor(colW - 28));
+
+  // Demo level (used until a monitor reports, and while "Simulate drain" runs)
   const [gasLevel, setGasLevel] = useState(100);
   const [simulating, setSimulating] = useState(false);
+  const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Reminder (local only)
   const [selectedReminder, setSelectedReminder] = useState('1 day before');
   const [reminderSet, setReminderSet] = useState(false);
+  const [reminderVisible, setReminderVisible] = useState(false);
+
+  // Live data
+  const [orders, setOrders] = useState<ConsumerOrder[]>([]);
+  const [listings, setListings] = useState<MarketplaceListing[] | null>(null);
+  const [monitors, setMonitors] = useState<Monitor[]>([]);
+  const [points, setPoints] = useState<MonitorHourPoint[]>([]);
 
   // Cylinder profiles
   const [profiles, setProfiles] = useState<CylinderProfile[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
-
-  // UI state
-  const [isFlipped, setIsFlipped] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
 
@@ -317,20 +265,9 @@ export default function HomeScreen() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const simRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
-  const gaugeY = useRef(0);
-  const contentY = useRef(0);
-  const reminderY = useRef(0);
-
-  // Flip animation
-  const flipAnim = useRef(new Animated.Value(0)).current;
-  const [showBackFace, setShowBackFace] = useState(false);
-
   const activeProfile = profiles.find((p) => p.isActive) ?? null;
-  const maxKg = activeProfile?.sizeKg ?? 12.5;
+  const monitor = monitors[0] ?? null;
 
-  // Load profiles on mount
   useEffect(() => {
     cylinderApi.list()
       .then(setProfiles)
@@ -338,35 +275,33 @@ export default function HomeScreen() {
       .finally(() => setProfilesLoading(false));
   }, []);
 
-  // Flip listener — swap face at the midpoint
-  useEffect(() => {
-    const id = flipAnim.addListener(({ value }) => {
-      setShowBackFace(value >= 0.5);
-    });
-    return () => flipAnim.removeListener(id);
-  }, [flipAnim]);
+  // Orders, marketplace and the monitor refresh every time the tab is focused.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      Promise.allSettled([ordersApi.list(), marketplaceApi.listings(), monitorApi.list()]).then(async ([o, m, d]) => {
+        if (cancelled) return;
+        if (o.status === 'fulfilled') setOrders(o.value);
+        if (m.status === 'fulfilled') setListings(m.value.listings);
+        if (d.status === 'fulfilled') {
+          setMonitors(d.value.devices);
+          const first = d.value.devices[0];
+          if (first) {
+            const h = await monitorApi.hourly(first.id).catch(() => ({ points: [] as MonitorHourPoint[] }));
+            if (!cancelled) setPoints(h.points);
+          } else {
+            setPoints([]);
+          }
+        }
+      });
+      return () => { cancelled = true; };
+    }, []),
+  );
 
-  function handleGaugeTap() {
-    const toValue = isFlipped ? 0 : 1;
-    setIsFlipped(!isFlipped);
-    Animated.spring(flipAnim, {
-      toValue,
-      friction: 8,
-      tension: 60,
-      useNativeDriver: true,
-    }).start();
-  }
-
-  const frontRotate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
-  const backRotate  = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
-
-  function scrollToReminder() {
-    scrollRef.current?.scrollTo({ y: contentY.current + reminderY.current - 16, animated: true });
-  }
+  useEffect(() => () => { if (simRef.current) clearInterval(simRef.current); }, []);
 
   function startDrain() {
     if (simulating) return;
-    scrollRef.current?.scrollTo({ y: gaugeY.current, animated: true });
     setGasLevel(100);
     setSimulating(true);
     let current = 100;
@@ -380,19 +315,12 @@ export default function HomeScreen() {
       }
     }, 240);
   }
-
   function stopDrain() {
     if (simRef.current) { clearInterval(simRef.current); simRef.current = null; }
     setSimulating(false);
   }
-
   function resetLevel() { stopDrain(); setGasLevel(100); }
 
-  useEffect(() => {
-    return () => { if (simRef.current) clearInterval(simRef.current); };
-  }, []);
-
-  // Activate a profile
   async function activateProfile(id: string) {
     try {
       const updated = await cylinderApi.activate(id);
@@ -400,16 +328,12 @@ export default function HomeScreen() {
     } catch {}
     setSheetVisible(false);
   }
-
-  // Delete a profile
   async function deleteProfile(id: string) {
     try {
       await cylinderApi.remove(id);
       setProfiles((prev) => prev.filter((p) => p.id !== id));
     } catch {}
   }
-
-  // Submit new profile
   async function submitNewProfile() {
     setFormError('');
     if (!newName.trim()) { setFormError('Profile name is required.'); return; }
@@ -422,7 +346,7 @@ export default function HomeScreen() {
       const parsed = parseFloat(customKg);
       if (!parsed || parsed <= 0) { setFormError('Enter a valid size in kg.'); return; }
       sizeKg = parsed;
-      imageKey = '12.5kg'; // fallback image for custom sizes
+      imageKey = '12.5kg';
       customSizeLabel = customLabel.trim() || `${parsed} kg`;
     } else {
       const opt = SIZE_OPTIONS.find((o) => o.key === newSizeOption)!;
@@ -447,7 +371,6 @@ export default function HomeScreen() {
       setSaving(false);
     }
   }
-
   function resetAddForm() {
     setNewName('');
     setNewSizeOption('12.5kg');
@@ -456,215 +379,168 @@ export default function HomeScreen() {
     setFormError('');
   }
 
-  const { label: statusLabel, color: statusColor } = getStatus(gasLevel);
-  const daysLeft = Math.round((gasLevel / 100) * 30);
-  const kgLeft = ((gasLevel / 100) * maxKg).toFixed(1);
+  // ── Derived values ──────────────────────────────────────────────────────────
+  const liveLevel =
+    monitor && !monitor.state.calibrating && monitor.state.percent != null ? Math.round(monitor.state.percent) : null;
+  const isLive = liveLevel != null && !simulating;
+  const level = isLive ? (liveLevel as number) : gasLevel;
+  const maxKg = monitor?.cylinder?.sizeKg ?? activeProfile?.sizeKg ?? 12.5;
+  const kgLeft = isLive && monitor?.state.netKg != null ? monitor.state.netKg : (level / 100) * maxKg;
+  const status = getStatus(level);
+
+  const days = isLive ? estimateDays(points, level) : Math.round((level / 100) * 30);
+  const daysText = days == null ? '—' : isLive ? `~${days}` : String(days);
+  const daysSub = isLive ? (days == null ? 'Not enough use yet' : 'at your recent use') : 'demo estimate';
+
+  const inStock = useMemo(() => (listings ?? []).filter((l) => l.inStock), [listings]);
+  const best = useMemo(
+    () => inStock.reduce<MarketplaceListing | null>((b, l) => (b == null || l.pricePerKg < b.pricePerKg ? l : b), null),
+    [inStock],
+  );
+  const supplierCount = useMemo(() => new Set(inStock.map((l) => l.vendor.id)).size, [inStock]);
+
+  const activeOrder = useMemo(() => {
+    const open = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY');
+    return open.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
+  }, [orders]);
+
+  const usagePoints = points.filter((p) => p.percent != null);
+  const usedPct = usagePoints.length >= 2 ? Math.max(0, Math.round((usagePoints[0].percent as number) - (usagePoints[usagePoints.length - 1].percent as number))) : null;
+
+  const goOrder = () => router.push('/order');
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.hero }}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={s.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Hero section ── */}
-        <View style={s.hero}>
-
-          {/* Header: title | profile pill | bell */}
-          <View style={s.header}>
-            <View>
-              <Text style={s.headerTitle}>4F G-Monitor</Text>
-              <Text style={s.headerSub}>FG-2024-0047 · Connected</Text>
-            </View>
-            <View style={s.headerRight}>
-              <TouchableOpacity
-                style={s.profilePill}
-                onPress={() => setSheetVisible(true)}
-                activeOpacity={0.7}
-                accessibilityLabel="Select cylinder profile"
-              >
-                <Text style={s.profilePillText} numberOfLines={1}>
-                  {activeProfile?.name ?? 'Select Cylinder'}
-                </Text>
-                <IconSymbol name="chevron.down" size={13} color={C.accent} />
-              </TouchableOpacity>
-              <NotificationBell />
-            </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+      <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={s.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle}>4F G-Monitor</Text>
+            <Text style={s.headerSub} numberOfLines={1}>
+              {monitor
+                ? `${monitor.nickname ?? monitor.id} · ${monitor.state.online ? 'Online' : 'Offline'}`
+                : 'No monitor connected yet'}
+            </Text>
           </View>
-
-          {/* Flippable Gauge */}
-          <View
-            onLayout={(e) => { gaugeY.current = e.nativeEvent.layout.y; }}
-            style={s.gaugeWrapper}
-          >
-            <TouchableOpacity onPress={handleGaugeTap} activeOpacity={1} accessible={false}>
-              <View style={{ width: FLIP_W, height: FLIP_H, justifyContent: 'center', alignItems: 'center' }}>
-                {/* Front face — gauge centred in the wider container */}
-                <Animated.View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    {
-                      backfaceVisibility: 'hidden',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      transform: [{ perspective: 1400 }, { rotateY: frontRotate }],
-                    },
-                  ]}
-                >
-                  <GaugeRing percentage={gasLevel} maxKg={maxKg} />
-                </Animated.View>
-
-                {/* Back face — wide horizontal card */}
-                <Animated.View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    {
-                      backfaceVisibility: 'hidden',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      transform: [{ perspective: 1400 }, { rotateY: backRotate }],
-                    },
-                  ]}
-                >
-                  <CylinderProfileCard profile={activeProfile} level={gasLevel} />
-                </Animated.View>
-              </View>
+          <View style={s.headerRight}>
+            <TouchableOpacity
+              style={s.profilePill}
+              onPress={() => setSheetVisible(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="Select cylinder profile"
+            >
+              <Text style={s.profilePillText} numberOfLines={1}>{activeProfile?.name ?? 'Select cylinder'}</Text>
+              <IconSymbol name="chevron.down" size={13} color={C.accent} />
             </TouchableOpacity>
-            <Text style={s.flipHint}>{isFlipped ? 'Tap to show gauge' : 'Tap gauge for profile'}</Text>
-          </View>
-
-          {/* Status badge */}
-          <View style={[s.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '55' }]}>
-            <View style={[s.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[s.statusText, { color: statusColor }]}>{statusLabel}</Text>
-          </View>
-
-          {/* Hero action buttons */}
-          <View style={s.heroActions}>
-            <TouchableOpacity style={s.heroSecondaryBtn} activeOpacity={0.7} onPress={resetLevel}>
-              <Text style={s.heroSecondaryBtnText}>Reset</Text>
-            </TouchableOpacity>
-            {gasLevel === 0 ? (
-              <TouchableOpacity
-                style={[s.heroPrimaryBtn, { backgroundColor: C.red }]}
-                activeOpacity={0.85}
-                onPress={() => router.push('/order')}
-              >
-                <IconSymbol name="cart.fill" size={15} color="#fff" />
-                <Text style={s.heroPrimaryBtnText}>Order Refill</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={s.heroPrimaryBtn} activeOpacity={0.85} onPress={scrollToReminder}>
-                <IconSymbol name="bell.fill" size={15} color="#fff" />
-                <Text style={s.heroPrimaryBtnText}>Set Reminder</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={s.heroIconBtn} activeOpacity={0.7}>
-              <IconSymbol name="arrow.clockwise" size={18} color={C.accent} />
-            </TouchableOpacity>
+            <NotificationBell />
           </View>
         </View>
 
-        {/* ── White content section ── */}
-        <View style={s.content} onLayout={(e) => { contentY.current = e.nativeEvent.layout.y; }}>
+        {level <= 25 && (
+          <TouchableOpacity style={s.alertBanner} onPress={goOrder} activeOpacity={0.85}>
+            <View style={s.alertIconBox}><Text style={s.alertIconText}>!</Text></View>
+            <Text style={s.alertText}>
+              {level <= 10 ? 'Gas is almost out. Order a refill now.' : 'Gas is running low. Order a refill soon.'}
+            </Text>
+            <IconSymbol name="chevron.right" size={16} color={C.red} />
+          </TouchableOpacity>
+        )}
 
-          <View style={s.statsRow}>
-            <View style={s.statItem}>
-              <Text style={[s.statNum, daysLeft === 0 && { color: C.red }, { fontFamily: monoFont }]}>{daysLeft}</Text>
-              <Text style={s.statLabel}>DAYS LEFT</Text>
+        <View style={s.bento}>
+          {/* Row 1: gauge tile + two stat tiles */}
+          <View style={s.row}>
+            <View style={[s.card, s.gaugeCard]}>
+              <Text style={s.k}>Gas level</Text>
+              <GaugeRing percentage={level} maxKg={maxKg} kgLeft={kgLeft} size={gaugeSize} />
+              <Pill
+                label={isLive ? `Live · ${status.label}` : `Demo · ${status.label}`}
+                color={isLive ? C.accent : status.color}
+                bg={isLive ? C.accentLight : status.color + '22'}
+                onPress={isLive ? undefined : () => router.push('/monitors' as never)}
+              />
             </View>
-            <View style={s.statDivider} />
-            <View style={s.statItem}>
-              <Text style={[s.statNum, { fontFamily: monoFont }]}>{kgLeft}</Text>
-              <Text style={s.statLabel}>KG LEFT</Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statItem}>
-              <Text style={[s.statNum, { fontFamily: monoFont, color: C.accent }]}>1.8</Text>
-              <Text style={s.statLabel}>KG/DAY</Text>
+
+            <View style={s.col}>
+              <View style={[s.card, s.fill]}>
+                <Text style={s.k}>Days left</Text>
+                <Text style={[s.v, { fontFamily: monoFont }, days === 0 && { color: C.red }]}>{daysText}</Text>
+                <Text style={s.sub}>{daysSub}</Text>
+              </View>
+              <TouchableOpacity style={[s.card, s.fill]} onPress={goOrder} activeOpacity={0.8}>
+                <Text style={s.k}>Best price</Text>
+                <Text style={[s.v, { fontFamily: monoFont }]}>{best ? naira(best.pricePerKg) : '—'}</Text>
+                <Text style={s.sub} numberOfLines={1}>{best ? `per kg · ${best.vendor.businessName}` : listings ? 'No suppliers in stock' : 'Loading…'}</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>AI Insights</Text>
-              <View style={s.liveBadge}>
-                <View style={s.liveDot} />
-                <Text style={s.liveText}>LIVE</Text>
-              </View>
+          {/* Marketplace */}
+          <TouchableOpacity style={[s.card, s.deepCard]} onPress={goOrder} activeOpacity={0.85}>
+            <View style={s.deepIcon}><IconSymbol name="storefront.fill" size={22} color="#fff" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.deepTitle}>Marketplace</Text>
+              <Text style={s.deepSub}>
+                {supplierCount > 0 ? `${supplierCount} supplier${supplierCount === 1 ? '' : 's'} with gas in stock` : 'Find a supplier and order gas'}
+              </Text>
             </View>
-            {gasLevel <= 10 && (
-              <View style={s.alertBanner}>
-                <View style={s.alertIconBox}><Text style={s.alertIconText}>!</Text></View>
-                <Text style={s.alertText}>Gas is empty — order a refill immediately.</Text>
+            <View style={s.deepBtn}><Text style={s.deepBtnText}>Browse</Text></View>
+          </TouchableOpacity>
+
+          {/* Usage, only when a monitor has readings */}
+          {usagePoints.length >= 2 && (
+            <TouchableOpacity style={s.card} onPress={() => router.push('/monitors' as never)} activeOpacity={0.85}>
+              <View style={s.between}>
+                <Text style={s.k}>Last 24 hours</Text>
+                {usedPct != null && <Text style={[s.k, { fontFamily: monoFont }]}>{usedPct}% used</Text>}
               </View>
-            )}
-            <InsightRow icon="📅" label="PREDICTED EMPTY DATE"
-              value={gasLevel === 0 ? 'Already empty' : 'In ~8 days at current usage'}
-              valueColor={gasLevel === 0 ? C.red : C.textSub} />
-            <InsightRow icon="📈" label="USAGE TREND"
-              value="Using 1.8 kg/day on average this week" valueColor={C.orange} />
-            <InsightRow icon="💡" label="SMART SUGGESTION"
-              value="Order a refill to avoid running out" valueColor={C.muted} />
+              <UsageBars points={usagePoints} />
+            </TouchableOpacity>
+          )}
+
+          {/* Active order */}
+          {activeOrder && (
+            <TouchableOpacity style={s.card} onPress={() => router.push(`/order/${activeOrder.id}`)} activeOpacity={0.85}>
+              <View style={s.between}>
+                <Text style={s.k}>Order in progress</Text>
+                <Pill
+                  label={activeOrder.status === 'OUT_FOR_DELIVERY' ? 'On the way' : 'Confirmed'}
+                  color={C.accent}
+                  bg={C.accentLight}
+                />
+              </View>
+              <Text style={s.orderTitle} numberOfLines={1}>
+                {activeOrder.vendor?.businessName ?? activeOrder.supplierName ?? 'Your order'} · {activeOrder.cylinderSize}
+                {activeOrder.quantity > 1 ? ` × ${activeOrder.quantity}` : ''}
+              </Text>
+              <OrderSteps status={activeOrder.status} />
+            </TouchableOpacity>
+          )}
+
+          {/* Row: cylinder + reminder */}
+          <View style={s.row}>
+            <TouchableOpacity style={[s.card, s.fill, s.half]} onPress={() => setSheetVisible(true)} activeOpacity={0.85}>
+              <Text style={s.k}>Cylinder</Text>
+              {activeProfile ? (
+                <View style={s.cylRow}>
+                  <Image source={CYLINDER_IMAGES[activeProfile.imageKey] ?? CYLINDER_IMAGES['12.5kg']} style={s.cylImg} resizeMode="contain" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.tileTitle} numberOfLines={1}>{activeProfile.name}</Text>
+                    <Text style={s.sub}>{activeProfile.customSizeLabel ?? `${activeProfile.sizeKg} kg`}</Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={s.sub}>Tap to add a cylinder profile</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.card, s.clayCard, s.fill, s.half]} onPress={() => setReminderVisible(true)} activeOpacity={0.85}>
+              <Text style={[s.k, { color: C.clay }]}>Reminder</Text>
+              <Text style={s.tileTitle}>{reminderSet ? 'On' : 'Not set'}</Text>
+              <Text style={s.sub}>{reminderSet ? selectedReminder : 'Tap to get a refill nudge'}</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={s.section} onLayout={(e) => { reminderY.current = e.nativeEvent.layout.y; }}>
-            <View style={s.sectionHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <IconSymbol name="bell.fill" size={16} color={C.accent} />
-                <Text style={s.sectionTitle}>Refill Reminder</Text>
-              </View>
-            </View>
-            {reminderSet ? (
-              <View style={s.reminderActive}>
-                <View style={s.reminderCheckCircle}>
-                  <IconSymbol name="checkmark.circle" size={36} color={C.accent} />
-                </View>
-                <Text style={s.reminderActiveTitle}>Reminder Active</Text>
-                <View style={s.reminderActiveRow}>
-                  <IconSymbol name="clock" size={13} color={C.muted} />
-                  <Text style={s.reminderActiveDesc}>
-                    Notify me{' '}
-                    <Text style={{ color: C.accent, fontWeight: '700' }}>{selectedReminder}</Text>
-                    {' '}before empty
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => setReminderSet(false)} activeOpacity={0.7}>
-                  <Text style={s.cancelReminderText}>Cancel reminder</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={s.sectionSubtitle}>When should we remind you to refill?</Text>
-                <View style={s.reminderGrid}>
-                  {REMINDER_OPTS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[s.reminderOpt, selectedReminder === opt && s.reminderOptActive]}
-                      onPress={() => setSelectedReminder(opt)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.reminderOptText, selectedReminder === opt && s.reminderOptTextActive]}>
-                        {opt}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <View style={s.reminderBtnRow}>
-                  <TouchableOpacity style={[s.getReminderBtn, { flex: 1 }]} onPress={() => setReminderSet(true)} activeOpacity={0.85}>
-                    <IconSymbol name="bell.fill" size={16} color="#fff" />
-                    <Text style={s.getReminderText}>Get Reminder</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.orderRefillBtn} onPress={() => router.push('/order')} activeOpacity={0.85}>
-                    <IconSymbol name="cart.fill" size={16} color="#fff" />
-                    <Text style={s.getReminderText}>Order Refill</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-
-          <View style={s.section}>
+          {/* Demo controls */}
+          <View style={[s.card, s.demo]}>
             <Text style={s.demoLabel}>DEMO CONTROLS</Text>
             <View style={s.demoRow}>
               <TouchableOpacity
@@ -672,25 +548,53 @@ export default function HomeScreen() {
                 activeOpacity={0.8}
                 onPress={simulating ? stopDrain : startDrain}
               >
-                <Text style={s.drainBtnText}>{simulating ? '■  Stop' : '▶  Simulate Drain'}</Text>
+                <Text style={s.drainBtnText}>{simulating ? '■  Stop' : '▶  Simulate drain'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.resetIconBtn} activeOpacity={0.7} onPress={resetLevel}>
+              <TouchableOpacity style={s.resetIconBtn} activeOpacity={0.7} onPress={resetLevel} accessibilityLabel="Reset level">
                 <IconSymbol name="arrow.clockwise" size={20} color={C.accent} />
               </TouchableOpacity>
             </View>
           </View>
-
-          <View style={{ height: 16 }} />
         </View>
       </ScrollView>
 
+      {/* ── Reminder Modal ── */}
+      <Modal visible={reminderVisible} transparent animationType="slide" onRequestClose={() => setReminderVisible(false)}>
+        <Pressable style={s.sheetOverlay} onPress={() => setReminderVisible(false)}>
+          <Pressable style={s.sheet} onPress={() => {}}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Refill reminder</Text>
+            <Text style={s.sheetNote}>When should we remind you to refill?</Text>
+            <View style={s.reminderGrid}>
+              {REMINDER_OPTS.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.reminderOpt, selectedReminder === opt && s.reminderOptActive]}
+                  onPress={() => setSelectedReminder(opt)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.reminderOptText, selectedReminder === opt && s.reminderOptTextActive]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={s.saveBtn}
+              activeOpacity={0.85}
+              onPress={() => { setReminderSet(true); setReminderVisible(false); }}
+            >
+              <Text style={s.saveBtnText}>{reminderSet ? 'Update reminder' : 'Turn on reminder'}</Text>
+            </TouchableOpacity>
+            {reminderSet && (
+              <TouchableOpacity onPress={() => { setReminderSet(false); setReminderVisible(false); }} activeOpacity={0.7} style={{ alignItems: 'center', marginTop: 14 }}>
+                <Text style={s.cancelReminderText}>Turn off reminder</Text>
+              </TouchableOpacity>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* ── Profile Selector Sheet ── */}
-      <Modal
-        visible={sheetVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSheetVisible(false)}
-      >
+      <Modal visible={sheetVisible} transparent animationType="slide" onRequestClose={() => setSheetVisible(false)}>
         <Pressable style={s.sheetOverlay} onPress={() => setSheetVisible(false)}>
           <Pressable style={s.sheet} onPress={() => {}}>
             <View style={s.sheetHandle} />
@@ -703,32 +607,15 @@ export default function HomeScreen() {
             ) : (
               profiles.map((p) => (
                 <View key={p.id} style={s.profileRow}>
-                  <TouchableOpacity
-                    style={s.profileRowMain}
-                    onPress={() => activateProfile(p.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Image
-                      source={CYLINDER_IMAGES[p.imageKey] ?? CYLINDER_IMAGES['12.5kg']}
-                      style={s.profileRowImage}
-                      resizeMode="contain"
-                    />
+                  <TouchableOpacity style={s.profileRowMain} onPress={() => activateProfile(p.id)} activeOpacity={0.7}>
+                    <Image source={CYLINDER_IMAGES[p.imageKey] ?? CYLINDER_IMAGES['12.5kg']} style={s.profileRowImage} resizeMode="contain" />
                     <View style={{ flex: 1 }}>
                       <Text style={s.profileRowName}>{p.name}</Text>
-                      <Text style={s.profileRowSize}>
-                        {p.customSizeLabel ?? `${p.sizeKg} kg`}
-                      </Text>
+                      <Text style={s.profileRowSize}>{p.customSizeLabel ?? `${p.sizeKg} kg`}</Text>
                     </View>
-                    {p.isActive && (
-                      <IconSymbol name="checkmark.circle.fill" size={20} color={C.accent} />
-                    )}
+                    {p.isActive && <IconSymbol name="checkmark.circle.fill" size={20} color={C.accent} />}
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={s.profileDeleteBtn}
-                    onPress={() => deleteProfile(p.id)}
-                    activeOpacity={0.7}
-                    accessibilityLabel={`Delete ${p.name}`}
-                  >
+                  <TouchableOpacity style={s.profileDeleteBtn} onPress={() => deleteProfile(p.id)} activeOpacity={0.7} accessibilityLabel={`Delete ${p.name}`}>
                     <IconSymbol name="trash.fill" size={16} color={C.red} />
                   </TouchableOpacity>
                 </View>
@@ -754,10 +641,7 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => { setAddModalVisible(false); resetAddForm(); }}
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={s.sheetOverlay} onPress={() => { setAddModalVisible(false); resetAddForm(); }}>
             <Pressable style={[s.sheet, { paddingBottom: 32 }]} onPress={() => {}}>
               <View style={s.sheetHandle} />
@@ -782,14 +666,8 @@ export default function HomeScreen() {
                     onPress={() => setNewSizeOption(opt.key)}
                     activeOpacity={0.7}
                   >
-                    <Image
-                      source={CYLINDER_IMAGES[opt.key]}
-                      style={{ width: 28, height: 28 }}
-                      resizeMode="contain"
-                    />
-                    <Text style={[s.sizeOptText, newSizeOption === opt.key && s.sizeOptTextActive]}>
-                      {opt.label}
-                    </Text>
+                    <Image source={CYLINDER_IMAGES[opt.key]} style={{ width: 28, height: 28 }} resizeMode="contain" />
+                    <Text style={[s.sizeOptText, newSizeOption === opt.key && s.sizeOptTextActive]}>{opt.label}</Text>
                   </TouchableOpacity>
                 ))}
                 <TouchableOpacity
@@ -823,21 +701,10 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              {formError !== '' && (
-                <Text style={s.formError}>{formError}</Text>
-              )}
+              {formError !== '' && <Text style={s.formError}>{formError}</Text>}
 
-              <TouchableOpacity
-                style={[s.saveBtn, saving && { opacity: 0.6 }]}
-                onPress={submitNewProfile}
-                disabled={saving}
-                activeOpacity={0.85}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={s.saveBtnText}>Save Profile</Text>
-                )}
+              <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={submitNewProfile} disabled={saving} activeOpacity={0.85}>
+                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>Save Profile</Text>}
               </TouchableOpacity>
             </Pressable>
           </Pressable>
@@ -849,290 +716,138 @@ export default function HomeScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const cardShadow = Platform.select({
-  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A2E1A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+  android: { elevation: 2 },
   default: {},
 });
 
 const s = StyleSheet.create({
-  container: { flexGrow: 1 },
+  container: { paddingHorizontal: 16, paddingBottom: 28, gap: 12 },
 
-  // Hero
-  hero: {
-    backgroundColor: C.hero,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    alignItems: 'center',
-    gap: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  headerTitle: { color: C.heroText, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
-  headerSub: { color: C.heroSubText, fontSize: 12, marginTop: 2 },
-
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, gap: 10 },
+  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  headerSub: { color: C.muted, fontSize: 12, marginTop: 2 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   profilePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    maxWidth: 130,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border, maxWidth: 130,
   },
-  profilePillText: {
-    color: C.accent,
-    fontSize: 12,
-    fontWeight: '700',
-    flex: 1,
-  },
-
-  notifBtn: {
-    width: 44, height: 44,
-    borderRadius: 22,
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  gaugeWrapper: { marginVertical: 8, alignItems: 'center', gap: 6 },
-  flipHint: { color: C.dim, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, borderWidth: 1,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 13, fontWeight: '700' },
-
-  heroActions: { flexDirection: 'row', gap: 10, width: '100%', alignItems: 'center' },
-  heroSecondaryBtn: {
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderRadius: 22, backgroundColor: C.card,
-    borderWidth: 1, borderColor: C.border,
-  },
-  heroSecondaryBtnText: { color: C.text, fontSize: 14, fontWeight: '600' },
-  heroPrimaryBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: C.accent, borderRadius: 22, paddingVertical: 12,
-  },
-  heroPrimaryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  heroIconBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
-    justifyContent: 'center', alignItems: 'center',
-  },
-
-  // White content section
-  content: {
-    backgroundColor: C.card,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    marginTop: -28, paddingHorizontal: 20, paddingTop: 28,
-    gap: 24, ...cardShadow,
-  },
-
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.surface, borderRadius: 18,
-    borderWidth: 1, borderColor: C.border, paddingVertical: 16,
-  },
-  statItem: { flex: 1, alignItems: 'center', gap: 4 },
-  statNum: { color: C.text, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  statLabel: { color: C.muted, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
-  statDivider: { width: 1, height: 36, backgroundColor: C.border },
-
-  section: {
-    gap: 0, borderWidth: 1, borderColor: C.border,
-    borderRadius: 20, overflow: 'hidden',
-    backgroundColor: C.card, ...cardShadow,
-  },
-  sectionHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
-  },
-  sectionTitle: { color: C.text, fontSize: 16, fontWeight: '800' },
-  sectionSubtitle: { color: C.muted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
-  liveBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 20, backgroundColor: C.accentLight,
-    borderWidth: 1, borderColor: C.accent + '40',
-  },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent },
-  liveText: { color: C.accent, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  profilePillText: { color: C.accent, fontSize: 12, fontWeight: '700', flexShrink: 1 },
 
   alertBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: C.red + '12', borderTopWidth: 1, borderBottomWidth: 1,
-    borderColor: C.red + '30', paddingHorizontal: 16, paddingVertical: 12, marginBottom: 4,
+    backgroundColor: C.red + '12', borderWidth: 1, borderColor: C.red + '30',
+    borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12,
   },
-  alertIconBox: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: C.red, justifyContent: 'center', alignItems: 'center',
-  },
+  alertIconBox: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.red, justifyContent: 'center', alignItems: 'center' },
   alertIconText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   alertText: { flex: 1, color: C.red, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
-  insightRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderTopWidth: 1, borderTopColor: C.separator,
+  // Bento
+  bento: { gap: 10 },
+  row: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
+  col: { flex: 1, gap: 10 },
+  fill: { flex: 1 },
+  half: { flex: 1 },
+  card: {
+    backgroundColor: C.card, borderRadius: 20, borderWidth: 1, borderColor: C.border,
+    padding: 14, gap: 4, ...cardShadow,
   },
-  insightIconBox: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: C.surface, justifyContent: 'center', alignItems: 'center',
-  },
-  insightIcon: { fontSize: 20 },
-  insightLabel: { color: C.dim, fontSize: 10, fontWeight: '700', letterSpacing: 0.6, marginBottom: 3 },
-  insightValue: { fontSize: 13, fontWeight: '500', lineHeight: 18 },
+  gaugeCard: { flex: 1, alignItems: 'center', gap: 8 },
+  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  k: { color: C.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.4, alignSelf: 'flex-start' },
+  v: { color: C.text, fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  sub: { color: C.muted, fontSize: 11 },
+  tileTitle: { color: C.text, fontSize: 15, fontWeight: '800' },
 
-  reminderGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
-    paddingHorizontal: 16, paddingBottom: 14,
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, alignSelf: 'center' },
+  pillDot: { width: 6, height: 6, borderRadius: 3 },
+  pillText: { fontSize: 11, fontWeight: '700' },
+
+  deepCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.deep, borderColor: C.deep },
+  deepIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)', justifyContent: 'center', alignItems: 'center' },
+  deepTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  deepSub: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 1 },
+  deepBtn: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9 },
+  deepBtnText: { color: C.deep, fontSize: 13, fontWeight: '700' },
+
+  bars: { flexDirection: 'row', alignItems: 'flex-end', height: 54, gap: 2, marginTop: 6 },
+  bar: { flex: 1, backgroundColor: C.accentLight, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  barNow: { backgroundColor: C.accent },
+
+  orderTitle: { color: C.text, fontSize: 14, fontWeight: '700', marginTop: 2, marginBottom: 8 },
+  stepsRow: { flexDirection: 'row', alignItems: 'center' },
+  stepDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#C2D9C2' },
+  stepDotOn: { backgroundColor: C.accent },
+  stepLine: { flex: 1, height: 3, backgroundColor: '#C2D9C2' },
+  stepLineOn: { backgroundColor: C.accent },
+  stepLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  stepLabel: { color: C.muted, fontSize: 10 },
+
+  cylRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  cylImg: { width: 34, height: 44 },
+  clayCard: { backgroundColor: C.clayLight, borderColor: 'transparent' },
+
+  demo: { gap: 10 },
+  demoLabel: { color: C.dim, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  demoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  drainBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accent, borderRadius: 13, paddingVertical: 13 },
+  drainBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  resetIconBtn: {
+    width: 48, height: 48, borderRadius: 13, backgroundColor: C.accentLight,
+    borderWidth: 1, borderColor: C.border, justifyContent: 'center', alignItems: 'center',
   },
+
+  // Sheets
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: C.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12,
+  },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { color: C.text, fontSize: 18, fontWeight: '800', marginBottom: 16 },
+  sheetNote: { color: C.muted, fontSize: 13, marginTop: -8, marginBottom: 12 },
+  sheetEmpty: { color: C.muted, fontSize: 14, textAlign: 'center', marginVertical: 20 },
+
+  reminderGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reminderOpt: {
-    flex: 1, minWidth: '44%', paddingVertical: 12,
-    borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    backgroundColor: C.surface, alignItems: 'center',
+    flex: 1, minWidth: '44%', paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, alignItems: 'center',
   },
   reminderOptActive: { borderColor: C.accent + '80', backgroundColor: C.accentLight },
   reminderOptText: { color: C.muted, fontSize: 13, fontWeight: '500' },
   reminderOptTextActive: { color: C.accent, fontWeight: '700' },
-  reminderBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  getReminderBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 14,
-  },
-  orderRefillBtn: {
-    flex: 1,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: '#D4480A', borderRadius: 14, paddingVertical: 14,
-  },
-  getReminderText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  cancelReminderText: { color: C.accent, fontSize: 13, textDecorationLine: 'underline' },
 
-  reminderActive: {
-    alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16, gap: 10,
-  },
-  reminderCheckCircle: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: C.accentLight, borderWidth: 1, borderColor: C.accent + '30',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 4,
-  },
-  reminderActiveTitle: { color: C.text, fontSize: 16, fontWeight: '700' },
-  reminderActiveRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  reminderActiveDesc: { color: C.muted, fontSize: 13 },
-  cancelReminderText: { color: C.accent, fontSize: 13, textDecorationLine: 'underline', marginTop: 4 },
-
-  gaugePercent: { color: C.text, fontSize: 46, fontWeight: '800', letterSpacing: -2 },
-  gaugeLabel: { fontSize: 13, fontWeight: '700' },
-  gaugeKg: { color: C.muted, fontSize: 13, marginTop: 1 },
-
-  demoLabel: {
-    color: C.dim, fontSize: 10, fontWeight: '700', letterSpacing: 1,
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10,
-  },
-  demoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
-  drainBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.accent, borderRadius: 13, paddingVertical: 13,
-  },
-  drainBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  resetIconBtn: {
-    width: 48, height: 48, borderRadius: 13,
-    backgroundColor: C.accentLight, borderWidth: 1, borderColor: C.border,
-    justifyContent: 'center', alignItems: 'center',
-  },
-
-  // Bottom sheet
-  sheetOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: C.card,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12,
-    gap: 0,
-  },
-  sheetHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: C.border, alignSelf: 'center', marginBottom: 16,
-  },
-  sheetTitle: { color: C.text, fontSize: 18, fontWeight: '800', marginBottom: 16 },
-  sheetEmpty: { color: C.muted, fontSize: 14, textAlign: 'center', marginVertical: 20 },
-
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: C.separator,
-  },
-  profileRowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    paddingLeft: 4,
-  },
+  profileRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: C.separator },
+  profileRowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingLeft: 4 },
   profileRowImage: { width: 36, height: 36 },
   profileRowName: { color: C.text, fontSize: 14, fontWeight: '700' },
   profileRowSize: { color: C.muted, fontSize: 12, marginTop: 1 },
-  profileDeleteBtn: {
-    padding: 12,
-  },
+  profileDeleteBtn: { padding: 12 },
 
   addProfileBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, marginTop: 16, paddingVertical: 14,
-    borderRadius: 14, borderWidth: 1.5,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 16, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5,
     borderColor: C.accent + '60', backgroundColor: C.accentLight,
   },
   addProfileBtnText: { color: C.accent, fontSize: 15, fontWeight: '700' },
 
-  // Add profile form
   fieldLabel: { color: C.textSub, fontSize: 13, fontWeight: '700', marginBottom: 6 },
   fieldInput: {
     backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 14, paddingVertical: 12,
-    color: C.text, fontSize: 15,
+    paddingHorizontal: 14, paddingVertical: 12, color: C.text, fontSize: 15,
   },
   sizeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sizeOpt: {
-    flex: 1, minWidth: '22%', alignItems: 'center', gap: 4,
-    paddingVertical: 10, borderRadius: 12,
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.surface,
+    flex: 1, minWidth: '22%', alignItems: 'center', gap: 4, paddingVertical: 10,
+    borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface,
   },
   sizeOptActive: { borderColor: C.accent + '80', backgroundColor: C.accentLight },
   sizeOptText: { color: C.muted, fontSize: 12, fontWeight: '600' },
   sizeOptTextActive: { color: C.accent, fontWeight: '700' },
   formError: { color: C.red, fontSize: 13, marginTop: 8 },
-  saveBtn: {
-    marginTop: 20, backgroundColor: C.accent,
-    borderRadius: 14, paddingVertical: 15,
-    alignItems: 'center',
-  },
+  saveBtn: { marginTop: 20, backgroundColor: C.accent, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
