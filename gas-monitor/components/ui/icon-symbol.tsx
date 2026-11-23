@@ -54,6 +54,7 @@ const MAPPING = {
   'trash.fill': 'delete',
   'arrow.triangle.turn.up.right.diamond.fill': 'directions',
   'bicycle': 'two-wheeler',
+  'star.fill': 'star',
   'bookmark.fill': 'bookmark',
   'bookmark': 'bookmark-border',
 } as const satisfies Record<string, ComponentProps<typeof MaterialIcons>['name']>;

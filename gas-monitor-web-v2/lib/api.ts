@@ -1290,6 +1290,17 @@ export interface Monitor {
   config: { version: number; applied: number; pending: boolean };
 }
 
+export interface MonitorDayPoint {
+  day: string;
+  startKg: number;
+  endKg: number;
+  minKg: number;
+  maxKg: number;
+  /** Gas used that day, in kg. */
+  consumedKg: number;
+  readings: number;
+}
+
 export interface MonitorHourPoint {
   t: string;
   percent: number | null;
@@ -1328,6 +1339,11 @@ export const monitorApi = {
   async hourly(deviceId: string, hours = 24): Promise<{ points: MonitorHourPoint[] }> {
     const from = new Date(Date.now() - hours * 3600_000).toISOString();
     return request(`/api/devices/${encodeURIComponent(deviceId)}/readings?bucket=hour&from=${encodeURIComponent(from)}`, { auth: true });
+  },
+  /** One point per Lagos day. `day` is the start of that day as a UTC timestamp. */
+  async daily(deviceId: string, days = 7): Promise<{ points: MonitorDayPoint[] }> {
+    const from = new Date(Date.now() - days * 24 * 3600_000).toISOString();
+    return request(`/api/devices/${encodeURIComponent(deviceId)}/readings?bucket=day&from=${encodeURIComponent(from)}`, { auth: true });
   },
   async command(deviceId: string, type: 'REPORT_NOW' | 'TARE' | 'REBOOT', idempotencyKey: string): Promise<{ command: MonitorCommand }> {
     return request(`/api/devices/${encodeURIComponent(deviceId)}/commands`, { method: 'POST', auth: true, headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({ type }) });

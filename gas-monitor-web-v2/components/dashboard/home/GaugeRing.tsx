@@ -7,9 +7,13 @@ const START = 210;
 const BAR_H = 18;
 const BAR_W = 7;
 
-/** The segmented arc gauge from the mobile app, drawn as SVG so it scales to its tile. */
-export function GaugeRing({ percentage, maxKg, kgLeft }: { percentage: number; maxKg: number; kgLeft?: number | null }) {
-  const p = Math.max(0, Math.min(100, percentage));
+/**
+ * The segmented arc gauge from the mobile app, drawn as SVG so it scales to its tile.
+ * `percentage` is null when there is no reading: the ring is empty and says so.
+ */
+export function GaugeRing({ percentage, maxKg, kgLeft }: { percentage: number | null; maxKg: number; kgLeft?: number | null }) {
+  const empty = percentage == null;
+  const p = empty ? 0 : Math.max(0, Math.min(100, percentage));
   const midR = SIZE / 2 - BAR_H / 2;
   const innerR = midR - BAR_H / 2 - 4;
   const active = Math.round((p / 100) * TOTAL);
@@ -21,7 +25,7 @@ export function GaugeRing({ percentage, maxKg, kgLeft }: { percentage: number; m
       viewBox={`0 0 ${SIZE} ${SIZE}`}
       className="h-auto w-full max-w-[240px]"
       role="img"
-      aria-label={`Gas level ${Math.round(p)} percent, ${kg.toFixed(1)} kilograms left`}
+      aria-label={empty ? 'Gas level: no reading' : `Gas level ${Math.round(p)} percent, ${kg.toFixed(1)} kilograms left`}
     >
       {Array.from({ length: TOTAL }, (_, i) => {
         const angle = START + (i / TOTAL) * ARC;
@@ -48,16 +52,26 @@ export function GaugeRing({ percentage, maxKg, kgLeft }: { percentage: number; m
         fontSize={46}
         fontWeight={800}
         letterSpacing={-2}
-        className="fill-foreground font-mono"
+        className={`${empty ? 'fill-muted-foreground/50' : 'fill-foreground'} font-mono`}
       >
-        {Math.round(p)}%
+        {empty ? '—' : `${Math.round(p)}%`}
       </text>
-      <text x={c} y={c + 18} textAnchor="middle" fontSize={13} fontWeight={700} fill={getBarColor(p / 100)}>
+      <text
+        x={c}
+        y={c + 18}
+        textAnchor="middle"
+        fontSize={13}
+        fontWeight={700}
+        className={empty ? 'fill-muted-foreground' : undefined}
+        fill={empty ? undefined : getBarColor(p / 100)}
+      >
         Gas level
       </text>
-      <text x={c} y={c + 36} textAnchor="middle" fontSize={13} className="fill-muted-foreground font-mono">
-        {kg.toFixed(1)} kg
-      </text>
+      {!empty && (
+        <text x={c} y={c + 36} textAnchor="middle" fontSize={13} className="fill-muted-foreground font-mono">
+          {kg.toFixed(1)} kg
+        </text>
+      )}
     </svg>
   );
 }
