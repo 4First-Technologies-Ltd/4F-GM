@@ -12,7 +12,7 @@ import { publicImageUrl } from '../lib/storage';
  */
 const router = Router();
 
-const publicWhere: Prisma.GasListingWhereInput = {
+export const publicWhere: Prisma.GasListingWhereInput = {
   vendor: { status: 'APPROVED', user: { isSuspended: false } },
   // Listings on a closed or suspended branch drop out; pre-branch rows (null) stay visible.
   OR: [{ branchId: null }, { branch: { isActive: true, suspendedAt: null } }]
@@ -20,11 +20,11 @@ const publicWhere: Prisma.GasListingWhereInput = {
 
 // Explicit select: never leak plan, commission or account details publicly.
 /** Stored keys become URLs; the raw key is not part of the public shape. */
-function toPublic<T extends { imageKey: string | null; vendor: { logoUrl: string | null } }>({ imageKey, ...listing }: T) {
+export function toPublic<T extends { imageKey: string | null; vendor: { logoUrl: string | null } }>({ imageKey, ...listing }: T) {
   return { ...listing, imageUrl: publicImageUrl(imageKey), vendor: { ...listing.vendor, logoUrl: publicImageUrl(listing.vendor.logoUrl) } };
 }
 
-const publicSelect = {
+export const publicSelect = {
   id: true,
   gasType: true,
   customName: true,

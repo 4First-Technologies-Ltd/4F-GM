@@ -8,7 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ordersApi, marketplaceApi, monitorApi, type MarketplaceListing, type PaymentProviderOption, type ReorderSuggestion } from '@/lib/api';
+import { ordersApi, marketplaceApi, monitorApi, savedApi, type MarketplaceListing, type PaymentProviderOption, type ReorderSuggestion } from '@/lib/api';
 import { useAddresses } from '@/hooks/use-addresses';
 import { quoteByAmount, quoteByKg, MIN_LOOSE_KG, MAX_LOOSE_KG } from '@/lib/looseOrder';
 
@@ -247,7 +247,8 @@ export default function SuppliersScreen() {
   useEffect(() => { void loadSuppliers(); }, []);
 
   // Opened from a low-gas alert: the monitor says which cylinder size is needed and who sells it.
-  const { deviceId } = useLocalSearchParams<{ deviceId?: string }>();
+  // `listingId`: opened from the Saved tab, which wants that supplier's order form straight away.
+  const { deviceId, listingId } = useLocalSearchParams<{ deviceId?: string; listingId?: string }>();
   const [suggestion, setSuggestion] = useState<ReorderSuggestion | null>(null);
   useEffect(() => {
     if (!deviceId) return;
@@ -346,6 +347,58 @@ export default function SuppliersScreen() {
   function backToSuppliers() {
     setScreen('suppliers');
     setSelectedSupplier(null);
+  }
+
+  // Opened from the Saved tab: show that supplier's order form straight away. The param is
+  // cleared once used, so tapping the same saved item again later opens it again.
+  useEffect(() => {
+    if (!listingId || listState !== 'ok') return;
+    router.setParams({ listingId: undefined });
+    const sup = suppliersWithDist.find((x) => x.id === listingId);
+    if (sup) selectSupplier(sup);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listingId, listState]);
+
+  // Saved items ("Save & continue shopping"). Re-read whenever an order form opens, since
+  // the Saved tab can remove items in between.
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [savingItem, setSavingItem] = useState(false);
+  const selectedId = selectedSupplier?.id;
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    savedApi.ids().then((ids) => { if (!cancelled) setSavedIds(ids); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedId]);
+  const isSaved = !!selectedId && savedIds.includes(selectedId);
+
+  async function saveAndContinue() {
+    if (!selectedSupplier) return;
+    const id = selectedSupplier.id;
+    setSavingItem(true);
+    try {
+      if (!isSaved) await savedApi.save(id);
+      setSavedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      backToSuppliers();
+    } catch (err: any) {
+      Alert.alert('Could not save', err?.message ?? 'Please try again.');
+    } finally {
+      setSavingItem(false);
+    }
+  }
+
+  async function removeSaved() {
+    if (!selectedSupplier) return;
+    const id = selectedSupplier.id;
+    setSavingItem(true);
+    try {
+      await savedApi.remove(id);
+      setSavedIds((prev) => prev.filter((x) => x !== id));
+    } catch (err: any) {
+      Alert.alert('Could not remove', err?.message ?? 'Please try again.');
+    } finally {
+      setSavingItem(false);
+    }
   }
 
   async function addAddress() {
@@ -756,6 +809,20 @@ export default function SuppliersScreen() {
                 </>}
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[s.saveBtn, (savingItem || placing) && { opacity: 0.55 }]}
+            onPress={saveAndContinue}
+            disabled={savingItem || placing}
+            activeOpacity={0.85}>
+            <IconSymbol name={isSaved ? 'bookmark.fill' : 'bookmark'} size={18} color={C.accent} />
+            <Text style={s.saveBtnText}>{isSaved ? 'Saved · Continue shopping' : 'Save & continue shopping'}</Text>
+          </TouchableOpacity>
+          {isSaved && (
+            <TouchableOpacity onPress={removeSaved} disabled={savingItem} activeOpacity={0.7} style={s.unsaveBtn}>
+              <Text style={s.unsaveText}>Remove from saved</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={{ height: 32 }} />
         </ScrollView>
       ) : (
@@ -1152,6 +1219,21 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   placeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  saveBtn: {
+    backgroundColor: C.accentLight,
+    borderWidth: 1.5,
+    borderColor: C.accent + '60',
+    borderRadius: 16,
+    paddingVertical: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  saveBtnText: { color: C.accent, fontSize: 15, fontWeight: '700' },
+  unsaveBtn: { alignItems: 'center', paddingVertical: 12 },
+  unsaveText: { color: C.muted, fontSize: 13, textDecorationLine: 'underline' },
 
   ordersWrap: { flex: 1, paddingHorizontal: 20, paddingTop: 4 },
   orderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

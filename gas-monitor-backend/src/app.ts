@@ -20,6 +20,7 @@ import deviceRoutes from './routes/device';
 import devicesRoutes from './routes/devices';
 import internalMqttRoutes from './routes/internalMqtt';
 import marketplaceRoutes from './routes/marketplace';
+import savedRoutes from './routes/saved';
 import { paystackWebhookHandler } from './routes/ordersWebhook';
 import { payfonteWebhookHandler } from './routes/payfonteWebhook';
 import { sentryWebhookHandler } from './routes/internalSentryWebhook';
@@ -132,6 +133,8 @@ export function createApp() {
   // Called by the MQTT broker over the internal network only; off unless MQTT_AUTH_TOKEN is set.
   app.use('/internal/mqtt', internalMqttRoutes);
   app.use('/api/marketplace', marketplaceRoutes);
+  // A signed-in user's saved marketplace listings.
+  app.use('/api/saved', savedRoutes);
 
   // Admin API — namespaced under /api/admin to avoid colliding with the
   // consumer routes above (e.g. GET /api/orders vs admin's "all orders" list).

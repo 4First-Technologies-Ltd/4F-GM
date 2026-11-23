@@ -1,6 +1,7 @@
 import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
 import type { VendorPlan } from './plans';
 import { LEGAL_VERSION } from './legal';
+import type { PublicListing } from './marketplace';
 
 export type { VendorPlan };
 
@@ -1041,6 +1042,33 @@ export const cylinderApi = {
 
   async remove(id: string): Promise<void> {
     await request(`/api/cylinders/${id}`, { method: 'DELETE', auth: true });
+  }
+};
+
+// ── Saved listings API ────────────────────────────────────────────────────────
+
+/** A saved marketplace listing, in the public marketplace shape plus when it was saved. */
+export type SavedListingRow = PublicListing & { savedAt: string };
+
+export const savedApi = {
+  /** Ids only, to show "saved" on a listing without loading the whole list. */
+  async ids(): Promise<string[]> {
+    const data = await request<{ ids: string[] }>('/api/saved/ids', { auth: true });
+    return data.ids;
+  },
+
+  /** Newest first. Listings that have left the marketplace are left out until they are back. */
+  async list(): Promise<SavedListingRow[]> {
+    const data = await request<{ listings: SavedListingRow[] }>('/api/saved', { auth: true });
+    return data.listings;
+  },
+
+  async save(listingId: string): Promise<void> {
+    await request(`/api/saved/${encodeURIComponent(listingId)}`, { method: 'PUT', auth: true });
+  },
+
+  async remove(listingId: string): Promise<void> {
+    await request(`/api/saved/${encodeURIComponent(listingId)}`, { method: 'DELETE', auth: true });
   }
 };
 
