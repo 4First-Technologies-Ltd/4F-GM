@@ -35,7 +35,6 @@ export default function DashboardOverviewPage() {
 }
 
 function ConsumerOverview() {
-  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,12 +78,7 @@ function ConsumerOverview() {
       <HomeBento />
 
       {/* Account summary */}
-      <div>
-        <h2 className="text-xl font-semibold text-foreground mb-1">
-          Welcome back, {user?.name.split(' ')[0]}
-        </h2>
-        <p className="text-sm text-muted-foreground">Here&apos;s how your account is doing.</p>
-      </div>
+      <p className="text-sm text-muted-foreground">Here&apos;s how your account is doing.</p>
 
       {/* Error State */}
       {error && (
