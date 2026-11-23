@@ -70,8 +70,6 @@ beforeEach(() => {
 
 describe('manager gate', () => {
   it.each([
-    ['a vendor', { ...manager, role: 'VENDOR' }],
-    ['a consumer', { ...manager, role: 'CONSUMER' }],
     ['an unverified account', { ...manager, emailVerified: false }],
     ['a suspended account', { ...manager, isSuspended: true }],
     ['a missing user', null]
@@ -79,6 +77,24 @@ describe('manager gate', () => {
     db.user.findUnique.mockResolvedValue(user);
     expect((await call('/staff/orders')).status).toBe(403);
     expect(db.order.findMany).not.toHaveBeenCalled();
+  });
+
+  // Access follows holding an active branch, not User.role: an account can hold several roles.
+  it.each([
+    ['a vendor', { ...manager, role: 'VENDOR' }],
+    ['a consumer', { ...manager, role: 'CONSUMER' }]
+  ])('403s %s who staffs no branch', async (_n, user) => {
+    db.user.findUnique.mockResolvedValue(user);
+    db.branchStaff.findMany.mockResolvedValue([]);
+    expect((await call('/staff/orders')).status).toBe(403);
+    expect(db.order.findMany).not.toHaveBeenCalled();
+  });
+
+  it('lets a vendor who also manages a branch in, scoped to that branch', async () => {
+    db.user.findUnique.mockResolvedValue({ ...manager, role: 'VENDOR' });
+    db.order.findMany.mockResolvedValue([]);
+    expect((await call('/staff/orders')).status).toBe(200);
+    expect(JSON.stringify(db.order.findMany.mock.calls[0][0])).toContain('b1');
   });
 
   it('claims pending invites for the verified email before resolving access', async () => {
