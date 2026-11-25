@@ -210,7 +210,7 @@ router.get('/:id/reorder', handle(async (req, res) => {
       take: 50,
     }),
     // Paid and not yet delivered. An unpaid PENDING order does not count.
-    prisma.order.findFirst({ where: { consumerId: uid(req), status: { in: ['CONFIRMED', 'OUT_FOR_DELIVERY'] } }, select: { id: true } }),
+    prisma.order.findFirst({ where: { consumerId: uid(req), status: { in: ['CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY'] } }, select: { id: true } }),
   ]);
 
   const previous = new Set(past.map((o) => o.vendorId!));

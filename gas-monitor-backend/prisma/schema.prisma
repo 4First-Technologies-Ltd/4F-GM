@@ -46,9 +46,15 @@ enum GasType {
   OTHER
 }
 
+/// PENDING (unpaid) → CONFIRMED (paid, waiting for the vendor) → ACCEPTED
+/// (vendor accepted: in the rider job pool while riderId is null, claimed once
+/// it is set) → OUT_FOR_DELIVERY (rider picked it up) → DELIVERED (rider gave
+/// the customer's PIN). Platform orders have no vendor and skip CONFIRMED's
+/// wait: payment moves them straight to ACCEPTED. See lib/dispatch.ts.
 enum OrderStatus {
   PENDING
   CONFIRMED
+  ACCEPTED
   OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED
@@ -249,6 +255,12 @@ model RiderProfile {
   /// True when joining the fleet is what approved this rider. Leaving the fleet
   /// then puts them back to PENDING instead of leaving an unvetted rider live.
   approvedViaCompany Boolean           @default(false)
+  /// The rider sees the job pool and gets job alerts only while online.
+  /// `lat`/`lng` above are their last reported position while online.
+  isOnline           Boolean           @default(false)
+  /// Last time the rider's app was heard from (online toggle, location, pool
+  /// read). Alerts skip riders who went quiet without going offline.
+  lastSeenAt         DateTime?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   orders             Order[]           @relation("RiderOrders")
@@ -472,10 +484,25 @@ model Order {
   vendorSettledByGateway Boolean        @default(false)
   vendorSplitAmount      Float?
   riderEarning           RiderEarning?
+  /// 4 digits the customer gives the rider at the door; DELIVERED needs it.
+  /// Only ever returned to the customer (and emailed to them on payment).
+  deliveryPin            String?
+  /// Wrong PIN tries since the last lock; 5 locks the order for 15 minutes.
+  pinAttempts            Int            @default(0)
+  pinLockedUntil         DateTime?
+  /// Lifecycle timestamps. `poolEnteredAt` is the latest time the order
+  /// started waiting for a rider (vendor accept, rider release, admin unassign).
+  confirmedAt            DateTime?
+  acceptedAt             DateTime?
+  poolEnteredAt          DateTime?
+  pickedUpAt             DateTime?
+  deliveredAt            DateTime?
+  dispatchSuggestions    DispatchSuggestion[]
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
   @@index([branchId])
+  @@index([status, riderId])
   @@map("orders")
 }
 
@@ -531,6 +558,15 @@ model PlatformSettings {
   /// Share of the flat delivery fee paid to the rider who delivers the order.
   /// The platform keeps the rest. A placeholder until the business sets it.
   riderSharePercent  Float    @default(70)
+  /// Where riders collect platform (4FG Monitor) orders, which have no branch.
+  platformPickupAddress    String   @default("")
+  /// Dispatch watcher thresholds (lib/dispatchWatcher.ts). Placeholders.
+  dispatchNotifyAfterMin   Int      @default(2)
+  dispatchAssignAfterMin   Int      @default(15)
+  dispatchCancelAfterMin   Int      @default(45)
+  dispatchRadiusKm         Float    @default(10)
+  dispatchVendorStallMin   Int      @default(15)
+  dispatchDeliveryStallMin Int      @default(120)
   updatedAt          DateTime @updatedAt
 
   @@map("platform_settings")
@@ -679,6 +715,51 @@ enum AuditAction {
   SMOIS_ACTIVITY
   TESTER_CHANGED
   BUG_CHANGED
+  DISPATCH_SUGGESTION_APPLIED
+  DISPATCH_SUGGESTION_DISMISSED
+}
+
+enum DispatchAction {
+  /// Automatic: push the job to nearby online riders.
+  NOTIFY_RIDERS
+  ASSIGN_RIDER
+  CANCEL_ORDER
+  FOLLOW_UP_VENDOR
+  FOLLOW_UP_DELIVERY
+}
+
+enum DispatchSuggestionStatus {
+  OPEN
+  APPLIED
+  DISMISSED
+  /// The order moved on by itself, so the suggestion no longer applies.
+  EXPIRED
+}
+
+/// What the dispatch watcher proposed (or, for NOTIFY_RIDERS, did) for one
+/// order. `dedupeKey` = action + order + episode, so each step happens once
+/// per time the order starts waiting.
+model DispatchSuggestion {
+  id             String                   @id @default(uuid())
+  orderId        String
+  order          Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  action         DispatchAction
+  status         DispatchSuggestionStatus @default(OPEN)
+  title          String
+  reason         String
+  /// The order timestamp this step belongs to (poolEnteredAt, confirmedAt or pickedUpAt).
+  episode        DateTime
+  /// ASSIGN_RIDER: { riderId, riderName, distanceKm }. NOTIFY_RIDERS: { notified }.
+  payload        Json?
+  dedupeKey      String                   @unique
+  resolvedById   String?
+  resolvedByName String?
+  resolvedAt     DateTime?
+  createdAt      DateTime                 @default(now())
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("dispatch_suggestions")
 }
 
 // Append-only record of every mutating admin action.

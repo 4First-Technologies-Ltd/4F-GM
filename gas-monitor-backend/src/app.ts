@@ -45,6 +45,7 @@ import newsletterRoutes from './routes/newsletter';
 import appVersionRoutes from './routes/appVersion';
 import adminListingsRoutes from './routes/admin/listings';
 import adminOrdersRoutes from './routes/admin/orders';
+import adminDispatchRoutes from './routes/admin/dispatch';
 import adminRidersRoutes from './routes/admin/riders';
 import adminCompaniesRoutes from './routes/admin/companies';
 import adminSettingsRoutes from './routes/admin/settings';
@@ -151,6 +152,7 @@ export function createApp() {
   app.use('/api/admin/marketing', adminMarketingRoutes);
   app.use('/api/admin/listings', adminListingsRoutes);
   app.use('/api/admin/orders', adminOrdersRoutes);
+  app.use('/api/admin/dispatch', adminDispatchRoutes);
   app.use('/api/admin/payouts', adminPayoutsRoutes);
   app.use('/api/admin/rider-payouts', adminRiderPayoutsRoutes);
   app.use('/api/admin/riders', adminRidersRoutes);

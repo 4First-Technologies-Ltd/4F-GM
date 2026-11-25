@@ -129,7 +129,7 @@ export default function BecomeRoleScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {field('Plate number (optional)', plateNumber, setPlateNumber, 'ABC-123-XY', { autoCapitalize: 'characters', maxLength: 20 })}
+              {field('Plate number (optional)', plateNumber, (t) => setPlateNumber(t.toUpperCase()), 'ABC-123-XY', { autoCapitalize: 'characters', maxLength: 20, keyboardType: 'default', inputMode: 'text' })}
             </>
           )}
 

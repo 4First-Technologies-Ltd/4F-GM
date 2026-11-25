@@ -4,7 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { notificationsApi, type AppNotification } from '@/lib/api';
+import { notificationsApi, type ApiUser, type AppNotification } from '@/lib/api';
+import { getSavedUser } from '@/lib/storage';
+import { homeRouteFor } from '@/lib/homeRoute';
 
 const C = {
   bg: '#EDF7ED',
@@ -60,6 +62,12 @@ export default function NotificationsScreen() {
     // Monitor alerts lead somewhere: low or empty gas to the refill suggestions, the rest to the monitor.
     if (n.kind === 'REFILL' && n.refId) router.push({ pathname: '/order' as never, params: { deviceId: n.refId } });
     else if (n.kind === 'MONITOR') router.push('/monitors' as never);
+    // Order updates: customers open the order; vendors, managers and riders go back to their own home.
+    else if (n.kind === 'ORDER' && n.refId) {
+      const user = await getSavedUser<ApiUser>();
+      if (user?.role === 'CONSUMER') router.push({ pathname: '/order/[id]', params: { id: n.refId } });
+      else if (user) router.replace(homeRouteFor(user) as never);
+    }
   }
 
   async function readAll() {
@@ -124,7 +132,7 @@ export default function NotificationsScreen() {
                 <Text style={s.time}>{when(item.createdAt)}</Text>
               </View>
               <Text style={s.body}>{item.body}</Text>
-              {item.kind ? <Text style={[s.body, { color: '#2D7450', fontWeight: '600', marginTop: 6 }]}>{item.kind === 'REFILL' ? 'Order a refill ›' : 'View monitor ›'}</Text> : null}
+              {item.kind ? <Text style={[s.body, { color: '#2D7450', fontWeight: '600', marginTop: 6 }]}>{item.kind === 'REFILL' ? 'Order a refill ›' : item.kind === 'ORDER' ? 'View order ›' : 'View monitor ›'}</Text> : null}
             </TouchableOpacity>
           )}
         />

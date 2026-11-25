@@ -3,9 +3,16 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
-import { recordEarningSafe } from '../lib/earnings';
-import { ASSIGNABLE_RIDER } from '../lib/fleet';
-import { canManagerMove, claimInvites, managedBranchIds } from '../lib/staff';
+import { claimInvites, managedBranchIds } from '../lib/staff';
+import {
+  RIDERS_CHOOSE_JOBS,
+  acceptOrder,
+  cancelPaidOrder,
+  hidePin,
+  legacyStatusSchema,
+  rejectSchema,
+  sendDispatchResult
+} from '../lib/dispatch';
 
 /**
  * Branch-manager API at /api/staff. A manager runs orders and stock for the
@@ -96,92 +103,47 @@ router.get(
       orderBy: { createdAt: 'desc' },
       take: 200
     });
-    return res.json({ orders });
+    return res.json({ orders: orders.map(hidePin) });
   })
 );
 
-const statusSchema = z.object({ status: z.enum(['OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']) });
+const branchScope = (req: Request) => ({ branchId: { in: req.managerBranchIds ?? [] } });
 
+// Accept puts a paid order into the rider job pool. Managers no longer pick riders.
+router.post(
+  '/orders/:id/accept',
+  asyncHandler(async (req, res) => sendDispatchResult(res, await acceptOrder(req.params.id, branchScope(req))))
+);
+
+// Reject cancels a paid order before pickup and opens a refund ticket for the admins.
+router.post(
+  '/orders/:id/reject',
+  asyncHandler(async (req, res) => {
+    const result = rejectSchema.safeParse(req.body ?? {});
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
+    return sendDispatchResult(
+      res,
+      await cancelPaidOrder(req.params.id, branchScope(req), { by: 'branch manager', reason: result.data.reason })
+    );
+  })
+);
+
+// Old builds move orders with `{ status }`: only CANCELLED (as a reject) is still honoured.
 router.patch(
   '/orders/:id',
   asyncHandler(async (req, res) => {
-    const result = statusSchema.safeParse(req.body);
+    const result = legacyStatusSchema.safeParse(req.body);
     if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
-
-    const order = await prisma.order.findFirst({
-      where: { id: req.params.id, branchId: { in: req.managerBranchIds ?? [] } }
-    });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-
-    const { status } = result.data;
-    if (!canManagerMove(order.status, status)) {
-      return res.status(409).json({
-        error: `An order that is ${order.status.toLowerCase().replace(/_/g, ' ')} cannot be moved to ${status.toLowerCase().replace(/_/g, ' ')}`,
-        code: 'INVALID_STATUS_TRANSITION'
-      });
+    if (result.data.status === 'CANCELLED') {
+      return sendDispatchResult(res, await cancelPaidOrder(req.params.id, branchScope(req), { by: 'branch manager' }));
     }
-
-    // Compare-and-set on the status we checked, so two managers (or a manager
-    // and the rider) acting at once cannot both apply a stale transition.
-    const updated = await prisma.order.updateMany({
-      where: { id: order.id, status: order.status },
-      data: { status }
-    });
-    if (updated.count === 0) {
-      return res.status(409).json({ error: 'This order was just updated. Refresh and try again', code: 'STALE' });
-    }
-    if (status === 'DELIVERED') recordEarningSafe(order.id);
-    return res.json({ order: await prisma.order.findUnique({ where: { id: order.id } }) });
+    return res.status(409).json(RIDERS_CHOOSE_JOBS);
   })
 );
 
-const riderSchema = z.object({ riderId: z.string().min(1).nullable() });
-
-router.patch(
-  '/orders/:id/rider',
-  asyncHandler(async (req, res) => {
-    const result = riderSchema.safeParse(req.body);
-    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
-
-    const order = await prisma.order.findFirst({
-      where: { id: req.params.id, branchId: { in: req.managerBranchIds ?? [] } }
-    });
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-
-    const { riderId } = result.data;
-    if (riderId) {
-      const rider = await prisma.riderProfile.findFirst({ where: { id: riderId, ...ASSIGNABLE_RIDER } });
-      if (!rider) {
-        return res.status(400).json({ error: 'Rider not found or not approved' });
-      }
-    }
-
-    // Like the vendor route, this only ever touches riderId/assignedAt.
-    const updated = await prisma.order.update({
-      where: { id: order.id },
-      data: { riderId, assignedAt: riderId ? new Date() : null }
-    });
-    return res.json({ order: updated });
-  })
-);
-
-router.get(
-  '/riders',
-  asyncHandler(async (_req, res) => {
-    const riders = await prisma.riderProfile.findMany({
-      where: ASSIGNABLE_RIDER,
-      select: {
-        id: true,
-        phone: true,
-        vehicleType: true,
-        user: { select: { name: true } },
-        company: { select: { companyName: true } }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    return res.json({ riders });
-  })
-);
+// Removed: riders now claim accepted orders from the job pool.
+router.patch('/orders/:id/rider', (_req, res) => res.status(410).json(RIDERS_CHOOSE_JOBS));
+router.get('/riders', (_req, res) => res.status(410).json(RIDERS_CHOOSE_JOBS));
 
 router.get(
   '/listings',

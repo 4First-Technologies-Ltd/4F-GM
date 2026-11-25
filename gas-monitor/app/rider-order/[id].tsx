@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { advanceOrder } from '@/hooks/use-rider-orders';
+import { advanceOrder, releaseJob } from '@/hooks/use-rider-orders';
+import { DeliveryPinModal } from '@/components/delivery-pin-modal';
 import { riderApi, RiderOrder } from '@/lib/api';
 import {
-  RIDER_STATUS_META, fmtNaira, nextRiderAction, orderRef, supplierLabel, callNumber, openInMaps,
+  RIDER_STATUS_META, fmtNaira, nextRiderAction, orderRef, supplierLabel, callNumber, openInMaps, pickupAddress,
 } from '@/lib/riderOrders';
 
 const C = {
@@ -69,6 +70,7 @@ export default function RiderOrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [advancing, setAdvancing] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -88,11 +90,27 @@ export default function RiderOrderDetailScreen() {
 
   async function handleAdvance() {
     if (!order) return;
+    // Delivering needs the customer's PIN.
+    if (order.status === 'OUT_FOR_DELIVERY') {
+      setPinOpen(true);
+      return;
+    }
     setAdvancing(true);
     const changed = await advanceOrder(order);
     if (changed) await load();
     setAdvancing(false);
   }
+
+  async function handleRelease() {
+    if (!order) return;
+    setAdvancing(true);
+    const released = await releaseJob(order);
+    setAdvancing(false);
+    if (released) router.back();
+  }
+
+  const pickup = order ? pickupAddress(order) : null;
+  const pickupPhone = order?.branch?.phone ?? order?.vendor?.phone;
 
   const meta = order ? RIDER_STATUS_META[order.status] : null;
   const action = order ? nextRiderAction(order.status) : null;
@@ -134,10 +152,10 @@ export default function RiderOrderDetailScreen() {
             <ContactRow
               icon="storefront.fill"
               title="Pick up from"
-              name={supplierLabel(order)}
-              detail={order.vendor?.businessAddress}
-              onCall={order.vendor?.phone ? () => callNumber(order.vendor?.phone) : undefined}
-              onMap={order.vendor?.businessAddress ? () => openInMaps(order.vendor!.businessAddress!) : undefined}
+              name={order.branch?.name && order.branch.name !== 'Main branch' ? `${supplierLabel(order)} · ${order.branch.name}` : supplierLabel(order)}
+              detail={pickup ?? undefined}
+              onCall={pickupPhone ? () => callNumber(pickupPhone) : undefined}
+              onMap={pickup ? () => openInMaps(pickup) : undefined}
             />
 
             <ContactRow
@@ -179,10 +197,17 @@ export default function RiderOrderDetailScreen() {
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={s.primaryBtnText}>{action.label}</Text>}
               </TouchableOpacity>
+              {order.status === 'ACCEPTED' && (
+                <TouchableOpacity onPress={handleRelease} disabled={advancing} activeOpacity={0.7} style={{ alignItems: 'center', paddingTop: 12 }}>
+                  <Text style={{ color: C.muted, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }}>Give job back</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </>
       )}
+
+      <DeliveryPinModal order={pinOpen ? order : null} onClose={() => setPinOpen(false)} onDelivered={load} />
     </SafeAreaView>
   );
 }

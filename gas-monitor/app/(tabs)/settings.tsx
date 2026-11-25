@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, Platform, Switch, TouchableOpacity, Alert, ActivityIndicator,
-  Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { authApi, ApiUser, UnitPreference } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
@@ -11,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DeleteAccountLink } from '@/components/delete-account';
 import { ReportBugLink } from '@/components/report-bug';
-import { SwitchRoleLink } from '@/components/role-switcher';
 
 const C = {
   bg: '#EDF7ED',
@@ -37,17 +35,14 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [user, setUser] = useState<ApiUser | null>(null);
 
-  // Edit-profile modal
-  const [editing, setEditing] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
-  const [phoneDraft, setPhoneDraft] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  useEffect(() => {
-    // Show the cached user straight away, then pick up changes made on the website.
-    getSavedUser<ApiUser>().then((u) => u && setUser(u));
-    authApi.refreshUser().then(setUser).catch(() => {});
-  }, []);
+  // On every focus, so a name or phone changed on the profile screen shows up here.
+  useFocusEffect(
+    useCallback(() => {
+      // Show the cached user straight away, then pick up changes made on the website.
+      getSavedUser<ApiUser>().then((u) => u && setUser(u));
+      authApi.refreshUser().then(setUser).catch(() => {});
+    }, []),
+  );
 
   const initials =
     (user?.name ?? '')
@@ -68,28 +63,6 @@ export default function SettingsScreen() {
     } catch (err: any) {
       setUser(previous);
       Alert.alert('Could not save', err?.message ?? 'Please try again.');
-    }
-  }
-
-  function openEdit() {
-    setNameDraft(user?.name ?? '');
-    setPhoneDraft(user?.phone ?? '');
-    setEditing(true);
-  }
-
-  async function saveProfile() {
-    if (!nameDraft.trim()) {
-      Alert.alert('Name required', 'Please enter your name.');
-      return;
-    }
-    setSavingProfile(true);
-    try {
-      setUser(await authApi.updateProfile({ name: nameDraft.trim(), phone: phoneDraft.trim() || null }));
-      setEditing(false);
-    } catch (err: any) {
-      Alert.alert('Could not save', err?.message ?? 'Please try again.');
-    } finally {
-      setSavingProfile(false);
     }
   }
 
@@ -129,7 +102,13 @@ export default function SettingsScreen() {
         {/* Profile */}
         <View style={[s.card, { ...cardShadow }]}>
           <View style={[s.accentBar, { backgroundColor: C.accent }]} />
-          <View style={s.profileRow}>
+          <TouchableOpacity
+            style={s.profileRow}
+            activeOpacity={0.7}
+            onPress={() => router.push('/profile')}
+            accessibilityRole="button"
+            accessibilityLabel="Open profile"
+          >
             <View style={s.avatar}>
               <Text style={[s.avatarText, { color: C.accent }]}>{initials}</Text>
             </View>
@@ -138,10 +117,8 @@ export default function SettingsScreen() {
               <Text style={s.profileEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
               {user?.phone ? <Text style={s.profileEmail} numberOfLines={1}>{user.phone}</Text> : null}
             </View>
-            <TouchableOpacity style={s.editBtn} activeOpacity={0.7} onPress={openEdit} disabled={!user}>
-              <Text style={s.editBtnText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
+            <IconSymbol name="chevron.right" size={18} color={C.dim} />
+          </TouchableOpacity>
         </View>
 
         {/* Notifications */}
@@ -208,54 +185,11 @@ export default function SettingsScreen() {
             : <Text style={s.dangerText}>Sign Out</Text>}
         </TouchableOpacity>
 
-        <SwitchRoleLink />
         <ReportBugLink />
         <DeleteAccountLink />
 
         <View style={{ height: 32 }} />
       </ScrollView>
-
-      {/* Edit profile */}
-      <Modal visible={editing} transparent animationType="slide" onRequestClose={() => setEditing(false)}>
-        <KeyboardAvoidingView behavior="padding" style={s.modalOverlay}>
-          <View style={s.modalSheet}>
-            <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>Edit profile</Text>
-            <Text style={s.inputLabel}>Name</Text>
-            <TextInput
-              style={s.input}
-              value={nameDraft}
-              onChangeText={setNameDraft}
-              autoCapitalize="words"
-              placeholder="Your name"
-              placeholderTextColor={C.muted + '99'}
-            />
-            <Text style={s.inputLabel}>Phone</Text>
-            <TextInput
-              style={s.input}
-              value={phoneDraft}
-              onChangeText={setPhoneDraft}
-              keyboardType="phone-pad"
-              placeholder="e.g. 0803 000 0000"
-              placeholderTextColor={C.muted + '99'}
-            />
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setEditing(false)} activeOpacity={0.7}>
-                <Text style={s.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.saveBtn, savingProfile && { opacity: 0.6 }]}
-                onPress={saveProfile}
-                disabled={savingProfile}
-                activeOpacity={0.85}
-              >
-                {savingProfile ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Save</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
     </SafeAreaView>
   );
 }
@@ -336,15 +270,6 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
   profileName: { color: C.text, fontSize: 16, fontWeight: '700', marginBottom: 2 },
   profileEmail: { color: C.muted, fontSize: 12 },
-  editBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.surface,
-  },
-  editBtnText: { color: C.muted, fontSize: 13, fontWeight: '600' },
 
   sectionHeader: {
     padding: 16,
@@ -387,33 +312,4 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   dangerText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-
-
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalSheet: {
-    backgroundColor: C.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 28,
-  },
-  modalHandle: {
-    alignSelf: 'center', width: 40, height: 4, borderRadius: 2,
-    backgroundColor: C.border, marginBottom: 14,
-  },
-  modalTitle: { color: C.text, fontSize: 18, fontWeight: '800', marginBottom: 14 },
-  inputLabel: { color: C.muted, fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },
-  input: {
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.surface,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    color: C.text, fontSize: 15,
-  },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  cancelBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
-    borderWidth: 1, borderColor: C.border, backgroundColor: C.surface,
-  },
-  cancelBtnText: { color: C.muted, fontSize: 15, fontWeight: '600' },
-  saveBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: C.accent },
-  saveBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

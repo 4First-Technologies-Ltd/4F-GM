@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { PAYSTACK_SECRET } from '../lib/paystack';
 import { applyTransferStatus } from '../lib/payouts';
 import { applyRiderTransferStatus } from '../lib/riderPayouts';
+import { confirmOrder } from '../lib/orderPayment';
 
 // Mounted separately in app.ts with express.raw() so the exact request bytes
 // are available for HMAC verification — do not run through express.json().
@@ -27,10 +28,11 @@ export async function paystackWebhookHandler(req: Request, res: Response) {
   };
 
   if (event.event === 'charge.success') {
-    await prisma.order.updateMany({
+    const order = await prisma.order.findFirst({
       where: { paystackRef: event.data.reference, status: 'PENDING' },
-      data: { status: 'CONFIRMED', paystackStatus: event.data.status }
+      select: { id: true }
     });
+    if (order) await confirmOrder(order.id, event.data.status);
   }
 
   // Vendor payout outcomes. applyTransferStatus is idempotent, so Paystack's

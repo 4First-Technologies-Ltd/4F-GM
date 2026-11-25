@@ -159,7 +159,9 @@ export default function RiderProfileScreen() {
               <TextInput
                 style={s.input}
                 value={plateNumber}
-                onChangeText={setPlateNumber}
+                onChangeText={(t) => setPlateNumber(t.toUpperCase())}
+                keyboardType="default"
+                inputMode="text"
                 autoCapitalize="characters"
                 placeholder="Optional"
                 placeholderTextColor={C.muted + '99'}

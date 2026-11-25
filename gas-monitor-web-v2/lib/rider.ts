@@ -6,41 +6,43 @@ export const VEHICLE_TYPES = ['Motorbike', 'Bicycle', 'Tricycle', 'Car / Van'] a
 
 export const RIDER_STATUS_BADGE: Record<OrderStatus, string> = {
   PENDING: 'bg-amber-100/50 text-amber-700',
-  CONFIRMED: 'bg-blue-100/50 text-blue-700',
+  CONFIRMED: 'bg-amber-100/50 text-amber-700',
+  ACCEPTED: 'bg-blue-100/50 text-blue-700',
   OUT_FOR_DELIVERY: 'bg-orange-100/50 text-orange-700',
   DELIVERED: 'bg-green-100/50 text-green-700',
   CANCELLED: 'bg-red-100/50 text-red-700'
 };
 
-/** Rider-facing wording for the pre-delivery states (the shared labels are consumer-facing). */
+/** Rider- and vendor-facing wording (the shared labels are consumer-facing). */
 export const RIDER_STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING: 'Awaiting payment',
-  CONFIRMED: 'Ready for pickup',
+  CONFIRMED: 'Needs accepting',
+  ACCEPTED: 'Ready for pickup',
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled'
 };
 
 /** Orders that still need rider action. Everything else belongs in history. */
-export const isActiveOrder = (o: RiderOrder) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY';
+export const isActiveOrder = (o: RiderOrder) => o.status === 'ACCEPTED' || o.status === 'OUT_FOR_DELIVERY';
 export const isHistoryOrder = (o: RiderOrder) => o.status === 'DELIVERED' || o.status === 'CANCELLED';
 
 /** The one forward step a rider can take from the current status, if any. */
 export function nextRiderAction(status: OrderStatus) {
-  if (status === 'CONFIRMED') {
+  if (status === 'ACCEPTED') {
     return {
       to: 'OUT_FOR_DELIVERY' as const,
-      label: 'Start delivery',
-      confirmTitle: 'Start this delivery?',
+      label: 'Picked up, start delivery',
+      confirmTitle: 'Have you collected the gas?',
       confirmBody: 'This tells the customer their order is on the way.'
     };
   }
   if (status === 'OUT_FOR_DELIVERY') {
     return {
       to: 'DELIVERED' as const,
-      label: 'Mark as delivered',
-      confirmTitle: 'Mark as delivered?',
-      confirmBody: 'Only confirm once the customer has received the cylinder(s).'
+      label: 'Complete delivery',
+      confirmTitle: 'Complete this delivery',
+      confirmBody: "Ask the customer for their 4-digit delivery PIN once they have the cylinder(s), and enter it here."
     };
   }
   return null;
@@ -49,6 +51,9 @@ export function nextRiderAction(status: OrderStatus) {
 export const orderRef = (o: { id: string }) => '#' + o.id.slice(0, 8).toUpperCase();
 
 export const supplierLabel = (o: RiderOrder) => o.vendor?.businessName ?? o.supplierName ?? 'Supplier';
+
+/** Where the rider collects the order. */
+export const pickupAddress = (o: RiderOrder) => o.branch?.address ?? o.vendor?.businessAddress ?? null;
 
 export const mapsUrl = (address: string) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;

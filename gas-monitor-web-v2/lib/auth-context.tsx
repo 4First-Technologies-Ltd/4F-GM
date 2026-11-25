@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import {
   authApi,
+  ApiRequestError,
+  onSessionExpired,
   ApiUser,
   UserRole,
   RegisterResult,
@@ -10,7 +12,7 @@ import {
   UpdateProfilePayload,
   AcceptInviteResult
 } from './api';
-import { getAccessToken, getSavedUser, clearSession, saveSession, getRefreshToken } from './storage';
+import { getAccessToken, getSavedUser, saveSession, getRefreshToken } from './storage';
 
 interface AuthContextValue {
   user: ApiUser | null;
@@ -43,15 +45,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authApi
         .me()
         .then(setUser)
-        .catch(() => {
-          clearSession();
-          setUser(null);
+        .catch((err) => {
+          // Only a session the server ended signs the user out. A network blip or a
+          // server error keeps them signed in with the saved user.
+          if (err instanceof ApiRequestError && err.code === 'SESSION_EXPIRED') setUser(null);
         })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
   }, []);
+
+  // A session ended mid-use (signed out elsewhere, password changed, 90 days idle):
+  // dropping the user sends signed-in pages to /sign-in.
+  useEffect(() => onSessionExpired(() => setUser(null)), []);
 
   const login = useCallback(async (email: string, password: string) => {
     const data = await authApi.login(email, password);

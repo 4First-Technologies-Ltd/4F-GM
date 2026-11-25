@@ -7,6 +7,7 @@ const db = vi.hoisted(() => ({
 const gw = vi.hoisted(() => ({ verify: vi.fn() }));
 
 vi.mock('../src/lib/prisma', () => ({ prisma: db }));
+vi.mock('../src/lib/dispatch', () => ({ afterOrderPaid: vi.fn() }));
 vi.mock('../src/lib/gateways', async (orig) => ({
   ...(await orig<typeof import('../src/lib/gateways')>()),
   getGateway: () => ({ id: 'PAYFONTE', verify: gw.verify })
@@ -32,6 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.PAYFONTE_CLIENT_SECRET = SECRET;
   db.order.findFirst.mockResolvedValue(order);
+  db.order.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe('payfonte webhook', () => {

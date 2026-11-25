@@ -1,3 +1,4 @@
+import { PAID_STATUSES } from '../../lib/dispatch';
 import { Router } from 'express';
 import { requireAdmin } from '../../middleware/requireAdmin';
 import { prisma } from '../../lib/prisma';
@@ -19,7 +20,7 @@ router.get(
         prisma.gasListing.count(),
         prisma.order.aggregate({
           _sum: { totalAmount: true },
-          where: { status: { in: ['CONFIRMED', 'DELIVERED'] } }
+          where: { status: { in: PAID_STATUSES } }
         }),
         prisma.order.aggregate({
           _sum: { totalAmount: true },

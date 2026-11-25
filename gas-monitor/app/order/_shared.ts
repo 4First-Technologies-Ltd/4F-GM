@@ -2,7 +2,8 @@ import type { ConsumerOrder, OrderStatus } from '@/lib/api';
 
 export const STATUS_META: Record<OrderStatus, { label: string; color: string; bg: string; border: string }> = {
   PENDING:          { label: 'Awaiting payment', color: '#B45309', bg: '#FEF3E2', border: '#B4530940' },
-  CONFIRMED:        { label: 'Confirmed',        color: '#1D4ED8', bg: '#E8F0FE', border: '#1D4ED840' },
+  CONFIRMED:        { label: 'Paid',             color: '#1D4ED8', bg: '#E8F0FE', border: '#1D4ED840' },
+  ACCEPTED:         { label: 'Accepted',         color: '#0369A1', bg: '#E0F2FE', border: '#0369A140' },
   OUT_FOR_DELIVERY: { label: 'Out for delivery', color: '#E65100', bg: '#FFF3E0', border: '#E6510040' },
   DELIVERED:        { label: 'Delivered',        color: '#2D7450', bg: '#E8F5E8', border: '#2D745040' },
   CANCELLED:        { label: 'Cancelled',        color: '#D32F2F', bg: '#FFEBEE', border: '#D32F2F40' },
@@ -16,8 +17,13 @@ export const STATUS_CONTENT: Record<OrderStatus, { icon: string; headline: strin
   },
   CONFIRMED: {
     icon: 'checkmark.circle.fill',
-    headline: 'Order Confirmed',
-    sub: 'Payment received. Your supplier is preparing the order.',
+    headline: 'Payment Received',
+    sub: 'Waiting for your supplier to accept the order.',
+  },
+  ACCEPTED: {
+    icon: 'storefront.fill',
+    headline: 'Order Accepted',
+    sub: 'Your supplier accepted the order. A rider is on the way to collect it.',
   },
   OUT_FOR_DELIVERY: {
     icon: 'shippingbox.fill',
@@ -39,7 +45,8 @@ export const STATUS_CONTENT: Record<OrderStatus, { icon: string; headline: strin
 /** Forward steps shown on the timeline, in the order an order moves through them. */
 export const TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'PENDING', label: 'Order placed' },
-  { status: 'CONFIRMED', label: 'Confirmed' },
+  { status: 'CONFIRMED', label: 'Paid' },
+  { status: 'ACCEPTED', label: 'Accepted' },
   { status: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
   { status: 'DELIVERED', label: 'Delivered' },
 ];

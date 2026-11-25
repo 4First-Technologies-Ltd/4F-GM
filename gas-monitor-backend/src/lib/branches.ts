@@ -35,4 +35,4 @@ export function isSellable(b: { isActive: boolean; suspendedAt: Date | null }): 
 }
 
 /** Statuses that mean an order is still being worked and pins its branch open. */
-export const OPEN_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY'] as const;
+export const OPEN_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY'] as const;

@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { ASSIGNABLE_RIDER } from '../../lib/fleet';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { requireAdmin, requireOperations } from '../../middleware/requireAdmin';
@@ -7,6 +6,7 @@ import { prisma } from '../../lib/prisma';
 import { asyncHandler } from '../../lib/asyncHandler';
 import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 import { writeAuditLog } from '../../lib/audit';
+import { assignRiderAsAdmin, hidePin } from '../../lib/dispatch';
 
 const router = Router();
 
@@ -14,8 +14,10 @@ const router = Router();
  * Orders are otherwise READ-ONLY from the admin panel: order state is driven
  * by the consumer/vendor flows and the Paystack webhook, and no route here
  * should touch `status` or payment fields. The one exception is rider
- * assignment below — it only ever writes `riderId`/`assignedAt`, never
- * `status`, so it doesn't cross that line.
+ * assignment below, the fallback when no rider takes a job from the pool — it
+ * only ever writes `riderId`/`assignedAt` (and `poolEnteredAt` when it puts an
+ * order back in the pool), never `status`. Cancelling a paid order nobody would
+ * deliver happens through a dispatch suggestion (routes/admin/dispatch.ts).
  */
 
 const SORTABLE = ['createdAt', 'totalAmount', 'status'] as const;
@@ -63,7 +65,7 @@ router.get(
       prisma.order.count({ where })
     ]);
 
-    return res.json(paginated(orders, total, query));
+    return res.json(paginated(orders.map(hidePin), total, query));
   })
 );
 
@@ -81,7 +83,7 @@ router.get(
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    return res.json({ order });
+    return res.json({ order: hidePin(order) });
   })
 );
 
@@ -101,24 +103,13 @@ router.patch(
       return res.status(400).json({ error: result.error.issues[0].message });
     }
 
-    const order = await prisma.order.findUnique({ where: { id } });
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
     const { riderId } = result.data;
-    if (riderId) {
-      const rider = await prisma.riderProfile.findFirst({ where: { id: riderId, ...ASSIGNABLE_RIDER } });
-      if (!rider) {
-        return res.status(400).json({ error: 'Rider not found or not approved' });
-      }
+    const outcome = await assignRiderAsAdmin(id, riderId);
+    if (!outcome.ok) {
+      return res.status(outcome.status).json({ error: outcome.error, ...(outcome.code ? { code: outcome.code } : {}) });
     }
-
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { riderId, assignedAt: riderId ? new Date() : null },
-      include: LIST_INCLUDE
-    });
+    const order = { riderId: outcome.from };
+    const updated = (await prisma.order.findUnique({ where: { id }, include: LIST_INCLUDE }))!;
 
     await writeAuditLog(req, {
       action: riderId ? 'ORDER_RIDER_ASSIGNED' : 'ORDER_RIDER_UNASSIGNED',
@@ -130,7 +121,7 @@ router.patch(
       metadata: { from: order.riderId, to: riderId }
     });
 
-    return res.json({ order: updated });
+    return res.json({ order: hidePin(updated) });
   })
 );
 

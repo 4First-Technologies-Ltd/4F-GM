@@ -1,7 +1,7 @@
 import React, { useRef, useState, createContext, useContext } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated,
-  TouchableWithoutFeedback, Dimensions, Alert,
+  TouchableWithoutFeedback, useWindowDimensions, Alert,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,9 +9,11 @@ import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
+import { RoleSwitcher, useCanSwitchRole } from '@/components/role-switcher';
 
-const { width: W } = Dimensions.get('window');
-const DRAWER_W = Math.min(W * 0.78, 320);
+// Derived from the live window size inside the component: a value read at bundle
+// load can be stale on a first launch.
+const drawerWidth = (w: number) => Math.min(w * 0.78, 320);
 
 const C = {
   bg: '#EDF7ED',
@@ -66,6 +68,10 @@ export default function VendorLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeRoute, setActiveRoute] = useState<string>('index');
   const [businessName, setBusinessName] = useState('Your Business');
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const canSwitchRole = useCanSwitchRole();
+  const { width: winW } = useWindowDimensions();
+  const DRAWER_W = drawerWidth(winW);
 
   const translateX = useRef(new Animated.Value(-DRAWER_W)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -98,6 +104,11 @@ export default function VendorLayout() {
       if (route === 'index') router.replace('/(vendor)');
       else router.push(`/(vendor)/${route}` as any);
     }, 240);
+  }
+
+  function openRoleSwitcher() {
+    closeDrawer();
+    setTimeout(() => setSwitchOpen(true), 240);
   }
 
   async function handleSignOut() {
@@ -215,6 +226,13 @@ export default function VendorLayout() {
             <View style={{ flex: 1 }} />
 
             <View style={[d.navSection, { paddingBottom: 8 }]}>
+              {canSwitchRole && (
+                <NavItem
+                  icon="arrow.triangle.2.circlepath"
+                  label="Switch role"
+                  onPress={openRoleSwitcher}
+                />
+              )}
               <NavItem
                 icon="arrow.left"
                 label="Sign Out"
@@ -227,6 +245,7 @@ export default function VendorLayout() {
           </SafeAreaView>
         </Animated.View>
       </View>
+      <RoleSwitcher visible={switchOpen} onClose={() => setSwitchOpen(false)} />
     </DrawerCtx.Provider>
   );
 }

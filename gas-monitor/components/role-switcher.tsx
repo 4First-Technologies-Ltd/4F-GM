@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { authApi, type ApiUser, type RoleInfo, type UserRole } from '@/lib/api';
 import { getSavedUser } from '@/lib/storage';
 import { homeRouteFor } from '@/lib/homeRoute';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const C = {
   bg: '#EDF7ED',
@@ -117,20 +118,45 @@ export function RoleSwitcher({ visible, onClose }: { visible: boolean; onClose: 
   );
 }
 
-/** A link for the account screens that opens the switcher. Hidden on older API builds that send no roles. */
-export function SwitchRoleLink() {
-  const [open, setOpen] = useState(false);
+/**
+ * True once we know the account can switch roles. The saved copy of the user may
+ * predate role switching (no `roles`), so it is always refreshed from the server
+ * instead of trusting the cache. Stays false on older API builds that send none.
+ */
+export function useCanSwitchRole(): boolean {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    getSavedUser<ApiUser>().then((u) => setShow(!!u?.roles?.length));
+    let alive = true;
+    getSavedUser<ApiUser>().then((u) => {
+      if (alive && u?.roles?.length) setShow(true);
+    });
+    authApi
+      .refreshUser()
+      .then((u) => {
+        if (alive) setShow(!!u?.roles?.length);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  return show;
+}
+
+/** A clearly visible button for the account screens that opens the switcher. */
+export function SwitchRoleLink() {
+  const [open, setOpen] = useState(false);
+  const show = useCanSwitchRole();
 
   if (!show) return null;
   return (
     <>
-      <TouchableOpacity style={s.link} activeOpacity={0.7} onPress={() => setOpen(true)} accessibilityRole="button">
+      <TouchableOpacity style={s.link} activeOpacity={0.8} onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel="Switch role">
+        <IconSymbol name="arrow.triangle.2.circlepath" size={18} color={C.accent} />
         <Text style={s.linkText}>Switch role</Text>
+        <IconSymbol name="chevron.right" size={14} color={C.accent} />
       </TouchableOpacity>
       <RoleSwitcher visible={open} onClose={() => setOpen(false)} />
     </>
@@ -153,6 +179,10 @@ const s = StyleSheet.create({
   badge: { color: C.muted, fontSize: 11, fontWeight: '700' },
   error: { color: C.red, fontSize: 12, marginTop: 4 },
   close: { alignItems: 'center', paddingTop: 14 },
-  link: { alignItems: 'center', paddingVertical: 14 },
-  linkText: { color: C.accent, fontSize: 13, fontWeight: '600' },
+  link: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 14, paddingHorizontal: 18, marginVertical: 8,
+    borderRadius: 14, borderWidth: 1.5, borderColor: C.accent, backgroundColor: C.accentLight,
+  },
+  linkText: { color: C.accent, fontSize: 15, fontWeight: '700' },
 });

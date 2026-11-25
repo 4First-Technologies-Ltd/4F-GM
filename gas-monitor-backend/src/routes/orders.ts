@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { CALLBACK_URL } from '../lib/paystack';
 import { planVendorSplit } from '../lib/settlement';
 import { confirmOrder } from '../lib/orderPayment';
+import { newDeliveryPin } from '../lib/dispatch';
 import {
   GatewayError,
   defaultGateway,
@@ -164,7 +165,11 @@ async function verifyOrderPayment(reference: string, consumerId?: string): Promi
   }
 
   const confirmed = await confirmOrder(order.id);
-  return { code: 200, body: { success: true, orderId: order.id, status: confirmed?.status } };
+  // The PIN goes back to whoever holds the payment reference (the payer): guests have no account to read it from.
+  return {
+    code: 200,
+    body: { success: true, orderId: order.id, status: confirmed?.status, deliveryPin: confirmed?.deliveryPin ?? null }
+  };
 }
 
 /**
@@ -253,6 +258,7 @@ router.post(
         totalAmount,
         deliveryFee: priced.deliveryFee ?? 0,
         deliveryAddress,
+        deliveryPin: newDeliveryPin(),
         status: 'PENDING'
       }
     });
@@ -346,6 +352,7 @@ router.post(
         totalAmount,
         deliveryFee: priced.deliveryFee ?? 0,
         deliveryAddress,
+        deliveryPin: newDeliveryPin(),
         status: 'PENDING'
       }
     });

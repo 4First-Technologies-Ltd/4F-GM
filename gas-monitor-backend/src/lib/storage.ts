@@ -111,8 +111,9 @@ export const ALLOWED_IMAGE_TYPES: Record<string, string> = {
 };
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-export type ImageKind = 'logo' | 'listing';
-const IMAGE_FOLDER: Record<ImageKind, string> = { logo: 'vendor-logos', listing: 'listing-images' };
+/** `avatar` keys are under the user id; `logo` and `listing` under the vendor profile id. */
+export type ImageKind = 'logo' | 'listing' | 'avatar';
+const IMAGE_FOLDER: Record<ImageKind, string> = { logo: 'vendor-logos', listing: 'listing-images', avatar: 'avatars' };
 
 export function publicStorageConfigured(): boolean {
   return Boolean(storageConfigured() && process.env.R2_PUBLIC_BUCKET && process.env.R2_PUBLIC_URL);
@@ -130,7 +131,7 @@ export function newImageKey(kind: ImageKind, vendorProfileId: string, contentTyp
 
 /** True for a key this module issued (as opposed to a legacy URL or data: URI). */
 export const isImageKey = (value: string) =>
-  value.startsWith(`${IMAGE_FOLDER.logo}/`) || value.startsWith(`${IMAGE_FOLDER.listing}/`);
+  Object.values(IMAGE_FOLDER).some((folder) => value.startsWith(`${folder}/`));
 
 /**
  * A browser-ready URL for a stored image value. Keys resolve against

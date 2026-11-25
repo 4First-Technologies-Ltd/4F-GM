@@ -77,10 +77,10 @@ export async function collectOpsMetrics(day: string, now = new Date()): Promise<
     prisma.order.count({ where: { createdAt: { gte: weekStart, lt: start } } }),
     prisma.order.aggregate({ where: { status: 'DELIVERED', updatedAt: { gte: weekStart, lt: start } }, _count: true, _sum: { totalAmount: true } }),
 
-    // Paid orders a vendor has accepted but no rider has been put on.
-    prisma.order.count({ where: { status: 'CONFIRMED', riderId: null, vendorId: { not: null }, updatedAt: { lt: rider30 } } }),
-    prisma.order.findFirst({ where: { status: 'CONFIRMED', riderId: null, vendorId: { not: null }, updatedAt: { lt: rider30 } }, orderBy: { updatedAt: 'asc' }, select: { updatedAt: true } }),
-    prisma.order.count({ where: { status: 'OUT_FOR_DELIVERY', updatedAt: { lt: out4h } } }),
+    // Accepted orders sitting in the rider job pool.
+    prisma.order.count({ where: { status: 'ACCEPTED', riderId: null, poolEnteredAt: { lt: rider30 } } }),
+    prisma.order.findFirst({ where: { status: 'ACCEPTED', riderId: null, poolEnteredAt: { lt: rider30 } }, orderBy: { poolEnteredAt: 'asc' }, select: { poolEnteredAt: true } }),
+    prisma.order.count({ where: { status: 'OUT_FOR_DELIVERY', OR: [{ pickedUpAt: { lt: out4h } }, { pickedUpAt: null, updatedAt: { lt: out4h } }] } }),
     prisma.riderProfile.count({ where: { status: 'APPROVED' } }),
 
     prisma.user.groupBy({ by: ['role'], where: { createdAt: inDay }, _count: true }),
@@ -126,7 +126,7 @@ export async function collectOpsMetrics(day: string, now = new Date()): Promise<
     },
     live: {
       awaitingRider,
-      oldestAwaitingRiderMin: oldestAwaiting ? Math.round((now.getTime() - oldestAwaiting.updatedAt.getTime()) / 60_000) : null,
+      oldestAwaitingRiderMin: oldestAwaiting ? Math.round((now.getTime() - oldestAwaiting.poolEnteredAt!.getTime()) / 60_000) : null,
       stuckOutForDelivery: stuckOut,
       approvedRiders
     },
@@ -187,9 +187,9 @@ export function deriveFlags(m: OpsMetrics): OpsFlag[] {
       key: 'orders-no-rider',
       severity: m.live.awaitingRider >= 5 || mins >= 120 ? 'critical' : 'warning',
       title: `${plural(m.live.awaitingRider, 'paid order')} waiting for a rider`,
-      detail: `The oldest has waited ${mins} minutes since the vendor confirmed it.`,
-      action: 'Assign a rider from the order, or contact the vendor.',
-      href: '/dashboard/orders?status=CONFIRMED'
+      detail: `The oldest has been in the job pool for ${mins} minutes and no rider has taken it.`,
+      action: 'Check the Dispatch page: alert riders, or assign one from the order.',
+      href: '/dashboard/dispatch'
     });
   }
 

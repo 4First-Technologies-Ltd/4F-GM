@@ -14,11 +14,11 @@ export const withImage = <T extends { imageKey: string | null }>(listing: T) => 
 
 /**
  * A client may only point at a key it was issued for itself: under its own
- * vendor prefix, of the right kind, and actually present in the bucket.
+ * prefix (vendor profile id, or user id for avatars), of the right kind, and present in the bucket.
  * Returns an error message, or null when the key is fine.
  */
-export async function checkOwnImageKey(kind: ImageKind, vendorProfileId: string, key: string): Promise<string | null> {
-  if (!key.startsWith(imagePrefix(kind, vendorProfileId)) || key.includes('..')) {
+export async function checkOwnImageKey(kind: ImageKind, ownerId: string, key: string): Promise<string | null> {
+  if (!key.startsWith(imagePrefix(kind, ownerId)) || key.includes('..')) {
     return 'Invalid image reference.';
   }
   if (!(await imageExists(key))) return 'Upload was not completed. Please try again.';

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell } from 'lucide-react';
 import { notificationsApi, type AppNotification } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 function when(iso: string): string {
   const d = new Date(iso);
@@ -15,9 +16,10 @@ function when(iso: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Messages from the 4FG team (broadcasts sent from the admin panel). */
+/** Messages from the 4FG team (broadcasts), monitor alerts and order updates. */
 export default function NotificationsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [items, setItems] = useState<AppNotification[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +45,8 @@ export default function NotificationsPage() {
     // Monitor alerts lead somewhere: low or empty gas to the refill suggestions, the rest to the monitor.
     if (n.kind === 'REFILL' && n.refId) router.push(`/dashboard/refill?deviceId=${encodeURIComponent(n.refId)}`);
     else if (n.kind === 'MONITOR') router.push('/dashboard/monitors');
+    // Order updates: each role's home shows its own orders (customer orders, vendor queue, rider jobs).
+    else if (n.kind === 'ORDER') router.push(user?.role === 'CONSUMER' ? '/dashboard/orders' : '/dashboard');
   }
 
   function readAll() {
@@ -92,7 +96,11 @@ export default function NotificationsPage() {
                   <span className="text-xs text-muted-foreground">{when(n.createdAt)}</span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{n.body}</p>
-                {n.kind && <p className="mt-2 text-sm font-medium text-primary">{n.kind === 'REFILL' ? 'Order a refill ›' : 'View monitor ›'}</p>}
+                {n.kind && (
+                  <p className="mt-2 text-sm font-medium text-primary">
+                    {n.kind === 'REFILL' ? 'Order a refill ›' : n.kind === 'ORDER' ? 'View order ›' : 'View monitor ›'}
+                  </p>
+                )}
               </button>
             </li>
           ))}

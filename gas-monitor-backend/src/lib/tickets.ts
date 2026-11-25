@@ -22,6 +22,8 @@ export async function createTicket(input: {
   category?: TicketCategory;
   priority?: TicketPriority;
   orderId?: string | null;
+  /** SYSTEM for tickets the platform opens itself (e.g. a refund owed after a vendor rejects a paid order). */
+  author?: 'REQUESTER' | 'SYSTEM';
 }) {
   const email = input.requesterEmail.trim().toLowerCase();
   const priority = input.priority ?? 'NORMAL';
@@ -38,7 +40,13 @@ export async function createTicket(input: {
       requesterId: user?.id ?? null,
       orderId: input.orderId ?? null,
       slaDueAt: slaDueFor(priority),
-      messages: { create: { author: 'REQUESTER', authorName: input.requesterName, body: input.message } }
+      messages: {
+        create: {
+          author: input.author ?? 'REQUESTER',
+          authorName: input.author === 'SYSTEM' ? '4FG system' : input.requesterName,
+          body: input.message
+        }
+      }
     }
   });
 }

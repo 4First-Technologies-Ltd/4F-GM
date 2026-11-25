@@ -20,7 +20,12 @@ export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER' | 'BRANCH_MANAGER' | 'LOG
 export type CompanyStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+/**
+ * PENDING (unpaid) → CONFIRMED (paid, waiting for the vendor) → ACCEPTED (vendor
+ * accepted; in the rider job pool until a rider takes it) → OUT_FOR_DELIVERY →
+ * DELIVERED (the rider entered the customer's PIN).
+ */
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'ACCEPTED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 
 export type UnitPreference = 'KG' | 'LBS';
@@ -60,7 +65,8 @@ export interface ApiUser {
 export interface UpdateProfilePayload {
   name?: string;
   phone?: string | null;
-  avatarUrl?: string | null;
+  /** Key from `authApi.uploadAvatar(file)`, or null to remove the profile picture. */
+  avatarKey?: string | null;
   pushEnabled?: boolean;
   emailNotifEnabled?: boolean;
   smsAlertsEnabled?: boolean;
@@ -76,6 +82,12 @@ export interface Order {
   deliveryAddress: string;
   status: OrderStatus;
   paystackRef?: string;
+  /** Only on the customer's own orders: they give it to the rider at the door. */
+  deliveryPin?: string | null;
+  riderId?: string | null;
+  acceptedAt?: string | null;
+  pickedUpAt?: string | null;
+  deliveredAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +125,85 @@ export class ApiRequestError extends Error {
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
 
+// Session handling mirrors the mobile app (gas-monitor/lib/api.ts): one shared
+// refresh at a time, a token about to expire is refreshed before the request,
+// and only the server refusing the refresh token ends the session (a network
+// failure never does). Tabs racing each other are covered by the server keeping
+// a just-rotated refresh token valid for a short grace period.
+
+type RefreshOutcome = 'ok' | 'rejected' | 'offline';
+
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
+const sessionExpiredHandlers = new Set<() => void>();
+
+/** Called when the server ends the session; the auth context then signs the user out. */
+export function onSessionExpired(handler: () => void): () => void {
+  sessionExpiredHandlers.add(handler);
+  return () => {
+    sessionExpiredHandlers.delete(handler);
+  };
+}
+
+function secondsLeft(token: string): number | null {
+  try {
+    const part = token.split('.')[1];
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+    return typeof json.exp === 'number' ? json.exp - Date.now() / 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function doRefresh(): Promise<RefreshOutcome> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return 'rejected';
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+  } catch {
+    return 'offline';
+  }
+  if (res.status === 401 || res.status === 403) {
+    // Another tab may have replaced the token while this one was out.
+    const current = getRefreshToken();
+    return current && current !== refreshToken ? 'ok' : 'rejected';
+  }
+  if (!res.ok) return 'offline';
+  try {
+    const tokens = (await res.json()) as { accessToken: string; refreshToken: string };
+    const user = getSavedUserSafe();
+    if (user) saveSession(tokens.accessToken, tokens.refreshToken, user);
+    else {
+      window.localStorage.setItem('4fg_access_token', tokens.accessToken);
+      window.localStorage.setItem('4fg_refresh_token', tokens.refreshToken);
+    }
+    return 'ok';
+  } catch {
+    return 'offline';
+  }
+}
+
+function refreshSession(): Promise<RefreshOutcome> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+function endSession(): never {
+  clearSession();
+  sessionExpiredHandlers.forEach((h) => h());
+  throw new ApiRequestError('Your session has ended. Please sign in again.', 'SESSION_EXPIRED');
+}
+
+const OFFLINE_MESSAGE = "Couldn't reach 4FG. Check your connection and try again.";
+
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean; _retry?: boolean } = {}
@@ -124,35 +215,35 @@ async function request<T>(
     ...(headers as Record<string, string>)
   };
 
+  let sentToken: string | null = null;
   if (auth) {
-    const token = getAccessToken();
-    if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
+    sentToken = getAccessToken();
+    const left = sentToken ? secondsLeft(sentToken) : null;
+    if (sentToken && left !== null && left < 30 && getRefreshToken()) {
+      const outcome = await refreshSession();
+      if (outcome === 'rejected') endSession();
+      if (outcome === 'ok') sentToken = getAccessToken();
+    }
+    if (sentToken) reqHeaders['Authorization'] = `Bearer ${sentToken}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: reqHeaders,
-    ...rest
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { headers: reqHeaders, ...rest });
+  } catch {
+    throw new ApiRequestError(OFFLINE_MESSAGE, 'NETWORK');
+  }
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 401 && auth && !_retry) {
-      const storedRefresh = getRefreshToken();
-      if (storedRefresh) {
-        try {
-          const tokens = await request<{ accessToken: string; refreshToken: string }>('/api/auth/refresh', {
-            method: 'POST',
-            body: JSON.stringify({ refreshToken: storedRefresh })
-          });
-          const user = getSavedUserSafe();
-          if (user) saveSession(tokens.accessToken, tokens.refreshToken, user);
-          return request<T>(path, { ...options, _retry: true });
-        } catch {
-          clearSession();
-          throw new Error('Session expired. Please sign in again.');
-        }
-      }
+    if (res.status === 401 && auth && !_retry && getRefreshToken()) {
+      const current = getAccessToken();
+      if (current && current !== sentToken) return request<T>(path, { ...options, _retry: true });
+      const outcome = await refreshSession();
+      if (outcome === 'ok') return request<T>(path, { ...options, _retry: true });
+      if (outcome === 'rejected') endSession();
+      throw new ApiRequestError(OFFLINE_MESSAGE, 'NETWORK');
     }
     throw new ApiRequestError((data as ApiError).error ?? `HTTP ${res.status}`, (data as ApiError).code);
   }
@@ -269,6 +360,17 @@ export const authApi = {
     clearSession();
   },
 
+  /** Uploads a profile picture (any account type); save the key with `updateProfile({ avatarKey })`. */
+  async uploadAvatar(file: File): Promise<{ key: string; publicUrl: string | null }> {
+    const { key, uploadUrl, publicUrl } = await request<{ key: string; uploadUrl: string; publicUrl: string | null }>(
+      '/api/auth/me/avatar/upload-url',
+      { method: 'POST', auth: true, body: JSON.stringify({ contentType: file.type, size: file.size }) }
+    );
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!put.ok) throw new Error('Photo upload failed. Please try again.');
+    return { key, publicUrl };
+  },
+
   async updateProfile(payload: UpdateProfilePayload): Promise<ApiUser> {
     const data = await request<{ user: ApiUser }>('/api/auth/me', {
       method: 'PATCH',
@@ -328,6 +430,14 @@ export interface PaymentProviderOption {
   label: string;
 }
 
+/** The delivery PIN comes back with the payment check: guests have no account to read it from. */
+export interface PaymentVerifyResult {
+  success: boolean;
+  orderId: string;
+  status: string;
+  deliveryPin?: string | null;
+}
+
 export const ordersApi = {
   /** Gateways enabled for checkout. Show a picker only when there is more than one. */
   async paymentProviders(): Promise<{ default: string; providers: PaymentProviderOption[] }> {
@@ -342,7 +452,7 @@ export const ordersApi = {
     });
   },
 
-  async verify(reference: string): Promise<{ success: boolean; orderId: string; status: string }> {
+  async verify(reference: string): Promise<PaymentVerifyResult> {
     return request('/api/orders/verify', {
       method: 'POST',
       auth: true,
@@ -362,7 +472,7 @@ export const ordersApi = {
     });
   },
 
-  async guestVerify(reference: string): Promise<{ success: boolean; orderId: string; status: string }> {
+  async guestVerify(reference: string): Promise<PaymentVerifyResult> {
     return request('/api/orders/guest/verify', {
       method: 'POST',
       body: JSON.stringify({ reference })
@@ -480,16 +590,6 @@ export interface UpdateVendorProfilePayload {
   logoKey?: string | null;
   lat?: number;
   lng?: number;
-}
-
-/** An approved rider a vendor can assign. The pool is platform-wide, not vendor-owned. */
-export interface AssignableRider {
-  id: string;
-  phone: string;
-  vehicleType?: string | null;
-  user: { name: string };
-  /** Set when the rider rides for a logistics company. */
-  company?: { companyName: string } | null;
 }
 
 export interface VendorOrder extends Order {
@@ -687,27 +787,14 @@ export const vendorApi = {
     return data.orders;
   },
 
-  async getRiders(): Promise<AssignableRider[]> {
-    const data = await request<{ riders: AssignableRider[] }>('/api/vendor/riders', { auth: true });
-    return data.riders;
+  /** Accept a paid order: it goes to riders, who choose their own jobs. */
+  async acceptOrder(id: string): Promise<void> {
+    await request(`/api/vendor/orders/${id}/accept`, { method: 'POST', auth: true });
   },
 
-  /** Assign a rider to one of this vendor's orders; `null` unassigns. Never touches status. */
-  async assignRider(orderId: string, riderId: string | null): Promise<void> {
-    await request(`/api/vendor/orders/${orderId}/rider`, {
-      method: 'PATCH',
-      auth: true,
-      body: JSON.stringify({ riderId })
-    });
-  },
-
-  async updateOrderStatus(id: string, status: 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'): Promise<VendorOrder> {
-    const data = await request<{ order: VendorOrder }>(`/api/vendor/orders/${id}`, {
-      method: 'PATCH',
-      auth: true,
-      body: JSON.stringify({ status })
-    });
-    return data.order;
+  /** Reject a paid order before pickup. It is cancelled and 4FG refunds the customer. */
+  async rejectOrder(id: string, reason?: string): Promise<void> {
+    await request(`/api/vendor/orders/${id}/reject`, { method: 'POST', auth: true, body: JSON.stringify({ reason }) });
   }
 };
 
@@ -719,6 +806,7 @@ export interface RiderProfile {
   vehicleType?: string | null;
   plateNumber?: string | null;
   status: RiderStatus;
+  isOnline?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -733,6 +821,8 @@ export interface RiderOrder extends Order {
   assignedAt?: string | null;
   consumer: { id: string; name: string; email: string; phone?: string | null };
   vendor?: { id: string; businessName: string; businessAddress?: string | null; phone: string } | null;
+  /** Where to collect the order. */
+  branch?: { id: string; name: string; address: string; phone: string; lat: number | null; lng: number | null } | null;
 }
 
 // ── Payout account (vendors and riders) ──────────────────────────────────────
@@ -821,14 +911,63 @@ export const riderApi = {
     return data.orders;
   },
 
-  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED'): Promise<void> {
+  /** DELIVERED needs the 4-digit PIN the customer gives the rider. */
+  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED', pin?: string): Promise<void> {
     await request(`/api/rider/orders/${id}`, {
       method: 'PATCH',
       auth: true,
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status, pin })
     });
+  },
+
+  /** Online riders see the job pool and get job alerts. */
+  async setOnline(online: boolean, coords?: { lat: number; lng: number }): Promise<{ isOnline: boolean }> {
+    return request('/api/rider/online', { method: 'PATCH', auth: true, body: JSON.stringify({ online, ...coords }) });
+  },
+
+  async updateLocation(coords: { lat: number; lng: number }): Promise<void> {
+    await request('/api/rider/location', { method: 'PATCH', auth: true, body: JSON.stringify(coords) });
+  },
+
+  async getJobs(): Promise<RiderJobsResponse> {
+    return request<RiderJobsResponse>('/api/rider/jobs', { auth: true });
+  },
+
+  /** Take a job from the pool. 409 JOB_TAKEN if another rider got there first. */
+  async acceptJob(id: string): Promise<void> {
+    await request(`/api/rider/jobs/${id}/accept`, { method: 'POST', auth: true });
+  },
+
+  /** Give a job back before pickup. */
+  async releaseJob(id: string): Promise<void> {
+    await request(`/api/rider/jobs/${id}/release`, { method: 'POST', auth: true });
   }
 };
+
+/** One job in the pool. Customer details are only shown once the rider takes it. */
+export interface RiderJob {
+  id: string;
+  ref: string;
+  vendorName: string;
+  branchName: string | null;
+  pickupAddress: string;
+  pickupCity: string | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  deliveryAddress: string;
+  cylinderSize: string;
+  quantity: number;
+  riderPay: number;
+  distanceKm: number | null;
+  waitingSince: string;
+}
+
+export interface RiderJobsResponse {
+  online: boolean;
+  approved: boolean;
+  activeJob: { id: string; status: OrderStatus } | null;
+  jobs: RiderJob[];
+}
 
 // ── Branch manager API ────────────────────────────────────────────────────────
 
@@ -866,21 +1005,12 @@ export const staffApi = {
     return data.orders;
   },
 
-  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED'): Promise<void> {
-    await request(`/api/staff/orders/${id}`, { method: 'PATCH', auth: true, body: JSON.stringify({ status }) });
+  async acceptOrder(id: string): Promise<void> {
+    await request(`/api/staff/orders/${id}/accept`, { method: 'POST', auth: true });
   },
 
-  async getRiders(): Promise<AssignableRider[]> {
-    const data = await request<{ riders: AssignableRider[] }>('/api/staff/riders', { auth: true });
-    return data.riders;
-  },
-
-  async assignRider(orderId: string, riderId: string | null): Promise<void> {
-    await request(`/api/staff/orders/${orderId}/rider`, {
-      method: 'PATCH',
-      auth: true,
-      body: JSON.stringify({ riderId })
-    });
+  async rejectOrder(id: string, reason?: string): Promise<void> {
+    await request(`/api/staff/orders/${id}/reject`, { method: 'POST', auth: true, body: JSON.stringify({ reason }) });
   },
 
   async getListings(branchId?: string): Promise<GasListing[]> {
@@ -1094,7 +1224,8 @@ export interface AppNotification {
   title: string;
   body: string;
   /** Where clicking it leads: REFILL or MONITOR (the device id is in `refId`). Null for plain messages. */
-  kind?: 'REFILL' | 'MONITOR' | null;
+  /** ORDER = an order update for the signed-in user (refId = order id). */
+  kind?: 'REFILL' | 'MONITOR' | 'ORDER' | null;
   refId?: string | null;
   readAt: string | null;
   createdAt: string;

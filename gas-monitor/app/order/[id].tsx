@@ -262,6 +262,18 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+        {/* Delivery PIN: the rider can only complete the delivery with it. */}
+        {!!order.deliveryPin && ['CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY'].includes(order.status) && (
+          <Section title="Delivery PIN" icon="lock.fill">
+            <Text style={{ color: C.accent, fontSize: 32, fontWeight: '800', letterSpacing: 12, textAlign: 'center' }}>
+              {order.deliveryPin}
+            </Text>
+            <Text style={[s.supplierAddr, { textAlign: 'center', marginTop: 6 }]}>
+              Give this PIN to the rider only once you have your gas.
+            </Text>
+          </Section>
+        )}
+
         {/* Supplier */}
         <Section title="Supplier" icon="storefront.fill">
           <View style={s.supplierRow}>

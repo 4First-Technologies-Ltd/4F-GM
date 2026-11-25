@@ -23,7 +23,7 @@ import {
   type Order
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import { formatNaira } from '@/lib/format';
+import { customerStatusLabel, formatNaira, isOpenOrder } from '@/lib/format';
 import { fetchPublicListings, getStatus } from '@/lib/home-data';
 import { dateLabel, daysLeft, firstNameOf, greetingFor, weekBars } from '@/lib/home-content';
 import type { PublicListing } from '@/lib/marketplace';
@@ -46,7 +46,8 @@ const CYLINDER_IMG: Record<CylinderImageKey, string> = {
 };
 
 const ORDER_STEPS: { status: Order['status']; label: string }[] = [
-  { status: 'CONFIRMED', label: 'Confirmed' },
+  { status: 'CONFIRMED', label: 'Paid' },
+  { status: 'ACCEPTED', label: 'Accepted' },
   { status: 'OUT_FOR_DELIVERY', label: 'On the way' },
   { status: 'DELIVERED', label: 'Delivered' }
 ];
@@ -260,7 +261,7 @@ export function HomeBento() {
   const supplierCount = useMemo(() => new Set(inStock.map((l) => l.vendor.id)).size, [inStock]);
 
   const activeOrder = useMemo(() => {
-    const open = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY');
+    const open = orders.filter(isOpenOrder);
     return [...open].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
   }, [orders]);
 
@@ -422,7 +423,7 @@ export function HomeBento() {
           <Link href="/dashboard/orders" className={`${TILE} col-span-2 lg:col-span-2 ${FOCUS}`}>
             <div className="flex items-center justify-between gap-2">
               <span className={LABEL}>Order in progress</span>
-              <Pill label={activeOrder.status === 'OUT_FOR_DELIVERY' ? 'On the way' : 'Confirmed'} color="var(--primary)" />
+              <Pill label={customerStatusLabel(activeOrder)} color="var(--primary)" />
             </div>
             <p className="mb-2 mt-0.5 truncate text-sm font-bold text-foreground">
               {activeOrder.supplierName ?? 'Your order'} · {activeOrder.cylinderSize}

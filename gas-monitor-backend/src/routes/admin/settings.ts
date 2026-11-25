@@ -53,7 +53,16 @@ const patchSchema = z.object({
     .union([z.literal(''), z.string().trim().regex(/^https:\/\/\S+$/, 'App Store link must be an https link')])
     .optional(),
   // What's new in the latest version, shown in the app's update prompt.
-  updateNotes: z.string().trim().max(2000, 'Update notes can be at most 2000 characters').optional()
+  updateNotes: z.string().trim().max(2000, 'Update notes can be at most 2000 characters').optional(),
+  // Where riders collect platform (4FG Monitor) orders.
+  platformPickupAddress: z.string().trim().max(300, 'Pickup address can be at most 300 characters').optional(),
+  // Dispatch watcher (lib/dispatchWatcher.ts): minutes an order waits before each step.
+  dispatchNotifyAfterMin: z.number().int().min(0).max(240).optional(),
+  dispatchAssignAfterMin: z.number().int().min(1).max(720).optional(),
+  dispatchCancelAfterMin: z.number().int().min(1).max(2880).optional(),
+  dispatchRadiusKm: z.number().min(0.5).max(200).optional(),
+  dispatchVendorStallMin: z.number().int().min(1).max(1440).optional(),
+  dispatchDeliveryStallMin: z.number().int().min(5).max(2880).optional()
 });
 
 router.patch(
@@ -73,6 +82,12 @@ router.patch(
     const latest = result.data.latestAppVersion ?? before.latestAppVersion;
     if (compareVersions(min, latest) > 0) {
       return res.status(400).json({ error: 'Minimum app version cannot be higher than the latest version.' });
+    }
+    const notify = result.data.dispatchNotifyAfterMin ?? before.dispatchNotifyAfterMin;
+    const assign = result.data.dispatchAssignAfterMin ?? before.dispatchAssignAfterMin;
+    const cancel = result.data.dispatchCancelAfterMin ?? before.dispatchCancelAfterMin;
+    if (!(notify < assign && assign < cancel)) {
+      return res.status(400).json({ error: 'Dispatch steps must come in order: alert riders, then suggest a rider, then suggest cancelling.' });
     }
     const settings = await prisma.platformSettings.update({
       where: { id: 'singleton' },

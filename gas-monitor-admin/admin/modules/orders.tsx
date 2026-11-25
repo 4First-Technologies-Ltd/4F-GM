@@ -16,7 +16,8 @@ import type { OrderRow, RiderRow } from './types';
  * the generic row actions (which would go through `data.update`, i.e. PATCH
  * /orders/:id and touch `status`).
  *
- * Rider assignment is different: it's a dedicated endpoint
+ * Riders choose their own jobs from the pool (accepted orders with no rider).
+ * Rider assignment here is the admin fallback: it's a dedicated endpoint
  * (PATCH /orders/:id/rider) that only ever writes `riderId`/`assignedAt`,
  * never `status` or payment fields, so it's wired up separately below via
  * `detail.extra` rather than through the generic data source.
@@ -75,7 +76,14 @@ export const ordersModule: ResourceConfig<OrderRow> = {
       header: 'Rider',
       accessor: (o) => o.rider?.user.name ?? null,
       priority: 2,
-      render: (o) => (o.rider ? o.rider.user.name : <span className="adm-muted">Unassigned</span>)
+      render: (o) =>
+        o.rider ? (
+          o.rider.user.name
+        ) : o.status === 'ACCEPTED' ? (
+          <span className="adm-muted">In job pool{o.poolEnteredAt ? ` · ${formatRelative(o.poolEnteredAt)}` : ''}</span>
+        ) : (
+          <span className="adm-muted">—</span>
+        )
     },
     {
       key: 'payment',
@@ -107,7 +115,9 @@ export const ordersModule: ResourceConfig<OrderRow> = {
       type: 'segmented',
       options: [
         { value: 'PENDING', label: 'Pending' },
-        { value: 'CONFIRMED', label: 'Confirmed' },
+        { value: 'CONFIRMED', label: 'Awaiting vendor' },
+        { value: 'ACCEPTED', label: 'Accepted' },
+        { value: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
         { value: 'DELIVERED', label: 'Delivered' },
         { value: 'CANCELLED', label: 'Cancelled' }
       ]
@@ -179,6 +189,8 @@ export const ordersModule: ResourceConfig<OrderRow> = {
 function OrderRiderAssign({ order }: { order: OrderRow }) {
   const session = useAdminSession();
   const canAssign = can(session.role, 'orders.assignRider');
+  // Only orders the vendor has accepted can go to a rider; after pickup only a hand-over is possible.
+  const assignable = order.status === 'ACCEPTED' || order.status === 'OUT_FOR_DELIVERY';
 
   const [riders, setRiders] = useState<RiderRow[] | null>(null);
   const [current, setCurrent] = useState(order.rider);
@@ -230,11 +242,15 @@ function OrderRiderAssign({ order }: { order: OrderRow }) {
           Assigned to <strong>{current.user.name}</strong>
           <span className="adm-td-sub">{current.phone}</span>
         </p>
+      ) : order.status === 'ACCEPTED' ? (
+        <p className="adm-muted">In the rider job pool. Riders choose their own jobs; assign one here only as a fallback.</p>
+      ) : order.status === 'CONFIRMED' ? (
+        <p className="adm-muted">Paid, waiting for the vendor to accept. It goes to riders once accepted.</p>
       ) : (
-        <p className="adm-muted">No rider assigned yet.</p>
+        <p className="adm-muted">No rider.</p>
       )}
 
-      {canAssign && (
+      {canAssign && assignable && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
           <select
             className="adm-input"
@@ -258,9 +274,9 @@ function OrderRiderAssign({ order }: { order: OrderRow }) {
           >
             {current ? 'Reassign' : 'Assign'}
           </button>
-          {current && (
+          {current && order.status === 'ACCEPTED' && (
             <button className="adm-btn adm-btn--sm" disabled={saving} onClick={() => assign(null)}>
-              Unassign
+              Put back in pool
             </button>
           )}
         </div>

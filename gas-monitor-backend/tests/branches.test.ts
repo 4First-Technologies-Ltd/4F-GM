@@ -148,7 +148,7 @@ describe('deactivate', () => {
     const res = await call('/b2/deactivate', 'POST');
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('OPEN_ORDERS');
-    expect(db.order.count.mock.calls[0][0].where.status.in).toEqual(['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY']);
+    expect(db.order.count.mock.calls[0][0].where.status.in).toEqual(['PENDING', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY']);
     expect(db.branch.update).not.toHaveBeenCalled();
   });
 

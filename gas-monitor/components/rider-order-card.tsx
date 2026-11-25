@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator }
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { RiderOrder } from '@/lib/api';
 import {
-  RIDER_STATUS_META, fmtNaira, nextRiderAction, orderRef, supplierLabel, callNumber, openInMaps,
+  RIDER_STATUS_META, fmtNaira, nextRiderAction, orderRef, supplierLabel, callNumber, openInMaps, pickupAddress,
 } from '@/lib/riderOrders';
 
 const C = {
@@ -72,7 +72,8 @@ export function RiderOrderCard({
         <View style={s.actions}>
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={() => openInMaps(order.deliveryAddress)}
+            // Before pickup, navigation leads to the vendor; after, to the customer.
+            onPress={() => openInMaps(order.status === 'ACCEPTED' ? (pickupAddress(order) ?? order.deliveryAddress) : order.deliveryAddress)}
             activeOpacity={0.8}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >

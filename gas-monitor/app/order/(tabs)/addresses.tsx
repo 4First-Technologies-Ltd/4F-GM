@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAddresses } from '@/hooks/use-addresses';
+import { UseMyLocationButton } from '@/components/use-my-location';
 
 const C = {
   bg: '#EDF7ED',
@@ -68,7 +69,7 @@ export default function MyAddressesScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
       <StatusBar style="dark" />
 
       <View style={s.header}>
@@ -180,6 +181,7 @@ export default function MyAddressesScreen() {
               numberOfLines={3}
               textAlignVertical="top"
             />
+            <UseMyLocationButton onAddress={setNewFull} />
 
             <View style={s.modalActions}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => setShowModal(false)} activeOpacity={0.7}>

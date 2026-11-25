@@ -28,6 +28,9 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
@@ -122,13 +125,77 @@ export default function ProfilePage() {
   }
 
   if (!user) return null;
+  const avatarSrc = avatarPreview ?? user.avatarUrl ?? null;
 
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Profile Section */}
       <div className="rounded-2xl bg-card border border-border p-6 md:p-8">
         <h2 className="text-xl font-semibold text-foreground mb-2">Profile</h2>
-        <p className="text-sm text-muted-foreground mb-6">Update your name and phone number.</p>
+        <p className="text-sm text-muted-foreground mb-6">Your picture, name and phone number.</p>
+
+        <div className="mb-6 flex items-center gap-4">
+          <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-full border border-primary/25 bg-primary/10 grid place-items-center">
+            {avatarSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarSrc} alt="Your profile picture" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-2xl font-bold text-primary">
+                {user.name.split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase() || '?'}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <ImageUpload
+                kind="avatar"
+                label={user.avatarUrl ? 'Change photo' : 'Upload photo'}
+                disabled={savingAvatar}
+                onUploaded={async ({ key, previewUrl }) => {
+                  setAvatarError(null);
+                  setAvatarPreview(previewUrl);
+                  setSavingAvatar(true);
+                  try {
+                    await updateProfile({ avatarKey: key });
+                  } catch (err) {
+                    setAvatarPreview(null);
+                    setAvatarError(err instanceof Error ? err.message : 'Could not save your photo.');
+                  } finally {
+                    setSavingAvatar(false);
+                  }
+                }}
+                onError={setAvatarError}
+              />
+              {(user.avatarUrl || avatarPreview) && (
+                <button
+                  type="button"
+                  disabled={savingAvatar}
+                  className="text-sm font-medium text-destructive hover:text-destructive/80 disabled:opacity-60"
+                  onClick={async () => {
+                    setAvatarError(null);
+                    setSavingAvatar(true);
+                    try {
+                      await updateProfile({ avatarKey: null });
+                      setAvatarPreview(null);
+                    } catch (err) {
+                      setAvatarError(err instanceof Error ? err.message : 'Could not remove your photo.');
+                    } finally {
+                      setSavingAvatar(false);
+                    }
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB. Shown on your account.</p>
+            {avatarError && (
+              <p className="text-xs text-destructive" role="alert">
+                {avatarError}
+              </p>
+            )}
+          </div>
+        </div>
 
         <form onSubmit={handleProfileSubmit} noValidate className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

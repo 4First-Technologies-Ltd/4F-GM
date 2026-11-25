@@ -35,7 +35,19 @@ type Draft = Pick<
   | 'storeUrlAndroid'
   | 'storeUrlIos'
   | 'updateNotes'
+  | DispatchKey
 >;
+
+/** Dispatch watcher and the platform pickup point (lib/dispatchWatcher.ts on the backend). */
+const DISPATCH_FIELDS = [
+  { key: 'dispatchNotifyAfterMin', label: 'Alert nearby riders after (min)', help: 'How long a job sits in the pool before online riders near the pickup get a push.', min: 0, step: 1 },
+  { key: 'dispatchAssignAfterMin', label: 'Suggest a rider after (min)', help: 'Then the Dispatch page suggests the nearest idle rider for you to assign.', min: 1, step: 1 },
+  { key: 'dispatchCancelAfterMin', label: 'Suggest cancelling after (min)', help: 'Then it suggests cancelling the order and refunding the customer.', min: 1, step: 1 },
+  { key: 'dispatchRadiusKm', label: 'Alert radius (km)', help: 'Riders further than this from the pickup are not alerted or suggested.', min: 0.5, step: 0.5 },
+  { key: 'dispatchVendorStallMin', label: 'Flag vendors who have not accepted after (min)', help: 'A paid order the vendor has not accepted gets a follow-up suggestion.', min: 1, step: 1 },
+  { key: 'dispatchDeliveryStallMin', label: 'Flag deliveries still out after (min)', help: 'An order picked up this long ago and not delivered gets a follow-up suggestion.', min: 5, step: 5 }
+] as const;
+type DispatchKey = (typeof DISPATCH_FIELDS)[number]['key'] | 'platformPickupAddress';
 
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
@@ -82,7 +94,14 @@ export default function SettingsPage() {
           latestAppVersion: r.settings.latestAppVersion,
           storeUrlAndroid: r.settings.storeUrlAndroid,
           storeUrlIos: r.settings.storeUrlIos,
-          updateNotes: r.settings.updateNotes ?? ''
+          updateNotes: r.settings.updateNotes ?? '',
+          platformPickupAddress: r.settings.platformPickupAddress ?? '',
+          dispatchNotifyAfterMin: r.settings.dispatchNotifyAfterMin,
+          dispatchAssignAfterMin: r.settings.dispatchAssignAfterMin,
+          dispatchCancelAfterMin: r.settings.dispatchCancelAfterMin,
+          dispatchRadiusKm: r.settings.dispatchRadiusKm,
+          dispatchVendorStallMin: r.settings.dispatchVendorStallMin,
+          dispatchDeliveryStallMin: r.settings.dispatchDeliveryStallMin
         });
       })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))));
@@ -129,6 +148,16 @@ export default function SettingsPage() {
         draft.riderSharePercent !== settings.riderSharePercent ||
         (draft.supportEmail ?? '') !== (settings.supportEmail ?? '')
       : false;
+
+  const dirtyDispatch =
+    draft && settings
+      ? DISPATCH_FIELDS.some((d) => draft[d.key] !== settings[d.key]) ||
+        draft.platformPickupAddress.trim() !== (settings.platformPickupAddress ?? '')
+      : false;
+  const dispatchError =
+    draft && !(draft.dispatchNotifyAfterMin < draft.dispatchAssignAfterMin && draft.dispatchAssignAfterMin < draft.dispatchCancelAfterMin)
+      ? 'The steps must come in order: alert riders, then suggest a rider, then suggest cancelling.'
+      : null;
 
   const dirtyMonitor =
     draft && settings
@@ -326,6 +355,74 @@ export default function SettingsPage() {
                   }
                 >
                   {saving === 'commerce' ? 'Saving…' : 'Save commerce settings'}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="adm-card adm-card-pad">
+            <h2 className="adm-section-title">Dispatch</h2>
+            <p className="adm-field-help" style={{ marginTop: 'var(--space-2)' }}>
+              Vendors accept orders and riders choose jobs from the pool. When nobody takes a job, the
+              dispatch watcher steps in at these times (placeholder values). Its suggestions appear on the
+              Dispatch page.
+            </p>
+
+            <div style={{ display: 'grid', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+              {DISPATCH_FIELDS.map((d) => (
+                <label key={d.key} className="adm-field">
+                  <span className="adm-field-label">{d.label}</span>
+                  <input
+                    type="number"
+                    className="adm-input"
+                    min={d.min}
+                    step={d.step}
+                    value={draft[d.key]}
+                    disabled={!canEdit}
+                    onChange={(e) => setDraft({ ...draft, [d.key]: Number(e.target.value) })}
+                  />
+                  <span className="adm-field-help">{d.help}</span>
+                </label>
+              ))}
+
+              <label className="adm-field">
+                <span className="adm-field-label">4FG Monitor pickup address</span>
+                <input
+                  type="text"
+                  className="adm-input"
+                  maxLength={300}
+                  value={draft.platformPickupAddress}
+                  disabled={!canEdit}
+                  placeholder="Where riders collect 4FG Monitor orders"
+                  onChange={(e) => setDraft({ ...draft, platformPickupAddress: e.target.value })}
+                />
+                <span className="adm-field-help">
+                  Platform orders have no vendor branch, so riders are shown this address as the pickup.
+                </span>
+              </label>
+            </div>
+
+            {dispatchError && (
+              <p role="alert" style={{ color: 'var(--error)', marginTop: 'var(--space-3)' }}>
+                {dispatchError}
+              </p>
+            )}
+
+            {canEdit && (
+              <div className="adm-dialog-actions" style={{ marginTop: 'var(--space-4)' }}>
+                {saved === 'dispatch' && <span className="adm-badge adm-badge--success">Saved</span>}
+                <button
+                  type="button"
+                  className="adm-btn adm-btn--primary"
+                  disabled={!dirtyDispatch || !!dispatchError || saving === 'dispatch'}
+                  onClick={() =>
+                    save('dispatch', {
+                      ...Object.fromEntries(DISPATCH_FIELDS.map((d) => [d.key, draft[d.key]])),
+                      platformPickupAddress: draft.platformPickupAddress.trim()
+                    })
+                  }
+                >
+                  {saving === 'dispatch' ? 'Saving…' : 'Save dispatch settings'}
                 </button>
               </div>
             )}

@@ -1,26 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bike, UserPlus } from 'lucide-react';
+import { AlertCircle, Bike, Clock } from 'lucide-react';
 import { vendorApi, Branch, OrderStatus, VendorOrder } from '@/lib/api';
-import { STATUS_LABEL, formatNaira } from '@/lib/format';
-import { RIDER_STATUS_BADGE, orderRef } from '@/lib/rider';
-import { Button } from '@/components/motion/button/base';
-import { AssignRiderModal } from './AssignRiderModal';
+import { formatNaira } from '@/lib/format';
+import { RIDER_STATUS_BADGE, RIDER_STATUS_LABEL, orderRef } from '@/lib/rider';
+import { AcceptRejectActions } from '@/components/orders/AcceptRejectActions';
 
 type StatusFilter = 'ALL' | OrderStatus;
 
-const FILTERS: StatusFilter[] = ['ALL', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
-
-/** A rider only makes sense while the order is paid and not yet finished. */
-const canAssign = (o: VendorOrder) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY';
+const FILTERS: StatusFilter[] = ['ALL', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'PENDING'];
 
 export function VendorOrders() {
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('ALL');
-  const [assigning, setAssigning] = useState<VendorOrder | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
 
@@ -39,6 +34,9 @@ export function VendorOrders() {
 
   useEffect(() => {
     load();
+    // New paid orders need accepting quickly, so keep the list fresh.
+    const t = window.setInterval(() => document.visibilityState === 'visible' && load(), 30_000);
+    return () => window.clearInterval(t);
   }, [load]);
 
   const filtered = useMemo(
@@ -49,15 +47,18 @@ export function VendorOrders() {
     [orders, filter, branchFilter]
   );
   const multiBranch = branches.length > 1;
-  const needsRider = orders.filter((o) => canAssign(o) && !o.rider).length;
+  const toAccept = orders.filter((o) => o.status === 'CONFIRMED').length;
 
   return (
     <div className="rounded-2xl bg-card border border-border p-6">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-foreground">Incoming orders</h2>
-        {!loading && needsRider > 0 && (
-          <p className="mt-1 text-sm text-amber-700">
-            {needsRider} {needsRider === 1 ? 'order needs' : 'orders need'} a rider.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Accept a paid order and it goes to riders nearby. The first rider to take it collects it from you.
+        </p>
+        {!loading && toAccept > 0 && (
+          <p className="mt-1 text-sm font-medium text-amber-700">
+            {toAccept} paid {toAccept === 1 ? 'order needs' : 'orders need'} accepting.
           </p>
         )}
       </div>
@@ -105,7 +106,7 @@ export function VendorOrders() {
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
             }`}
           >
-            {f === 'ALL' ? 'All' : STATUS_LABEL[f]}
+            {f === 'ALL' ? 'All' : RIDER_STATUS_LABEL[f]}
           </button>
         ))}
       </div>
@@ -131,7 +132,7 @@ export function VendorOrders() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['Order', 'Customer', 'Size × Qty', 'Amount', 'Status', 'Rider'].map((h) => (
+                {['Order', 'Customer', 'Size × Qty', 'Amount', 'Status', 'Rider / action'].map((h) => (
                   <th
                     key={h}
                     className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide"
@@ -171,34 +172,30 @@ export function VendorOrders() {
                     <span
                       className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${RIDER_STATUS_BADGE[order.status]}`}
                     >
-                      {STATUS_LABEL[order.status]}
+                      {RIDER_STATUS_LABEL[order.status]}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm">
-                    {order.rider ? (
-                      <div className="flex items-center gap-3">
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5 font-medium text-foreground">
-                            <Bike className="h-4 w-4 text-primary" aria-hidden="true" />
-                            {order.rider.user.name}
-                          </span>
-                          <a href={`tel:${order.rider.phone}`} className="text-xs text-muted-foreground hover:text-foreground">
-                            {order.rider.phone}
-                          </a>
+                    {order.status === 'CONFIRMED' ? (
+                      <AcceptRejectActions orderId={order.id} api={vendorApi} onDone={load} />
+                    ) : order.rider ? (
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 font-medium text-foreground">
+                          <Bike className="h-4 w-4 text-primary" aria-hidden="true" />
+                          {order.rider.user.name}
                         </span>
-                        {canAssign(order) && (
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setAssigning(order)}>
-                            Change
-                          </Button>
-                        )}
+                        <a href={`tel:${order.rider.phone}`} className="text-xs text-muted-foreground hover:text-foreground">
+                          {order.rider.phone}
+                        </a>
+                      </span>
+                    ) : order.status === 'ACCEPTED' ? (
+                      <div className="space-y-1">
+                        <span className="flex items-center gap-1.5 text-amber-700">
+                          <Clock className="h-4 w-4" aria-hidden="true" />
+                          Waiting for a rider
+                        </span>
+                        <AcceptRejectActions orderId={order.id} api={vendorApi} onDone={load} canAccept={false} />
                       </div>
-                    ) : canAssign(order) ? (
-                      <Button type="button" variant="outline" size="sm" onClick={() => setAssigning(order)}>
-                        <span className="flex items-center gap-2">
-                          <UserPlus className="h-4 w-4" aria-hidden="true" />
-                          Assign rider
-                        </span>
-                      </Button>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -210,7 +207,6 @@ export function VendorOrders() {
         </div>
       )}
 
-      <AssignRiderModal order={assigning} onClose={() => setAssigning(null)} onAssigned={load} />
     </div>
   );
 }

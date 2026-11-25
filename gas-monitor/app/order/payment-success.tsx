@@ -18,11 +18,13 @@ const C = {
 };
 
 export default function PaymentSuccessScreen() {
-  const { reference, amount, supplierName } = useLocalSearchParams<{
+  const { reference, amount, supplierName, pin } = useLocalSearchParams<{
     orderId: string;
     reference: string;
     amount: string;
     supplierName: string;
+    /** Delivery PIN from the payment check: the customer gives it to the rider. */
+    pin?: string;
   }>();
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -73,6 +75,18 @@ export default function PaymentSuccessScreen() {
             <Text style={s.summaryLabel}>Reference</Text>
             <Text style={[s.summaryValue, s.refValue]} numberOfLines={1}>{reference}</Text>
           </View>
+          {!!pin && (
+            <>
+              <View style={s.divider} />
+              <View style={{ alignItems: 'center', paddingVertical: 6, gap: 4 }}>
+                <Text style={s.summaryLabel}>Your delivery PIN</Text>
+                <Text style={{ color: C.accent, fontSize: 30, fontWeight: '800', letterSpacing: 10 }}>{pin}</Text>
+                <Text style={[s.summaryLabel, { textAlign: 'center', fontSize: 12 }]}>
+                  Give it to the rider once you have your gas. You can also find it on the order.
+                </Text>
+              </View>
+            </>
+          )}
         </Animated.View>
       </View>
 

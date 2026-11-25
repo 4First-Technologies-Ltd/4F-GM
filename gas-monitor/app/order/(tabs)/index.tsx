@@ -10,6 +10,7 @@ import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ordersApi, marketplaceApi, monitorApi, savedApi, type MarketplaceListing, type PaymentProviderOption, type ReorderSuggestion } from '@/lib/api';
 import { useAddresses } from '@/hooks/use-addresses';
+import { UseMyLocationButton } from '@/components/use-my-location';
 import { quoteByAmount, quoteByKg, MIN_LOOSE_KG, MAX_LOOSE_KG } from '@/lib/looseOrder';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -473,7 +474,7 @@ export default function SuppliersScreen() {
   // ── Supplier List ───────────────────────────────────────────────────────────
   if (screen === 'suppliers') {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
         <StatusBar style="dark" />
 
         <View style={s.header}>
@@ -587,7 +588,7 @@ export default function SuppliersScreen() {
 
   // ── Order Form ──────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
       <StatusBar style="dark" />
 
       <View style={s.header}>
@@ -897,6 +898,12 @@ export default function SuppliersScreen() {
                   multiline
                   numberOfLines={2}
                   textAlignVertical="top"
+                />
+                <UseMyLocationButton
+                  onAddress={(address) => {
+                    setNewAddrFull(address);
+                    if (!newAddrLabel.trim()) setNewAddrLabel('Current location');
+                  }}
                 />
                 <View style={s.addFormActions}>
                   <TouchableOpacity style={s.modalCancelBtn} onPress={() => setShowAddForm(false)} activeOpacity={0.7}>

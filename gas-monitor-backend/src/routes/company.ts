@@ -131,7 +131,7 @@ router.get(
           plateNumber: true,
           status: true,
           user: { select: { name: true, email: true } },
-          _count: { select: { orders: { where: { status: { in: ['CONFIRMED', 'OUT_FOR_DELIVERY'] } } } } }
+          _count: { select: { orders: { where: { status: { in: ['ACCEPTED', 'OUT_FOR_DELIVERY'] } } } } }
         },
         orderBy: { createdAt: 'asc' }
       }),

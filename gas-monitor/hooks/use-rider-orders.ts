@@ -53,10 +53,35 @@ export function useRiderOrders({ poll = false }: { poll?: boolean } = {}) {
   return { orders, loading, refreshing, error, refresh, reload: load };
 }
 
-/** Confirms, then moves an order one step forward. Resolves true if the status changed. */
+/** Gives a job back before pickup, after a confirm. Resolves true if it went back to the pool. */
+export function releaseJob(order: RiderOrder): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert('Give this job back?', 'It goes back to other riders. Only do this if you cannot collect it.', [
+      { text: 'Keep job', style: 'cancel', onPress: () => resolve(false) },
+      {
+        text: 'Give back',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await riderApi.releaseJob(order.id);
+            resolve(true);
+          } catch (err) {
+            Alert.alert('Could not give the job back', err instanceof Error ? err.message : 'Try again.');
+            resolve(false);
+          }
+        },
+      },
+    ], { onDismiss: () => resolve(false) });
+  });
+}
+
+/**
+ * Confirms, then marks a job as picked up. Resolves true if the status changed.
+ * Delivering needs the customer's PIN: screens open `DeliveryPinModal` for that step instead.
+ */
 export function advanceOrder(order: RiderOrder): Promise<boolean> {
   const action = nextRiderAction(order.status);
-  if (!action) return Promise.resolve(false);
+  if (!action || action.to === 'DELIVERED') return Promise.resolve(false);
 
   return new Promise((resolve) => {
     Alert.alert(action.confirmTitle, action.confirmBody, [

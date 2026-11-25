@@ -1,3 +1,4 @@
+import { PAID_STATUSES } from '../../lib/dispatch';
 import { Router } from 'express';
 import type { OrderStatus, VendorStatus } from '@prisma/client';
 import { requireAdmin } from '../../middleware/requireAdmin';
@@ -6,8 +7,9 @@ import { asyncHandler } from '../../lib/asyncHandler';
 
 const router = Router();
 
-const REVENUE_STATUSES: OrderStatus[] = ['CONFIRMED', 'DELIVERED'];
-const ORDER_STATUSES: OrderStatus[] = ['PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'];
+// Every paid order (it used to miss orders out for delivery).
+const REVENUE_STATUSES: OrderStatus[] = PAID_STATUSES;
+const ORDER_STATUSES: OrderStatus[] = ['PENDING', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 const VENDOR_STATUSES: VendorStatus[] = ['PENDING', 'APPROVED', 'REJECTED'];
 
 function monthsBack(count: number): { since: Date; keys: string[] } {

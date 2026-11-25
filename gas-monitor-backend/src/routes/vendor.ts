@@ -4,10 +4,17 @@ import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { Prisma, VendorPlan } from '@prisma/client';
 import { listingPatchSchema, listingSchema } from '../lib/vendorSchemas';
-import { recordEarningSafe } from '../lib/earnings';
-import { ASSIGNABLE_RIDER } from '../lib/fleet';
 import { branchSchema, findMainBranch, findOwnBranch, isSellable } from '../lib/branches';
 import { asyncHandler } from '../lib/asyncHandler';
+import {
+  RIDERS_CHOOSE_JOBS,
+  acceptOrder,
+  cancelPaidOrder,
+  hidePin,
+  legacyStatusSchema,
+  rejectSchema,
+  sendDispatchResult
+} from '../lib/dispatch';
 import {
   ALLOWED_IMAGE_TYPES,
   deleteImage,
@@ -527,109 +534,68 @@ router.get(
       orderBy: { createdAt: 'desc' }
     });
 
-    return res.json({ orders });
+    // The delivery PIN is the customer's alone: the vendor never sees it.
+    return res.json({ orders: orders.map(hidePin) });
   })
 );
 
-const orderStatusSchema = z.object({
-  status: z.enum(['CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'])
-});
+async function ownVendorId(userId: string): Promise<string | null> {
+  const profile = await prisma.vendorProfile.findUnique({ where: { userId }, select: { id: true } });
+  return profile?.id ?? null;
+}
 
+// Accepting puts a paid order into the rider job pool. Vendors no longer pick riders.
+router.post(
+  '/orders/:id/accept',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const vendorId = await ownVendorId(req.user!.sub);
+    if (!vendorId) return res.status(404).json({ error: 'Vendor profile not found' });
+    return sendDispatchResult(res, await acceptOrder(req.params.id, { vendorId }));
+  })
+);
+
+// Rejecting a paid order cancels it and opens a refund ticket for the admins.
+// Allowed until a rider has picked the order up.
+router.post(
+  '/orders/:id/reject',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const result = rejectSchema.safeParse(req.body ?? {});
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
+    const vendorId = await ownVendorId(req.user!.sub);
+    if (!vendorId) return res.status(404).json({ error: 'Vendor profile not found' });
+    return sendDispatchResult(res, await cancelPaidOrder(req.params.id, { vendorId }, { by: 'vendor', reason: result.data.reason }));
+  })
+);
+
+/**
+ * Old app builds move orders with `{ status }`. Delivery statuses now belong to
+ * the rider (and DELIVERED needs the customer's PIN), so only CANCELLED is still
+ * honoured, as a reject. This also closes the old gap where an owner could move
+ * an unpaid order to any status.
+ */
 router.patch(
   '/orders/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = orderStatusSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0].message });
+    const result = legacyStatusSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.issues[0].message });
+    const vendorId = await ownVendorId(req.user!.sub);
+    if (!vendorId) return res.status(404).json({ error: 'Vendor profile not found' });
+
+    if (result.data.status === 'CANCELLED') {
+      return sendDispatchResult(res, await cancelPaidOrder(req.params.id, { vendorId }, { by: 'vendor' }));
     }
-
-    const { id } = req.params;
-
-    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
-    if (!profile) {
-      return res.status(404).json({ error: 'Vendor profile not found' });
+    if (result.data.status === 'CONFIRMED' || result.data.status === 'ACCEPTED') {
+      return sendDispatchResult(res, await acceptOrder(req.params.id, { vendorId }));
     }
-
-    const exists = await prisma.order.findFirst({ where: { id, vendorId: profile.id } });
-    if (!exists) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const order = await prisma.order.update({ where: { id }, data: { status: result.data.status } });
-    if (order.status === 'DELIVERED') recordEarningSafe(order.id);
-    return res.json({ order });
+    return res.status(409).json(RIDERS_CHOOSE_JOBS);
   })
 );
 
-const assignRiderSchema = z.object({
-  // null unassigns — a vendor pulling a rider off an order without picking a
-  // replacement yet.
-  riderId: z.string().min(1).nullable()
-});
-
-router.patch(
-  '/orders/:id/rider',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const result = assignRiderSchema.safeParse(req.body);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error.issues[0].message });
-    }
-
-    const { id } = req.params;
-    const { riderId } = result.data;
-
-    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
-    if (!profile) {
-      return res.status(404).json({ error: 'Vendor profile not found' });
-    }
-
-    const order = await prisma.order.findFirst({ where: { id, vendorId: profile.id } });
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    if (riderId) {
-      const rider = await prisma.riderProfile.findFirst({ where: { id: riderId, ...ASSIGNABLE_RIDER } });
-      if (!rider) {
-        return res.status(400).json({ error: 'Rider not found or not approved' });
-      }
-    }
-
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { riderId, assignedAt: riderId ? new Date() : null }
-    });
-
-    return res.json({ order: updated });
-  })
-);
-
-/** Approved riders available to assign — every vendor draws from the same pool. */
-router.get(
-  '/riders',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const profile = await prisma.vendorProfile.findUnique({ where: { userId: req.user!.sub } });
-    if (!profile) {
-      return res.status(404).json({ error: 'Vendor profile not found' });
-    }
-
-    const riders = await prisma.riderProfile.findMany({
-      where: ASSIGNABLE_RIDER,
-      select: {
-        id: true,
-        phone: true,
-        vehicleType: true,
-        user: { select: { name: true } },
-        company: { select: { companyName: true } }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    return res.json({ riders });
-  })
-);
+// Removed: riders now claim accepted orders from the job pool. Old builds get a clear message.
+router.patch('/orders/:id/rider', requireAuth, (_req, res) => res.status(410).json(RIDERS_CHOOSE_JOBS));
+router.get('/riders', requireAuth, (_req, res) => res.status(410).json(RIDERS_CHOOSE_JOBS));
 
 export default router;

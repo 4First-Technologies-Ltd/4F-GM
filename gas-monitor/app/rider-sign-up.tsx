@@ -59,6 +59,8 @@ function Field({
           placeholder={placeholder}
           placeholderTextColor={C.muted + '99'}
           keyboardType={keyboardType ?? 'default'}
+          // Explicit, so the keyboard switches back from the phone pad (some Android keyboards stay numeric).
+          inputMode={keyboardType === 'phone-pad' ? 'tel' : keyboardType === 'email-address' ? 'email' : 'text'}
           autoCapitalize={autoCapitalize ?? 'none'}
           autoCorrect={false}
           secureTextEntry={secure}
@@ -234,7 +236,7 @@ export default function RiderSignUpScreen() {
               </View>
 
               <Field
-                label="Plate number (optional)" value={plateNumber} onChangeText={setPlateNumber}
+                label="Plate number (optional)" value={plateNumber} onChangeText={(t) => setPlateNumber(t.toUpperCase())}
                 placeholder="ABC-123-XY" autoCapitalize="characters" maxLength={20}
               />
             </View>
