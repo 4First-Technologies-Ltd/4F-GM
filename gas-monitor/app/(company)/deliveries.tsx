@@ -12,7 +12,8 @@ const C = {
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   PENDING: { label: 'Awaiting payment', color: C.muted, bg: '#F5FBF5' },
-  CONFIRMED: { label: 'Assigned', color: C.amber, bg: C.amberLight },
+  CONFIRMED: { label: 'Waiting for vendor', color: C.amber, bg: C.amberLight },
+  ACCEPTED: { label: 'Going to pickup', color: C.amber, bg: C.amberLight },
   OUT_FOR_DELIVERY: { label: 'Out for delivery', color: C.accent, bg: C.accentLight },
   DELIVERED: { label: 'Delivered', color: C.accent, bg: C.accentLight },
   CANCELLED: { label: 'Cancelled', color: C.red, bg: '#FFF0F0' },
@@ -39,7 +40,7 @@ export default function FleetDeliveriesScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const active = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY');
+  const active = orders.filter((o) => o.status === 'ACCEPTED' || o.status === 'OUT_FOR_DELIVERY');
   const done = orders.filter((o) => o.status === 'DELIVERED' || o.status === 'CANCELLED').slice(0, 30);
 
   const card = (o: FleetDelivery) => {

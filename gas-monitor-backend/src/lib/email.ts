@@ -143,6 +143,45 @@ export async function sendTicketReplyEmail(input: {
   return true;
 }
 
+/**
+ * The customer's delivery PIN, sent once their order is paid. Guests have no
+ * account to see it in, so this email is how they get it. The PIN is never
+ * logged, not even when email is not configured.
+ */
+export async function sendDeliveryPinEmail(input: {
+  to: string;
+  name: string;
+  pin: string;
+  orderRef: string;
+  item: string;
+}): Promise<boolean> {
+  const resend = getClient();
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY not set — delivery PIN for order ${input.orderRef} not emailed`);
+    return false;
+  }
+  const { error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: input.to,
+    subject: `Order ${input.orderRef} is paid — your delivery PIN`,
+    html: `
+      <div style="font-family: -apple-system, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
+        <p style="font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: #2d7450; text-transform: uppercase; margin: 0 0 24px;">4FG Smart Gas Monitor</p>
+        <p style="font-size: 15px; color: #1a2e1a; margin: 0 0 12px;">Hi ${escapeHtml(input.name)},</p>
+        <p style="font-size: 15px; color: #444; line-height: 1.5; margin: 0 0 8px;">We've received payment for order <strong>${escapeHtml(input.orderRef)}</strong> (${escapeHtml(input.item)}).</p>
+        <p style="font-size: 15px; color: #444; line-height: 1.5; margin: 0 0 24px;">When your gas arrives, give the rider this PIN. They can't complete the delivery without it, so only share it once you have your gas.</p>
+        <div style="font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #12271d; background: #e9f6ec; border-radius: 8px; padding: 16px 20px; text-align: center; margin: 0 0 24px;">${escapeHtml(input.pin)}</div>
+        <p style="font-size: 13px; color: #888; line-height: 1.5;">Nobody from 4FG will ever ask you for this PIN by phone.</p>
+      </div>
+    `
+  });
+  if (error) {
+    console.error(`[email] Resend failed to send the delivery PIN for order ${input.orderRef}:`, error);
+    return false;
+  }
+  return true;
+}
+
 const webBase = () => (process.env.WEB_APP_URL ?? 'https://4fgmonitor.com').replace(/\/+$/, '');
 export const testerPortalUrl = () => `${webBase()}/testers`;
 

@@ -1,19 +1,20 @@
 'use client';
 
 import { useMemo } from 'react';
-import { AlertCircle, PackageOpen, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useRiderOrders } from '@/lib/hooks/use-rider-orders';
 import { isActiveOrder } from '@/lib/rider';
 import { Button } from '@/components/motion/button/base';
 import { RiderOrderCard } from './RiderOrderCard';
+import { JobPool } from './JobPool';
 
-/** Rider home: orders still needing action. Polls every 30s. */
+/** Rider home: the job they are doing now, the online switch and the job pool. */
 export function RiderDeliveries() {
   const { user } = useAuth();
   const { orders, loading, refreshing, error, refresh, reload } = useRiderOrders({ poll: true });
 
-  // Out-for-delivery first (already in progress), then oldest assignment first.
+  // Out-for-delivery first (already in progress), then oldest first.
   const active = useMemo(
     () =>
       orders.filter(isActiveOrder).sort((a, b) => {
@@ -27,13 +28,13 @@ export function RiderDeliveries() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground mb-1">
-            Hi, {user?.name.split(' ')[0] ?? 'there'}
-          </h2>
+          <h2 className="text-2xl font-bold text-foreground mb-1">Hi, {user?.name.split(' ')[0] ?? 'there'}</h2>
           <p className="text-sm text-muted-foreground">
             {loading
-              ? 'Loading your deliveries…'
-              : `${active.length} active ${active.length === 1 ? 'delivery' : 'deliveries'}. New assignments appear automatically.`}
+              ? 'Loading your jobs…'
+              : active.length > 0
+                ? 'Your current job is below.'
+                : 'Go online, then take a job from the list.'}
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={refreshing || loading}>
@@ -54,23 +55,15 @@ export function RiderDeliveries() {
         </div>
       )}
 
-      {!loading && !error && active.length === 0 && (
-        <div className="rounded-2xl border border-border bg-card px-6 py-14 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary">
-            <PackageOpen className="h-6 w-6" />
-          </span>
-          <h3 className="mt-4 text-lg font-semibold text-foreground">No active deliveries</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Orders assigned to you by a vendor will show up here.
-          </p>
-        </div>
+      {active.length > 0 && (
+        <section className="space-y-4" aria-label="Current job">
+          {active.map((order) => (
+            <RiderOrderCard key={order.id} order={order} showActions onChanged={reload} />
+          ))}
+        </section>
       )}
 
-      <div className="space-y-4">
-        {active.map((order) => (
-          <RiderOrderCard key={order.id} order={order} showActions onChanged={reload} />
-        ))}
-      </div>
+      {!loading && <JobPool hasActiveJob={active.length > 0} onTaken={reload} />}
     </div>
   );
 }

@@ -215,6 +215,8 @@ export async function pricePlatformOrder(
   return {
     supplierName: item.supplierName,
     unitPrice: terms.unitPrice,
-    totalAmount: withDelivery(terms.unitPrice, quantity, terms.deliveryFee)
+    totalAmount: withDelivery(terms.unitPrice, quantity, terms.deliveryFee),
+    // Recorded so the rider who delivers a platform order earns their share of it.
+    deliveryFee: terms.deliveryFee
   };
 }

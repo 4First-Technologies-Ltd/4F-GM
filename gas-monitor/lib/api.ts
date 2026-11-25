@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { getAccessToken, getRefreshToken, saveSession, clearSession } from './storage';
+import { getAccessToken, getRefreshToken, saveSession, saveTokens, clearSession } from './storage';
 import { LEGAL_VERSION } from './legal';
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
@@ -20,7 +20,12 @@ export type CompanyStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+/**
+ * PENDING (unpaid) → CONFIRMED (paid, waiting for the vendor) → ACCEPTED (vendor
+ * accepted; in the rider job pool until a rider takes it) → OUT_FOR_DELIVERY →
+ * DELIVERED (the rider entered the customer's PIN).
+ */
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'ACCEPTED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 
 export type UnitPreference = 'KG' | 'LBS';
 
@@ -169,16 +174,6 @@ export interface GasListing {
   updatedAt: string;
 }
 
-/** An approved rider a vendor can assign. The pool is platform-wide, not vendor-owned. */
-export interface AssignableRider {
-  id: string;
-  phone: string;
-  vehicleType?: string | null;
-  user: { name: string };
-  /** Set when the rider rides for a logistics company. */
-  company?: { companyName: string } | null;
-}
-
 export interface CompanyProfile {
   id: string;
   companyName: string;
@@ -282,6 +277,88 @@ export class ApiRequestError extends Error {
 
 // ── Core fetch wrapper ────────────────────────────────────────────────────────
 
+// ── Session ───────────────────────────────────────────────────────────────────
+//
+// The access token lasts 15 minutes; the refresh token 90 days and is renewed on
+// every use, so a session only ends after 90 days without opening the app, or when
+// the server ends it (sign-out elsewhere, password change, suspension, deletion).
+//
+// - One refresh at a time: screens fire several requests at once, and they all
+//   wait on the same refresh instead of racing with the same refresh token.
+// - A token about to expire is refreshed before the request, not after a 401.
+// - A network failure never ends the session: only the server refusing the
+//   refresh token does. Then the session is cleared and the app goes to sign-in.
+
+type RefreshOutcome = 'ok' | 'rejected' | 'offline';
+
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
+let sessionExpiredHandler: (() => void) | null = null;
+
+/** Called once when the server ends the session (the root layout sends the user to sign-in). */
+export function onSessionExpired(handler: () => void): () => void {
+  sessionExpiredHandler = handler;
+  return () => {
+    if (sessionExpiredHandler === handler) sessionExpiredHandler = null;
+  };
+}
+
+/** Seconds until the JWT's `exp`, or null if it can't be read. */
+function secondsLeft(token: string): number | null {
+  try {
+    const part = token.split('.')[1];
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+    return typeof json.exp === 'number' ? json.exp - Date.now() / 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function doRefresh(): Promise<RefreshOutcome> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return 'rejected';
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch {
+    return 'offline';
+  }
+  if (res.status === 401 || res.status === 403) {
+    // Another refresh may have replaced the token while this one was out.
+    const current = await getRefreshToken();
+    return current && current !== refreshToken ? 'ok' : 'rejected';
+  }
+  if (!res.ok) return 'offline'; // server trouble: keep the session and try again later
+  try {
+    const tokens = (await res.json()) as { accessToken: string; refreshToken: string };
+    await saveTokens(tokens.accessToken, tokens.refreshToken);
+    return 'ok';
+  } catch {
+    return 'offline';
+  }
+}
+
+/** Refreshes the access token, sharing one refresh between every caller. */
+export function refreshSession(): Promise<RefreshOutcome> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function endSession(): Promise<never> {
+  await clearSession();
+  sessionExpiredHandler?.();
+  throw new ApiRequestError('Your session has ended. Please sign in again.', 'SESSION_EXPIRED');
+}
+
+const OFFLINE_MESSAGE = "Couldn't reach 4FG. Check your connection and try again.";
+
 async function request<T>(
   path: string,
   options: RequestInit & { auth?: boolean; _retry?: boolean } = {},
@@ -293,37 +370,39 @@ async function request<T>(
     ...(headers as Record<string, string>),
   };
 
+  let sentToken: string | null = null;
   if (auth) {
-    const token = await getAccessToken();
-    if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
+    sentToken = await getAccessToken();
+    // Refresh ahead of time (e.g. the app was in the background for hours).
+    const left = sentToken ? secondsLeft(sentToken) : null;
+    if (sentToken && left !== null && left < 30 && (await getRefreshToken())) {
+      const outcome = await refreshSession();
+      if (outcome === 'rejected') return endSession();
+      if (outcome === 'ok') sentToken = await getAccessToken();
+    }
+    if (sentToken) reqHeaders['Authorization'] = `Bearer ${sentToken}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: reqHeaders,
-    ...rest,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { headers: reqHeaders, ...rest });
+  } catch {
+    throw new ApiRequestError(OFFLINE_MESSAGE, 'NETWORK');
+  }
 
-  const data = await res.json();
+  // An HTML error page from a proxy must not crash the caller.
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    // On 401 for an auth'd request, attempt a token refresh once then retry
-    if (res.status === 401 && auth && !_retry) {
-      const storedRefresh = await getRefreshToken();
-      if (storedRefresh) {
-        try {
-          const tokens = await request<{ accessToken: string; refreshToken: string }>(
-            '/api/auth/refresh',
-            { method: 'POST', body: JSON.stringify({ refreshToken: storedRefresh }) },
-          );
-          const { getSavedUser } = await import('./storage');
-          const user = await getSavedUser();
-          if (user) await saveSession(tokens.accessToken, tokens.refreshToken, user);
-          return request<T>(path, { ...options, _retry: true });
-        } catch {
-          await clearSession();
-          throw new Error('Session expired. Please sign in again.');
-        }
-      }
+    // 401 on a signed-in request: refresh once (shared with any other request), then retry.
+    if (res.status === 401 && auth && !_retry && (await getRefreshToken())) {
+      const current = await getAccessToken();
+      // Someone else already refreshed while this request was out: just retry.
+      if (current && current !== sentToken) return request<T>(path, { ...options, _retry: true });
+      const outcome = await refreshSession();
+      if (outcome === 'ok') return request<T>(path, { ...options, _retry: true });
+      if (outcome === 'rejected') return endSession();
+      throw new ApiRequestError(OFFLINE_MESSAGE, 'NETWORK');
     }
     throw new ApiRequestError((data as ApiError).error ?? `HTTP ${res.status}`, (data as ApiError).code);
   }
@@ -380,20 +459,12 @@ export const authApi = {
     return data;
   },
 
+  /** Refreshes the token pair (shared with any refresh already running). Null if it could not. */
   async refresh(): Promise<{ accessToken: string; refreshToken: string } | null> {
-    const refreshToken = await getRefreshToken();
-    if (!refreshToken) return null;
-    try {
-      const data = await request<{ accessToken: string; refreshToken: string }>(
-        '/api/auth/refresh',
-        { method: 'POST', body: JSON.stringify({ refreshToken }) },
-      );
-      const user = await import('./storage').then((m) => m.getSavedUser());
-      if (user) await saveSession(data.accessToken, data.refreshToken, user);
-      return data;
-    } catch {
-      return null;
-    }
+    const outcome = await refreshSession();
+    if (outcome !== 'ok') return null;
+    const [accessToken, refreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
+    return accessToken && refreshToken ? { accessToken, refreshToken } : null;
   },
 
   async logout(): Promise<void> {
@@ -436,10 +507,28 @@ export const authApi = {
     return user;
   },
 
+  /**
+   * Uploads a profile picture to the public image bucket and returns the key to
+   * save with `updateProfile({ avatarKey })`. Any account type.
+   */
+  async uploadAvatar(file: { uri: string; mimeType?: string | null }): Promise<{ key: string }> {
+    const blob = await (await fetch(file.uri)).blob();
+    const contentType = blob.type || file.mimeType || 'image/jpeg';
+    const { key, uploadUrl } = await request<{ key: string; uploadUrl: string }>('/api/auth/me/avatar/upload-url', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ contentType, size: blob.size }),
+    });
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    if (!put.ok) throw new Error('Photo upload failed. Please try again.');
+    return { key };
+  },
+
   async updateProfile(patch: Partial<{
     name: string;
     phone: string | null;
-    avatarUrl: string | null;
+    /** Key from `uploadAvatar`, or null to remove the picture. */
+    avatarKey: string | null;
     pushEnabled: boolean;
     emailNotifEnabled: boolean;
     smsAlertsEnabled: boolean;
@@ -666,27 +755,14 @@ export const vendorApi = {
     return res.orders;
   },
 
-  async getRiders(): Promise<AssignableRider[]> {
-    const res = await request<{ riders: AssignableRider[] }>('/api/vendor/riders', { auth: true });
-    return res.riders;
+  /** Accept a paid order: it goes to riders, who choose their own jobs. */
+  async acceptOrder(id: string): Promise<void> {
+    await request(`/api/vendor/orders/${id}/accept`, { method: 'POST', auth: true });
   },
 
-  /** Assign a rider to one of this vendor's orders; `null` unassigns. Never touches status. */
-  async assignRider(orderId: string, riderId: string | null): Promise<void> {
-    await request(`/api/vendor/orders/${orderId}/rider`, {
-      method: 'PATCH',
-      auth: true,
-      body: JSON.stringify({ riderId }),
-    });
-  },
-
-  async updateOrderStatus(id: string, status: 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'): Promise<VendorOrder> {
-    const res = await request<{ order: VendorOrder }>(`/api/vendor/orders/${id}`, {
-      method: 'PATCH',
-      auth: true,
-      body: JSON.stringify({ status }),
-    });
-    return res.order;
+  /** Reject a paid order before pickup. It is cancelled and 4FG refunds the customer. */
+  async rejectOrder(id: string, reason?: string): Promise<void> {
+    await request(`/api/vendor/orders/${id}/reject`, { method: 'POST', auth: true, body: JSON.stringify({ reason }) });
   },
 };
 
@@ -715,6 +791,8 @@ export interface RiderOrder {
   updatedAt: string;
   consumer: { id: string; name: string; email: string; phone?: string | null };
   vendor?: { id: string; businessName: string; businessAddress?: string | null; phone: string } | null;
+  /** Where to collect the order. */
+  branch?: { id: string; name: string; address: string; phone: string; lat: number | null; lng: number | null } | null;
 }
 
 // ── Payout account (vendors and riders) ─────────────────────────────────────
@@ -803,14 +881,63 @@ export const riderApi = {
     return res.orders;
   },
 
-  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED'): Promise<void> {
+  /** DELIVERED needs the 4-digit PIN the customer gives the rider. */
+  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED', pin?: string): Promise<void> {
     await request(`/api/rider/orders/${id}`, {
       method: 'PATCH',
       auth: true,
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, pin }),
     });
   },
+
+  /** Online riders see the job pool and get job alerts. */
+  async setOnline(online: boolean, coords?: { lat: number; lng: number }): Promise<{ isOnline: boolean }> {
+    return request('/api/rider/online', { method: 'PATCH', auth: true, body: JSON.stringify({ online, ...coords }) });
+  },
+
+  async updateLocation(coords: { lat: number; lng: number }): Promise<void> {
+    await request('/api/rider/location', { method: 'PATCH', auth: true, body: JSON.stringify(coords) });
+  },
+
+  async getJobs(): Promise<RiderJobsResponse> {
+    return request<RiderJobsResponse>('/api/rider/jobs', { auth: true });
+  },
+
+  /** Take a job from the pool. 409 JOB_TAKEN if another rider got there first. */
+  async acceptJob(id: string): Promise<void> {
+    await request(`/api/rider/jobs/${id}/accept`, { method: 'POST', auth: true });
+  },
+
+  /** Give a job back before pickup. */
+  async releaseJob(id: string): Promise<void> {
+    await request(`/api/rider/jobs/${id}/release`, { method: 'POST', auth: true });
+  },
 };
+
+/** One job in the pool. Customer details are only shown once the rider takes it. */
+export interface RiderJob {
+  id: string;
+  ref: string;
+  vendorName: string;
+  branchName: string | null;
+  pickupAddress: string;
+  pickupCity: string | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  deliveryAddress: string;
+  cylinderSize: string;
+  quantity: number;
+  riderPay: number;
+  distanceKm: number | null;
+  waitingSince: string;
+}
+
+export interface RiderJobsResponse {
+  online: boolean;
+  approved: boolean;
+  activeJob: { id: string; status: OrderStatus } | null;
+  jobs: RiderJob[];
+}
 
 // ── Orders API ────────────────────────────────────────────────────────────────
 
@@ -824,6 +951,12 @@ export interface ConsumerOrder {
   deliveryAddress: string;
   status: OrderStatus;
   paystackRef?: string | null;
+  /** The customer gives it to the rider at the door; the delivery can't be completed without it. */
+  deliveryPin?: string | null;
+  riderId?: string | null;
+  acceptedAt?: string | null;
+  pickedUpAt?: string | null;
+  deliveredAt?: string | null;
   createdAt: string;
   updatedAt: string;
   vendor?: { businessName: string; businessAddress: string } | null;
@@ -879,7 +1012,7 @@ export interface AppNotification {
   title: string;
   body: string;
   /** Where tapping it leads: REFILL or MONITOR (the device id is in `refId`). Null for plain messages. */
-  kind?: 'REFILL' | 'MONITOR' | null;
+  kind?: 'REFILL' | 'MONITOR' | 'ORDER' | null;
   refId?: string | null;
   readAt: string | null;
   createdAt: string;
@@ -1073,7 +1206,7 @@ export const ordersApi = {
     });
   },
 
-  async verify(reference: string): Promise<{ success: boolean; orderId: string; status: string }> {
+  async verify(reference: string): Promise<{ success: boolean; orderId: string; status: string; deliveryPin?: string | null }> {
     return request('/api/orders/verify', {
       method: 'POST',
       auth: true,
@@ -1391,19 +1524,12 @@ export const staffApi = {
     return res.orders;
   },
 
-  async updateOrderStatus(id: string, status: 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED'): Promise<void> {
-    await request(`/api/staff/orders/${id}`, { method: 'PATCH', auth: true, body: JSON.stringify({ status }) });
+  async acceptOrder(id: string): Promise<void> {
+    await request(`/api/staff/orders/${id}/accept`, { method: 'POST', auth: true });
   },
 
-  async getRiders(): Promise<AssignableRider[]> {
-    const res = await request<{ riders: AssignableRider[] }>('/api/staff/riders', { auth: true });
-    return res.riders;
-  },
-
-  async assignRider(orderId: string, riderId: string | null): Promise<void> {
-    await request(`/api/staff/orders/${orderId}/rider`, {
-      method: 'PATCH', auth: true, body: JSON.stringify({ riderId }),
-    });
+  async rejectOrder(id: string, reason?: string): Promise<void> {
+    await request(`/api/staff/orders/${id}/reject`, { method: 'POST', auth: true, body: JSON.stringify({ reason }) });
   },
 
   async getListings(branchId?: string): Promise<GasListing[]> {

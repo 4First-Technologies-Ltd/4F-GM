@@ -52,10 +52,10 @@ export default function PaymentScreen() {
     setPhase('verifying');
 
     try {
-      await ordersApi.verify(reference);
+      const verified = await ordersApi.verify(reference);
       router.replace({
         pathname: '/order/payment-success',
-        params: { orderId, reference, amount, supplierName },
+        params: { orderId, reference, amount, supplierName, pin: verified.deliveryPin ?? '' },
       });
     } catch (err: any) {
       setErrorMsg(err?.message ?? 'Payment could not be verified. Please contact support.');

@@ -10,7 +10,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { vendorApi, VendorOrder, OrderStatus, Branch } from '@/lib/api';
 import { ApprovalBanner } from '@/components/approval-banner';
 import { NotificationBell } from '@/components/notification-bell';
-import { AssignRiderSheet } from '@/components/assign-rider-sheet';
+import { AcceptRejectActions } from '@/components/accept-reject-actions';
 import { useDrawer } from './_layout';
 
 const C = {
@@ -33,16 +33,18 @@ const cardShadow = Platform.select({
 
 const FILTERS: { id: OrderStatus | 'ALL'; label: string }[] = [
   { id: 'ALL', label: 'All' },
-  { id: 'PENDING', label: 'Pending' },
-  { id: 'CONFIRMED', label: 'Confirmed' },
+  { id: 'CONFIRMED', label: 'To accept' },
+  { id: 'ACCEPTED', label: 'Ready for pickup' },
   { id: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
   { id: 'DELIVERED', label: 'Delivered' },
   { id: 'CANCELLED', label: 'Cancelled' },
+  { id: 'PENDING', label: 'Unpaid' },
 ];
 
 const STATUS_META: Record<OrderStatus, { color: string; bg: string; label: string }> = {
-  PENDING:   { color: '#B45309', bg: '#FFFBEB', label: 'Pending'   },
-  CONFIRMED: { color: '#2D7450', bg: '#EDF7ED', label: 'Confirmed' },
+  PENDING:   { color: '#B45309', bg: '#FFFBEB', label: 'Unpaid'   },
+  CONFIRMED: { color: '#B45309', bg: '#FFFBEB', label: 'Needs accepting' },
+  ACCEPTED:  { color: '#2D7450', bg: '#EDF7ED', label: 'Ready for pickup' },
   OUT_FOR_DELIVERY: { color: '#E65100', bg: '#FFF3E0', label: 'Out for delivery' },
   DELIVERED: { color: '#1565C0', bg: '#E3F2FD', label: 'Delivered' },
   CANCELLED: { color: '#D32F2F', bg: '#FFF5F5', label: 'Cancelled' },
@@ -60,11 +62,6 @@ function fmtPrice(n: number) {
   return '₦' + n.toLocaleString();
 }
 
-/** A rider only makes sense while the order is paid and not yet finished. */
-function canAssignRider(order: VendorOrder) {
-  return order.status === 'CONFIRMED' || order.status === 'OUT_FOR_DELIVERY';
-}
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -73,19 +70,13 @@ function fmtDate(iso: string) {
 
 function OrderCard({
   order,
-  onConfirm,
-  onDeliver,
-  onCancel,
-  onAssignRider,
+  onChanged,
   branchName,
 }: {
   order: VendorOrder;
   /** Shown only when the vendor has more than one branch. */
   branchName?: string;
-  onConfirm: () => void;
-  onDeliver: () => void;
-  onCancel: () => void;
-  onAssignRider: () => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const meta = STATUS_META[order.status];
   const gasLabel = order.listing.customName ?? GAS_LABELS[order.listing.gasType] ?? order.listing.gasType;
@@ -142,18 +133,13 @@ function OrderCard({
           >
             <IconSymbol name="phone.fill" size={16} color={C.accent} />
           </TouchableOpacity>
-          {canAssignRider(order) && (
-            <TouchableOpacity onPress={onAssignRider} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={oc.riderChange}>Change</Text>
-            </TouchableOpacity>
-          )}
         </View>
       ) : (
-        canAssignRider(order) && (
-          <TouchableOpacity style={oc.assignBtn} onPress={onAssignRider} activeOpacity={0.8}>
-            <IconSymbol name="bicycle" size={16} color={C.accent} />
-            <Text style={oc.assignBtnText}>Assign rider</Text>
-          </TouchableOpacity>
+        order.status === 'ACCEPTED' && (
+          <View style={oc.assignBtn}>
+            <IconSymbol name="clock" size={16} color="#B45309" />
+            <Text style={[oc.assignBtnText, { color: '#B45309' }]}>Waiting for a rider to take it</Text>
+          </View>
         )
       )}
 
@@ -164,22 +150,10 @@ function OrderCard({
       </View>
 
       {/* Actions */}
-      {order.status === 'PENDING' && (
-        <View style={oc.actions}>
-          <TouchableOpacity style={oc.actionBtnPrimary} onPress={onConfirm} activeOpacity={0.8}>
-            <Text style={oc.actionBtnPrimaryText}>Confirm Order</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={oc.actionBtnDanger} onPress={onCancel} activeOpacity={0.8}>
-            <Text style={oc.actionBtnDangerText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {order.status === 'CONFIRMED' && (
-        <View style={oc.actions}>
-          <TouchableOpacity style={oc.actionBtnPrimary} onPress={onDeliver} activeOpacity={0.8}>
-            <Text style={oc.actionBtnPrimaryText}>Mark as Delivered</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Accept puts a paid order in the rider job pool; riders choose their own jobs. */}
+      {order.status === 'CONFIRMED' && <AcceptRejectActions orderId={order.id} api={vendorApi} onDone={onChanged} />}
+      {order.status === 'ACCEPTED' && !order.rider && (
+        <AcceptRejectActions orderId={order.id} api={vendorApi} onDone={onChanged} canAccept={false} />
       )}
     </View>
   );
@@ -192,7 +166,6 @@ export default function VendorOrdersScreen() {
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
-  const [assigning, setAssigning] = useState<VendorOrder | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState('all');
 
@@ -214,20 +187,12 @@ export default function VendorOrdersScreen() {
     setRefreshing(false);
   }
 
-  async function updateStatus(id: string, status: 'CONFIRMED' | 'DELIVERED' | 'CANCELLED') {
-    try {
-      const updated = await vendorApi.updateOrderStatus(id, status);
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updated } : o)));
-    } catch {
-      // no-op
-    }
-  }
-
   const filtered = orders.filter(
     (o) => (filter === 'ALL' || o.status === filter) && (branchFilter === 'all' || o.branchId === branchFilter),
   );
-  const pendingCount = orders.filter((o) => o.status === 'PENDING').length;
-  const needsRiderCount = orders.filter((o) => canAssignRider(o) && !o.rider).length;
+  // Paid orders waiting for the vendor to accept them.
+  const pendingCount = orders.filter((o) => o.status === 'CONFIRMED').length;
+  const needsRiderCount = orders.filter((o) => o.status === 'ACCEPTED' && !o.rider).length;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
@@ -242,9 +207,9 @@ export default function VendorOrdersScreen() {
           <Text style={s.headerTitle}>Incoming Orders</Text>
           <Text style={s.headerSub}>
             {pendingCount > 0
-              ? `${pendingCount} awaiting action`
+              ? `${pendingCount} to accept`
               : needsRiderCount > 0
-                ? `${needsRiderCount} need${needsRiderCount === 1 ? 's' : ''} a rider`
+                ? `${needsRiderCount} waiting for a rider`
                 : 'All caught up'}
           </Text>
         </View>
@@ -323,22 +288,13 @@ export default function VendorOrdersScreen() {
             <OrderCard
               key={order.id}
               order={order}
-              onConfirm={() => updateStatus(order.id, 'CONFIRMED')}
-              onDeliver={() => updateStatus(order.id, 'DELIVERED')}
-              onCancel={() => updateStatus(order.id, 'CANCELLED')}
-              onAssignRider={() => setAssigning(order)}
+              onChanged={loadOrders}
               branchName={branches.length > 1 ? branches.find((b) => b.id === order.branchId)?.name : undefined}
             />
           ))
         )}
         <View style={{ height: 32 }} />
       </ScrollView>
-
-      <AssignRiderSheet
-        order={assigning}
-        onClose={() => setAssigning(null)}
-        onAssigned={loadOrders}
-      />
     </SafeAreaView>
   );
 }

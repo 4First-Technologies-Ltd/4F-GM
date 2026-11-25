@@ -62,6 +62,8 @@ export const ROLE_GRANTS: Record<AdminRole, string[]> = {
     'riders.approve',
     'companies.approve',
     'orders.assignRider',
+    // Applying or dismissing a dispatch watcher suggestion (assign, cancel with refund, follow-up).
+    'dispatch.manage',
     'listings.update',
     'users.create',
     'users.update',

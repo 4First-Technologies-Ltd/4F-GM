@@ -1,10 +1,19 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { MapPin, Navigation, Phone, Store, User } from 'lucide-react';
-import type { RiderOrder } from '@/lib/api';
+import { riderApi, type RiderOrder } from '@/lib/api';
 import { formatNaira } from '@/lib/format';
-import { RIDER_STATUS_BADGE, RIDER_STATUS_LABEL, mapsUrl, nextRiderAction, orderRef, supplierLabel } from '@/lib/rider';
+import {
+  RIDER_STATUS_BADGE,
+  RIDER_STATUS_LABEL,
+  mapsUrl,
+  nextRiderAction,
+  orderRef,
+  pickupAddress,
+  supplierLabel
+} from '@/lib/rider';
 import { AdvanceOrderButton } from './AdvanceOrderButton';
 
 export function RiderOrderCard({
@@ -19,6 +28,27 @@ export function RiderOrderCard({
 }) {
   const hasAction = showActions && nextRiderAction(order.status) !== null;
   const date = new Date(order.updatedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+  const pickup = pickupAddress(order);
+  const goingToPickup = order.status === 'ACCEPTED';
+  // Before pickup, navigation leads to the vendor; after, to the customer.
+  const navTo = goingToPickup && pickup ? pickup : order.deliveryAddress;
+  const pickupPhone = order.branch?.phone ?? order.vendor?.phone;
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+
+  async function release() {
+    if (!window.confirm('Give this job back? It goes back to other riders.')) return;
+    setReleasing(true);
+    setReleaseError(null);
+    try {
+      await riderApi.releaseJob(order.id);
+      await onChanged?.();
+    } catch (err) {
+      setReleaseError(err instanceof Error ? err.message : 'Could not give the job back.');
+    } finally {
+      setReleasing(false);
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
@@ -42,6 +72,8 @@ export function RiderOrderCard({
           <dd className="text-foreground">
             <span className="text-muted-foreground">Pick up from </span>
             <span className="font-medium">{supplierLabel(order)}</span>
+            {order.branch?.name && <span className="text-muted-foreground"> · {order.branch.name}</span>}
+            {pickup && <span className="block text-xs text-muted-foreground">{pickup}</span>}
           </dd>
         </div>
         <div className="flex items-start gap-2.5">
@@ -67,24 +99,48 @@ export function RiderOrderCard({
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <AdvanceOrderButton order={order} onDone={onChanged ?? (() => {})} className="flex-1 min-w-[10rem]" />
           <a
-            href={mapsUrl(order.deliveryAddress)}
+            href={mapsUrl(navTo)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex h-10 items-center gap-2 rounded-lg bg-muted px-3 text-sm font-medium text-foreground hover:bg-muted/70 transition-colors"
           >
             <Navigation className="h-4 w-4" aria-hidden="true" />
-            Navigate
+            {goingToPickup ? 'To pickup' : 'To customer'}
           </a>
+          {goingToPickup && pickupPhone && (
+            <a
+              href={`tel:${pickupPhone}`}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-muted px-3 text-sm font-medium text-foreground hover:bg-muted/70 transition-colors"
+            >
+              <Phone className="h-4 w-4" aria-hidden="true" />
+              Call vendor
+            </a>
+          )}
           {order.consumer.phone && (
             <a
               href={`tel:${order.consumer.phone}`}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-muted px-3 text-sm font-medium text-foreground hover:bg-muted/70 transition-colors"
             >
               <Phone className="h-4 w-4" aria-hidden="true" />
-              Call
+              Call customer
             </a>
           )}
+          {goingToPickup && (
+            <button
+              type="button"
+              onClick={release}
+              disabled={releasing}
+              className="text-sm font-medium text-muted-foreground underline underline-offset-2 hover:text-destructive"
+            >
+              {releasing ? 'Giving back…' : 'Give job back'}
+            </button>
+          )}
         </div>
+      )}
+      {releaseError && (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {releaseError}
+        </p>
       )}
     </div>
   );

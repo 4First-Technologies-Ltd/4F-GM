@@ -5,9 +5,9 @@ import { prisma } from './prisma';
 import { deleteDocument, deleteImage } from './storage';
 
 /** Orders a paid customer is still waiting on. */
-const IN_FLIGHT = ['CONFIRMED', 'OUT_FOR_DELIVERY'] as const;
+const IN_FLIGHT = ['CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY'] as const;
 /** A consumer's own unpaid order counts too: the account is the only way back to it. */
-const CONSUMER_OPEN = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY'] as const;
+const CONSUMER_OPEN = ['PENDING', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY'] as const;
 
 export class DeletionBlocked extends Error {
   constructor(
@@ -107,6 +107,8 @@ async function anonymise(user: User): Promise<void> {
   // Object keys to remove from R2 once the database is done.
   const documentKeys: string[] = [];
   const imageKeys: string[] = [];
+  // The profile picture lives in the public bucket too.
+  if (user.avatarUrl) imageKeys.push(user.avatarUrl);
 
   const ops: Prisma.PrismaPromise<unknown>[] = [
     prisma.refreshToken.deleteMany({ where: { userId: user.id } }),

@@ -5,11 +5,21 @@ import type { Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { issueOtp, issueTokenPair, devOtp } from '../lib/auth';
 import { hashOtp, OTP_MAX_ATTEMPTS } from '../lib/otp';
-import { verifyRefreshToken } from '../lib/jwt';
+import { REFRESH_REUSE_GRACE_MS, verifyRefreshToken } from '../lib/jwt';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../lib/asyncHandler';
 import { LEGAL_VERSION } from '../lib/legal';
-import { loginLimiter, otpSendLimiter, otpVerifyLimiter, registerLimiter, sha256 } from '../lib/security';
+import { documentUploadLimiter, loginLimiter, otpSendLimiter, otpVerifyLimiter, registerLimiter, sha256 } from '../lib/security';
+import {
+  ALLOWED_IMAGE_TYPES,
+  deleteImage,
+  MAX_IMAGE_BYTES,
+  newImageKey,
+  presignImageUpload,
+  publicImageUrl,
+  publicStorageConfigured
+} from '../lib/storage';
+import { checkOwnImageKey } from '../lib/images';
 import { validatePassword } from '../lib/password';
 import { DeletionBlocked, eraseAccount } from '../lib/accountDeletion';
 import { claimFleetInvite, effectiveRiderStatus, RIDER_STATUS_SELECT } from '../lib/fleet';
@@ -196,9 +206,17 @@ router.post(
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Rotate: delete old token, issue new pair
-    await prisma.refreshToken.delete({ where: { token: sha256(refreshToken) } });
+    // Rotate: issue a new pair and retire the old token. It keeps working for a
+    // short grace period instead of dying at once, so two requests refreshing at
+    // the same moment (or an app killed before it saved the new pair) don't sign
+    // the user out. Sign-out, password change and suspension still delete it outright.
+    const graceEnd = new Date(Date.now() + REFRESH_REUSE_GRACE_MS);
+    if (stored.expiresAt > graceEnd) {
+      await prisma.refreshToken.updateMany({ where: { id: stored.id, expiresAt: { gt: graceEnd } }, data: { expiresAt: graceEnd } });
+    }
     const tokens = await issueTokenPair(user.id, user.email);
+    // Retired tokens are kept for the grace period only; clear this user's expired ones.
+    await prisma.refreshToken.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } }).catch(() => {});
 
     return res.json(tokens);
   })
@@ -390,8 +408,11 @@ async function serialize<
   }
 >(user: T) {
   const { vendorProfile, riderProfile, logisticsCompany, lastActiveRole: _last, ...userData } = user;
+  const stored = (userData as { avatarUrl?: string | null }).avatarUrl;
   return {
     ...userData,
+    // The database holds the image key; clients get a URL they can load.
+    ...(stored !== undefined ? { avatarUrl: publicImageUrl(stored) } : {}),
     ...(await roleFields(user)),
     vendorStatus: vendorProfile?.status ?? undefined,
     vendorRcNumberMissing: vendorProfile ? !vendorProfile.rcNumber : undefined,
@@ -466,7 +487,10 @@ router.post(
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().min(1).nullable().optional(),
-  avatarUrl: z.string().url().nullable().optional(),
+  // Profile picture: a key issued by POST /me/avatar/upload-url, or null to remove it.
+  avatarKey: z.string().min(1).nullable().optional(),
+  // Older clients could send any URL here; only removal (null) is still accepted.
+  avatarUrl: z.null().optional(),
   pushEnabled: z.boolean().optional(),
   emailNotifEnabled: z.boolean().optional(),
   smsAlertsEnabled: z.boolean().optional(),
@@ -482,13 +506,57 @@ router.patch(
       return res.status(400).json({ error: result.error.issues[0].message });
     }
 
+    const id = req.user!.sub;
+    const { avatarKey, avatarUrl: _legacy, ...fields } = result.data;
+    const avatarChange = avatarKey !== undefined ? avatarKey : _legacy === null ? null : undefined;
+    if (avatarChange) {
+      // Only a key issued to this user, under their own prefix, that was actually uploaded.
+      const problem = await checkOwnImageKey('avatar', id, avatarChange);
+      if (problem) return res.status(400).json({ error: problem });
+    }
+
+    const before = avatarChange !== undefined
+      ? await prisma.user.findUnique({ where: { id }, select: { avatarUrl: true } })
+      : null;
     const user = await prisma.user.update({
-      where: { id: req.user!.sub },
-      data: result.data,
+      where: { id },
+      data: { ...fields, ...(avatarChange !== undefined ? { avatarUrl: avatarChange } : {}) },
       select: SELECT
     });
+    // Replacing or removing the picture deletes the old file (best effort).
+    if (before?.avatarUrl && before.avatarUrl !== avatarChange) await deleteImage(before.avatarUrl);
 
     return res.json({ user: await serialize(user) });
+  })
+);
+
+const avatarUploadSchema = z.object({ contentType: z.string(), size: z.number().int().positive() });
+
+/**
+ * Step 1 of changing the profile picture (any account type): a 5-minute
+ * presigned PUT to the public image bucket. The client uploads the bytes, then
+ * saves the returned key with PATCH /me { avatarKey }.
+ */
+router.post(
+  '/me/avatar/upload-url',
+  requireAuth,
+  documentUploadLimiter,
+  asyncHandler(async (req, res) => {
+    if (!publicStorageConfigured()) {
+      return res.status(503).json({ error: 'Photo upload is not available right now. Please try again later.' });
+    }
+    const result = avatarUploadSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: 'Invalid image details' });
+    const { contentType, size } = result.data;
+    if (!ALLOWED_IMAGE_TYPES[contentType]) {
+      return res.status(400).json({ error: 'Only JPG, PNG or WebP images are accepted.' });
+    }
+    if (size > MAX_IMAGE_BYTES) {
+      return res.status(400).json({ error: 'Image is too large. The limit is 5 MB.' });
+    }
+    const key = newImageKey('avatar', req.user!.sub, contentType);
+    const uploadUrl = await presignImageUpload(key, contentType, size);
+    return res.json({ key, uploadUrl, publicUrl: publicImageUrl(key), contentType, expiresInSeconds: 300 });
   })
 );
 

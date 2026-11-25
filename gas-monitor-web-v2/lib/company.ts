@@ -27,7 +27,8 @@ export function readPendingCompany(): PendingCompanyProfile | null {
 /** Fleet-facing wording for an order's status. */
 export const FLEET_STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING: 'Awaiting payment',
-  CONFIRMED: 'Assigned',
+  CONFIRMED: 'Waiting for vendor',
+  ACCEPTED: 'Going to pickup',
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled'
@@ -35,13 +36,14 @@ export const FLEET_STATUS_LABEL: Record<OrderStatus, string> = {
 
 export const FLEET_STATUS_BADGE: Record<OrderStatus, string> = {
   PENDING: 'bg-amber-100/50 text-amber-700',
-  CONFIRMED: 'bg-blue-100/50 text-blue-700',
+  CONFIRMED: 'bg-amber-100/50 text-amber-700',
+  ACCEPTED: 'bg-blue-100/50 text-blue-700',
   OUT_FOR_DELIVERY: 'bg-orange-100/50 text-orange-700',
   DELIVERED: 'bg-green-100/50 text-green-700',
   CANCELLED: 'bg-red-100/50 text-red-700'
 };
 
-export const isActiveDelivery = (d: FleetDelivery) => d.status === 'CONFIRMED' || d.status === 'OUT_FOR_DELIVERY';
+export const isActiveDelivery = (d: FleetDelivery) => d.status === 'ACCEPTED' || d.status === 'OUT_FOR_DELIVERY';
 export const isFinishedDelivery = (d: FleetDelivery) => d.status === 'DELIVERED' || d.status === 'CANCELLED';
 
 export const deliveryRef = (d: FleetDelivery) => '#' + d.id.slice(0, 8).toUpperCase();

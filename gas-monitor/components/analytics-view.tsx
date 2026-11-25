@@ -17,7 +17,8 @@ const C = {
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   PENDING: 'Pending',
-  CONFIRMED: 'Confirmed',
+  CONFIRMED: 'Paid',
+  ACCEPTED: 'Accepted',
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',

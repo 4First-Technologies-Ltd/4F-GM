@@ -18,6 +18,14 @@ export async function saveSession(
   ]);
 }
 
+/** Replaces the token pair after a refresh, keeping the saved user as it is. */
+export async function saveTokens(accessToken: string, refreshToken: string): Promise<void> {
+  await Promise.all([
+    SecureStore.setItemAsync(KEYS.accessToken, accessToken),
+    SecureStore.setItemAsync(KEYS.refreshToken, refreshToken),
+  ]);
+}
+
 export async function getAccessToken(): Promise<string | null> {
   return SecureStore.getItemAsync(KEYS.accessToken);
 }

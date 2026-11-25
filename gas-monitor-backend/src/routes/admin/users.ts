@@ -1,3 +1,4 @@
+import { PAID_STATUSES } from '../../lib/dispatch';
 import { Router } from 'express';
 import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
@@ -233,7 +234,7 @@ router.get(
 
     // Only money that actually landed counts as spend (matches /customers).
     const spend = await prisma.order.aggregate({
-      where: { consumerId: id, status: { in: ['CONFIRMED', 'DELIVERED'] } },
+      where: { consumerId: id, status: { in: PAID_STATUSES } },
       _sum: { totalAmount: true }
     });
 
@@ -241,7 +242,7 @@ router.get(
       ? { ...user.vendorProfile, logoUrl: publicImageUrl(user.vendorProfile.logoUrl), documents: await withViewUrls(user.vendorProfile.documents) }
       : user.vendorProfile;
 
-    return res.json({ user: { ...user, vendorProfile, totalSpend: spend._sum.totalAmount ?? 0 } });
+    return res.json({ user: { ...user, avatarUrl: publicImageUrl(user.avatarUrl), vendorProfile, totalSpend: spend._sum.totalAmount ?? 0 } });
   })
 );
 

@@ -8,7 +8,8 @@
 export type VendorStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type VendorPlan = 'BASIC' | 'GROWTH' | 'PRO';
 export type RiderStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+/** CONFIRMED = paid, waiting for the vendor; ACCEPTED = in the rider job pool (or claimed once riderId is set). */
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'ACCEPTED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 export type GasType = 'COOKING' | 'MEDICAL' | 'INDUSTRIAL' | 'BULK' | 'OTHER';
 export type UserRole = 'CONSUMER' | 'VENDOR' | 'RIDER';
 export type AdminRoleValue = 'SUPER_ADMIN' | 'OPERATIONS' | 'SUPPORT' | 'SOCIAL';
@@ -132,6 +133,8 @@ export interface OrderRow {
   supplierName: string | null;
   paystackRef: string | null;
   paystackStatus: string | null;
+  /** When the order last started waiting in the rider job pool. */
+  poolEnteredAt?: string | null;
   createdAt: string;
   consumer: { id: string; name: string; email: string };
   vendor: { id: string; businessName: string } | null;
@@ -373,6 +376,15 @@ export interface PlatformSettings {
   storeUrlIos: string;
   /** "What's new" for the app's update prompt; first line is the short summary. */
   updateNotes: string;
+  /** Where riders collect platform (4FG Monitor) orders. */
+  platformPickupAddress: string;
+  /** Dispatch watcher thresholds (minutes, and km for the radius). */
+  dispatchNotifyAfterMin: number;
+  dispatchAssignAfterMin: number;
+  dispatchCancelAfterMin: number;
+  dispatchRadiusKm: number;
+  dispatchVendorStallMin: number;
+  dispatchDeliveryStallMin: number;
   updatedAt: string;
 }
 

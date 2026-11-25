@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useSegments } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -11,6 +11,10 @@ import { Sentry } from '@/lib/sentry';
 import { track, trackScreen } from '@/lib/analytics';
 import { UpdateGate } from '@/components/update-gate';
 import { PushRegistrar } from '@/components/push-registrar';
+import { onSessionExpired } from '@/lib/api';
+
+/** Screens a signed-out user can be on: a session ending there needs no redirect. */
+const SIGNED_OUT_SCREENS = ['splash', 'onboarding', 'sign-in', 'sign-up', 'vendor-sign-up', 'rider-sign-up', 'company-sign-up', 'verify-email', 'forgot-password', 'legal'];
 
 SplashScreen.preventAutoHideAsync();
 
@@ -23,6 +27,17 @@ function RootLayout() {
   const [fontsLoaded] = useAppFonts();
   // Route PATTERN (e.g. "rider-order/[id]"), never the URL, so no ids are recorded.
   const segments = useSegments().join('/');
+
+  // The server ended the session (signed out elsewhere, password changed, suspended, or 90
+  // days unused): go to sign-in instead of leaving screens failing without a session.
+  const firstSegment = useSegments()[0] ?? '';
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        if (!SIGNED_OUT_SCREENS.includes(firstSegment)) router.replace('/sign-in');
+      }),
+    [firstSegment],
+  );
 
   useEffect(() => {
     track('app_opened');
@@ -51,6 +66,7 @@ function RootLayout() {
         <Stack.Screen name="legal/[doc]" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
         <Stack.Screen name="notifications" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="monitors" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="profile" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="analytics"options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="verify-email" options={{ headerShown: false, animation: 'slide_from_right' }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />

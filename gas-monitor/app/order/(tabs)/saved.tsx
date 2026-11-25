@@ -66,7 +66,7 @@ export default function SavedItemsScreen() {
   const order = (id: string) => router.navigate({ pathname: '/order', params: { listingId: id } });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
       <StatusBar style="dark" />
 
       <View style={s.header}>

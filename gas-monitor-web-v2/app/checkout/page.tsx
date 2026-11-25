@@ -105,6 +105,7 @@ function CheckoutContent() {
   const [verifying, setVerifying] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [deliveryPin, setDeliveryPin] = useState<string | null>(null);
 
   // Payment gateways the backend has enabled. The picker only shows when there is a choice;
   // if the list cannot be loaded the server default is used.
@@ -331,9 +332,11 @@ function CheckoutContent() {
     setVerifyMessage(null);
     try {
       if (wasGuestPayment) {
-        await ordersApi.guestVerify(pendingPayment.reference);
+        const r = await ordersApi.guestVerify(pendingPayment.reference);
+        setDeliveryPin(r.deliveryPin ?? null);
       } else {
-        await ordersApi.verify(pendingPayment.reference);
+        const r = await ordersApi.verify(pendingPayment.reference);
+        setDeliveryPin(r.deliveryPin ?? null);
       }
       setCompleted(true);
       setPendingPayment(null);
@@ -358,6 +361,16 @@ function CheckoutContent() {
               ? ' Track its status from your dashboard.'
               : ` A receipt has been sent to ${guestEmail}. Create an account with that email to track your delivery.`}
           </p>
+          {deliveryPin && (
+            <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your delivery PIN</p>
+              <p className="mt-1 font-mono text-3xl font-bold tracking-[0.4em] text-primary">{deliveryPin}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Give it to the rider once you have your gas: they can&apos;t complete the delivery without it. We&apos;ve
+                also emailed it to you.
+              </p>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             {user ? (
               <Link

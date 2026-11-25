@@ -185,7 +185,8 @@ function Pill({ label, color, bg, onPress }: { label: string; color: string; bg:
 }
 
 const ORDER_STEPS: { status: ConsumerOrder['status']; label: string }[] = [
-  { status: 'CONFIRMED', label: 'Confirmed' },
+  { status: 'CONFIRMED', label: 'Paid' },
+  { status: 'ACCEPTED', label: 'Accepted' },
   { status: 'OUT_FOR_DELIVERY', label: 'On the way' },
   { status: 'DELIVERED', label: 'Delivered' },
 ];
@@ -364,7 +365,7 @@ export default function HomeScreen() {
   const supplierCount = useMemo(() => new Set(inStock.map((l) => l.vendor.id)).size, [inStock]);
 
   const activeOrder = useMemo(() => {
-    const open = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY');
+    const open = orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'ACCEPTED' || o.status === 'OUT_FOR_DELIVERY');
     return open.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
   }, [orders]);
 
@@ -493,7 +494,13 @@ export default function HomeScreen() {
               <View style={s.between}>
                 <Text style={s.k}>Order in progress</Text>
                 <Pill
-                  label={activeOrder.status === 'OUT_FOR_DELIVERY' ? 'On the way' : 'Confirmed'}
+                  label={
+                    activeOrder.status === 'OUT_FOR_DELIVERY'
+                      ? 'On the way'
+                      : activeOrder.status === 'ACCEPTED'
+                        ? 'Finding a rider'
+                        : 'Waiting for vendor'
+                  }
                   color={C.accent}
                   bg={C.accentLight}
                 />

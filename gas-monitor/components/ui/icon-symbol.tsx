@@ -19,6 +19,7 @@ const MAPPING = {
   'gearshape.fill': 'settings',
   'wifi': 'wifi',
   'arrow.clockwise': 'refresh',
+  'arrow.triangle.2.circlepath': 'swap-horiz',
   'arrow.right': 'arrow-forward',
   'arrow.left': 'arrow-back',
   'checkmark.circle.fill': 'check-circle',
@@ -56,6 +57,7 @@ const MAPPING = {
   'bicycle': 'two-wheeler',
   'star.fill': 'star',
   'bookmark.fill': 'bookmark',
+  'camera.fill': 'photo-camera',
   'bookmark': 'bookmark-border',
 } as const satisfies Record<string, ComponentProps<typeof MaterialIcons>['name']>;
 

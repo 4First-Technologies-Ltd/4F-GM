@@ -2,13 +2,13 @@ import { NotificationBell } from '@/components/notification-bell';
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
-  ActivityIndicator, Alert, Platform, Linking,
+  ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
 import { staffApi, ManagerOrder, StaffBranch } from '@/lib/api';
-import { AssignRiderSheet } from '@/components/assign-rider-sheet';
+import { AcceptRejectActions } from '@/components/accept-reject-actions';
 
 const C = {
   bg: '#EDF7ED', card: '#FFFFFF', surface: '#F5FBF5', border: '#E0EEE0', text: '#1A2E1A',
@@ -23,14 +23,17 @@ const cardShadow = Platform.select({
 });
 
 const STATUS_LABEL: Record<string, string> = {
-  CONFIRMED: 'Ready to dispatch',
+  CONFIRMED: 'Needs accepting',
+  ACCEPTED: 'Ready for pickup',
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',
 };
 
-type Next = 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
-
+/**
+ * A branch manager's orders. They accept or reject paid orders; riders then
+ * choose their own jobs from the pool, so there is no rider assignment here.
+ */
 export default function ManagerOrdersScreen() {
   const [branches, setBranches] = useState<StaffBranch[]>([]);
   const [filter, setFilter] = useState<string>('all');
@@ -38,8 +41,6 @@ export default function ManagerOrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState<ManagerOrder | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -57,37 +58,17 @@ export default function ManagerOrdersScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  function advance(order: ManagerOrder, status: Next, label: string) {
-    Alert.alert(label, `Order #${order.id.slice(0, 8).toUpperCase()} for ${order.consumer.name}.`, [
-      { text: 'Back', style: 'cancel' },
-      {
-        text: label,
-        style: status === 'CANCELLED' ? 'destructive' : 'default',
-        onPress: async () => {
-          setBusyId(order.id);
-          try {
-            await staffApi.updateOrderStatus(order.id, status);
-            await load();
-          } catch (err) {
-            Alert.alert('Could not update order', err instanceof Error ? err.message : 'Please try again.');
-            await load();
-          } finally {
-            setBusyId(null);
-          }
-        },
-      },
-    ]);
-  }
-
   // PENDING orders are unpaid; payment confirms them, so they never show here.
   const visible = orders.filter(
     (o) => o.status !== 'PENDING' && (filter === 'all' || o.branch?.id === filter),
   );
-  const active = visible.filter((o) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY');
+  // Orders waiting to be accepted come first.
+  const active = visible
+    .filter((o) => o.status === 'CONFIRMED' || o.status === 'ACCEPTED' || o.status === 'OUT_FOR_DELIVERY')
+    .sort((a, b) => Number(b.status === 'CONFIRMED') - Number(a.status === 'CONFIRMED'));
   const done = visible.filter((o) => o.status === 'DELIVERED' || o.status === 'CANCELLED').slice(0, 20);
 
   function card(o: ManagerOrder, isActive: boolean) {
-    const busy = busyId === o.id;
     return (
       <View key={o.id} style={[s.card, cardShadow]}>
         <View style={s.rowBetween}>
@@ -107,32 +88,18 @@ export default function ManagerOrdersScreen() {
         <Text style={s.muted}>{o.deliveryAddress}</Text>
         {o.rider ? (
           <Text style={s.muted}>Rider: {o.rider.user.name} · {o.rider.phone}</Text>
-        ) : isActive ? (
-          <Text style={[s.muted, { color: C.amber }]}>No rider assigned</Text>
+        ) : isActive && o.status === 'ACCEPTED' ? (
+          <Text style={[s.muted, { color: C.amber }]}>Waiting for a rider to take it</Text>
         ) : null}
 
-        {isActive && (
-          <View style={s.actions}>
-            {busy ? (
-              <ActivityIndicator color={C.accent} />
-            ) : (
-              <>
-                <TouchableOpacity onPress={() => setAssigning(o)}>
-                  <Text style={s.link}>{o.rider ? 'Change rider' : 'Assign rider'}</Text>
-                </TouchableOpacity>
-                {o.status === 'CONFIRMED' && (
-                  <TouchableOpacity onPress={() => advance(o, 'OUT_FOR_DELIVERY', 'Start delivery')}>
-                    <Text style={s.link}>Start delivery</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => advance(o, 'DELIVERED', 'Mark delivered')}>
-                  <Text style={s.link}>Mark delivered</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => advance(o, 'CANCELLED', 'Cancel order')}>
-                  <Text style={[s.link, { color: C.red }]}>Cancel</Text>
-                </TouchableOpacity>
-              </>
-            )}
+        {isActive && o.status === 'CONFIRMED' && (
+          <View style={{ marginTop: 6 }}>
+            <AcceptRejectActions orderId={o.id} api={staffApi} onDone={load} />
+          </View>
+        )}
+        {isActive && o.status === 'ACCEPTED' && !o.rider && (
+          <View style={{ marginTop: 6 }}>
+            <AcceptRejectActions orderId={o.id} api={staffApi} onDone={load} canAccept={false} />
           </View>
         )}
       </View>
@@ -197,13 +164,6 @@ export default function ManagerOrdersScreen() {
           <View style={{ height: 24 }} />
         </ScrollView>
       )}
-
-      <AssignRiderSheet
-        order={assigning}
-        api={staffApi}
-        onClose={() => setAssigning(null)}
-        onAssigned={async () => { setAssigning(null); await load(); }}
-      />
     </SafeAreaView>
   );
 }

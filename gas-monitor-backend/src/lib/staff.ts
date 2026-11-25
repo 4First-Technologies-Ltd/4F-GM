@@ -1,4 +1,3 @@
-import type { OrderStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { prisma } from './prisma';
 import { sha256 } from './security';
@@ -54,16 +53,3 @@ export async function managedBranchIds(userId: string): Promise<string[]> {
   return rows.map((r) => r.branchId);
 }
 
-/**
- * What a manager may move an order to. Deliberately tighter than the vendor
- * route: PENDING (unpaid) orders are untouchable — payment confirms them — and
- * a delivered or cancelled order is final.
- */
-export const MANAGER_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  CONFIRMED: ['OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
-  OUT_FOR_DELIVERY: ['DELIVERED', 'CANCELLED']
-};
-
-export function canManagerMove(from: OrderStatus, to: OrderStatus): boolean {
-  return (MANAGER_TRANSITIONS[from] ?? []).includes(to);
-}

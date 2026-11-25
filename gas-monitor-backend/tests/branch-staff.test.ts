@@ -18,7 +18,10 @@ const db = vi.hoisted(() => ({
   },
   order: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   gasListing: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
-  riderProfile: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() }
+  riderProfile: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
+  notification: { createMany: vi.fn() },
+  pushToken: { findMany: vi.fn().mockResolvedValue([]) },
+  ticket: { create: vi.fn() }
 }));
 const earning = vi.hoisted(() => vi.fn());
 let authedUser = { sub: 'm1', email: 'mgr@example.com' };
@@ -141,68 +144,72 @@ describe('branch scoping', () => {
   });
 });
 
-describe('order status', () => {
-  const order = (status: string) => ({ id: 'o1', branchId: 'b1', status });
-
-  it("404s on another branch's order (lookup is scoped)", async () => {
-    db.order.findFirst.mockResolvedValue(null);
-    expect((await call('/staff/orders/o1', 'PATCH', { status: 'DELIVERED' })).status).toBe(404);
-    expect(db.order.findFirst.mock.calls[0][0].where).toEqual({ id: 'o1', branchId: { in: ['b1'] } });
-  });
-
-  it('cannot touch an unpaid (PENDING) order', async () => {
-    db.order.findFirst.mockResolvedValue(order('PENDING'));
-    const res = await call('/staff/orders/o1', 'PATCH', { status: 'DELIVERED' });
-    expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe('INVALID_STATUS_TRANSITION');
-    expect(db.order.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('cannot reopen a delivered or cancelled order', async () => {
-    for (const s of ['DELIVERED', 'CANCELLED']) {
-      db.order.findFirst.mockResolvedValue(order(s));
-      expect((await call('/staff/orders/o1', 'PATCH', { status: 'OUT_FOR_DELIVERY' })).status).toBe(409);
-    }
-  });
-
-  it('cannot set CONFIRMED (payment does that) or an unknown status', async () => {
-    expect((await call('/staff/orders/o1', 'PATCH', { status: 'CONFIRMED' })).status).toBe(400);
-    expect((await call('/staff/orders/o1', 'PATCH', { status: 'PENDING' })).status).toBe(400);
-  });
-
-  it('delivers a confirmed order with compare-and-set and records the earning', async () => {
-    db.order.findFirst.mockResolvedValue(order('CONFIRMED'));
+describe('accept and reject (the rider job pool)', () => {
+  it('accepts a paid order in their branch with a scoped compare-and-set', async () => {
     db.order.updateMany.mockResolvedValue({ count: 1 });
-    db.order.findUnique.mockResolvedValue({ id: 'o1', status: 'DELIVERED' });
-    const res = await call('/staff/orders/o1', 'PATCH', { status: 'DELIVERED' });
+    db.order.findUnique.mockResolvedValue({ id: 'o1', consumerId: 'c1', status: 'ACCEPTED', deliveryPin: '1234' });
+    const res = await call('/staff/orders/o1/accept', 'POST');
     expect(res.status).toBe(200);
-    expect(db.order.updateMany).toHaveBeenCalledWith({
-      where: { id: 'o1', status: 'CONFIRMED' },
-      data: { status: 'DELIVERED' }
-    });
-    expect(earning).toHaveBeenCalledWith('o1');
+    const arg = db.order.updateMany.mock.calls[0][0];
+    expect(arg.where).toEqual({ id: 'o1', branchId: { in: ['b1'] }, status: 'CONFIRMED' });
+    expect(arg.data.status).toBe('ACCEPTED');
+    expect(arg.data.poolEnteredAt).toBeInstanceOf(Date);
+    // The manager never sees the customer's PIN.
+    expect((await res.json()).order.deliveryPin).toBeUndefined();
   });
 
-  it('409s when the order changed under them, without recording an earning', async () => {
-    db.order.findFirst.mockResolvedValue(order('CONFIRMED'));
+  it("404s on another branch's order and 409s on an unpaid one", async () => {
     db.order.updateMany.mockResolvedValue({ count: 0 });
-    const res = await call('/staff/orders/o1', 'PATCH', { status: 'DELIVERED' });
+    db.order.findFirst.mockResolvedValue(null);
+    expect((await call('/staff/orders/o1/accept', 'POST')).status).toBe(404);
+
+    db.order.findFirst.mockResolvedValue({ status: 'PENDING' });
+    const res = await call('/staff/orders/o1/accept', 'POST');
     expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe('STALE');
+    expect((await res.json()).code).toBe('NOT_PAID');
+  });
+
+  it('reject cancels before pickup and opens a refund ticket', async () => {
+    db.order.updateMany.mockResolvedValue({ count: 1 });
+    db.order.findUnique.mockResolvedValue({
+      id: 'o1',
+      consumerId: 'c1',
+      totalAmount: 5000,
+      paymentProvider: 'PAYSTACK',
+      paystackRef: '4FG-o1',
+      vendorSettledByGateway: false,
+      supplierName: 'Gasco',
+      consumer: { name: 'Ada', email: 'ada@example.com' },
+      rider: null
+    });
+    db.ticket.create.mockResolvedValue({ id: 't1' });
+    const res = await call('/staff/orders/o1/reject', 'POST', { reason: 'Out of 12.5kg' });
+    expect(res.status).toBe(200);
+    expect(db.order.updateMany.mock.calls[0][0]).toEqual({
+      where: { id: 'o1', branchId: { in: ['b1'] }, status: { in: ['CONFIRMED', 'ACCEPTED'] } },
+      data: { status: 'CANCELLED' }
+    });
+    const ticket = db.ticket.create.mock.calls[0][0].data;
+    expect(ticket).toMatchObject({ orderId: 'o1', category: 'PAYMENT', priority: 'HIGH', requesterEmail: 'ada@example.com' });
+    expect(ticket.messages.create.author).toBe('SYSTEM');
+  });
+
+  it('old builds can no longer move delivery statuses', async () => {
+    for (const status of ['OUT_FOR_DELIVERY', 'DELIVERED', 'CONFIRMED']) {
+      const res = await call('/staff/orders/o1', 'PATCH', { status });
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('RIDERS_CHOOSE_JOBS');
+    }
+    expect(db.order.updateMany).not.toHaveBeenCalled();
     expect(earning).not.toHaveBeenCalled();
   });
 });
 
 describe('rider assignment and stock', () => {
-  it('only assigns approved riders on in-scope orders', async () => {
-    db.order.findFirst.mockResolvedValue({ id: 'o1', branchId: 'b1' });
-    db.riderProfile.findFirst.mockResolvedValue(null); // not in the assignable set
-    expect((await call('/staff/orders/o1/rider', 'PATCH', { riderId: 'r1' })).status).toBe(400);
+  it('managers can no longer assign riders', async () => {
+    expect((await call('/staff/orders/o1/rider', 'PATCH', { riderId: 'r1' })).status).toBe(410);
+    expect((await call('/staff/riders')).status).toBe(410);
     expect(db.order.update).not.toHaveBeenCalled();
-    // The lookup goes through the shared filter (approved, and company approved if in a fleet).
-    const where = db.riderProfile.findFirst.mock.calls[0][0].where;
-    expect(where).toMatchObject({ id: 'r1', status: 'APPROVED' });
-    expect(where.OR).toHaveLength(2);
   });
 
   it('stock toggle writes inStock only, ignoring price and branch', async () => {

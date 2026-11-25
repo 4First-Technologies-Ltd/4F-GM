@@ -4,17 +4,18 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order } from '@/lib/api';
-import { STATUS_LABEL, formatNaira } from '@/lib/format';
+import { STATUS_LABEL, customerStatusLabel, formatNaira, isOpenOrder } from '@/lib/format';
 import { AlertCircle } from 'lucide-react';
 import { VendorOrders } from '@/components/vendor/VendorOrders';
 
 type StatusFilter = 'ALL' | Order['status'];
 
-const FILTERS: StatusFilter[] = ['ALL', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const FILTERS: StatusFilter[] = ['ALL', 'PENDING', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 const STATUS_BADGE_COLORS: Record<Order['status'], string> = {
   PENDING: 'bg-amber-100/50 text-amber-700',
   CONFIRMED: 'bg-blue-100/50 text-blue-700',
+  ACCEPTED: 'bg-sky-100/50 text-sky-700',
   OUT_FOR_DELIVERY: 'bg-orange-100/50 text-orange-700',
   DELIVERED: 'bg-green-100/50 text-green-700',
   CANCELLED: 'bg-red-100/50 text-red-700'
@@ -66,6 +67,32 @@ function OrdersPageContent() {
           Order a refill
         </Link>
       </div>
+
+      {/* Delivery PINs for orders on their way: the rider can only complete the delivery with it. */}
+      {orders.filter((o) => isOpenOrder(o) && o.deliveryPin).length > 0 && (
+        <div className="mb-6 space-y-2">
+          {orders
+            .filter((o) => isOpenOrder(o) && o.deliveryPin)
+            .map((o) => (
+              <div
+                key={o.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3"
+              >
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">
+                    {o.supplierName ?? 'Your order'} · {o.cylinderSize} × {o.quantity}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {customerStatusLabel(o)}. Give the rider this PIN only once you have your gas.
+                  </p>
+                </div>
+                <p className="font-mono text-2xl font-bold tracking-[0.3em] text-primary" aria-label={`Delivery PIN ${o.deliveryPin}`}>
+                  {o.deliveryPin}
+                </p>
+              </div>
+            ))}
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 -mx-2 px-2" role="tablist" aria-label="Filter orders by status">
@@ -145,7 +172,7 @@ function OrdersPageContent() {
                   </td>
                   <td className="px-6 py-4 text-sm">
                     <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_BADGE_COLORS[order.status]}`}>
-                      {STATUS_LABEL[order.status]}
+                      {customerStatusLabel(order)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">

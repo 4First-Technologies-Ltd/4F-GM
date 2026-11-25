@@ -1,32 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bike, UserPlus } from 'lucide-react';
+import { AlertCircle, Bike, Clock } from 'lucide-react';
 import { staffApi, type ManagerOrder, type StaffBranch } from '@/lib/api';
 import { formatNaira } from '@/lib/format';
 import { RIDER_STATUS_BADGE, RIDER_STATUS_LABEL, orderRef } from '@/lib/rider';
-import { Button } from '@/components/motion/button/base';
-import { AssignRiderModal } from '@/components/vendor/AssignRiderModal';
-
-type Next = 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+import { AcceptRejectActions } from '@/components/orders/AcceptRejectActions';
 
 /** Unpaid (PENDING) orders never appear: payment confirms them, not a manager. */
-const isActive = (o: ManagerOrder) => o.status === 'CONFIRMED' || o.status === 'OUT_FOR_DELIVERY';
+const isActive = (o: ManagerOrder) => o.status === 'CONFIRMED' || o.status === 'ACCEPTED' || o.status === 'OUT_FOR_DELIVERY';
 const isFinished = (o: ManagerOrder) => o.status === 'DELIVERED' || o.status === 'CANCELLED';
 
 /**
  * A branch manager's orders: the branches they were invited to, nothing else.
- * Moves are forward-only and the server enforces them.
+ * They accept or reject paid orders; riders choose their own jobs from there.
  */
 export function ManagerOrders() {
   const [branches, setBranches] = useState<StaffBranch[] | null>(null);
   const [orders, setOrders] = useState<ManagerOrder[]>([]);
   const [filter, setFilter] = useState('all');
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState<ManagerOrder | null>(null);
-  // Armed action: the first click selects it, the second confirms.
-  const [pending, setPending] = useState<{ id: string; to: Next } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -46,57 +39,14 @@ export function ManagerOrders() {
     return () => window.clearInterval(t);
   }, [load]);
 
-  async function advance(order: ManagerOrder, to: Next) {
-    setBusyId(order.id);
-    setError(null);
-    try {
-      await staffApi.updateOrderStatus(order.id, to);
-      setPending(null);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update the order.');
-      setPending(null);
-      await load();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   const visible = useMemo(
     () => orders.filter((o) => o.status !== 'PENDING' && (filter === 'all' || o.branch?.id === filter)),
     [orders, filter]
   );
-  const active = visible.filter(isActive);
+  // Orders waiting to be accepted first.
+  const active = visible.filter(isActive).sort((a, b) => Number(b.status === 'CONFIRMED') - Number(a.status === 'CONFIRMED'));
   const finished = visible.filter(isFinished).slice(0, 20);
   const multi = (branches?.length ?? 0) > 1;
-
-  const actionButton = (o: ManagerOrder, to: Next, label: string, danger = false) => {
-    const armed = pending?.id === o.id && pending.to === to;
-    return armed ? (
-      <span key={to} className="flex items-center gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={busyId === o.id} onClick={() => advance(o, to)}>
-          Confirm: {label.toLowerCase()}
-        </Button>
-        <button
-          type="button"
-          className="text-xs text-muted-foreground underline underline-offset-2"
-          onClick={() => setPending(null)}
-        >
-          Cancel
-        </button>
-      </span>
-    ) : (
-      <button
-        key={to}
-        type="button"
-        disabled={busyId === o.id}
-        onClick={() => setPending({ id: o.id, to })}
-        className={`text-sm font-medium ${danger ? 'text-destructive hover:text-destructive/80' : 'text-primary hover:text-primary/80'}`}
-      >
-        {label}
-      </button>
-    );
-  };
 
   const card = (o: ManagerOrder, withActions: boolean) => (
     <div key={o.id} className="rounded-xl bg-card border border-border p-4">
@@ -123,22 +73,23 @@ export function ManagerOrders() {
           {o.rider.user.name} · {o.rider.phone}
         </p>
       ) : (
-        withActions && <p className="mt-1 text-xs text-amber-700">No rider assigned</p>
+        withActions &&
+        o.status === 'ACCEPTED' && (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-700">
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            Waiting for a rider to take it
+          </p>
+        )
       )}
 
-      {withActions && (
-        <div className="mt-3 flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80"
-            onClick={() => setAssigning(o)}
-          >
-            <UserPlus className="h-4 w-4" aria-hidden="true" />
-            {o.rider ? 'Change rider' : 'Assign rider'}
-          </button>
-          {o.status === 'CONFIRMED' && actionButton(o, 'OUT_FOR_DELIVERY', 'Start delivery')}
-          {actionButton(o, 'DELIVERED', 'Mark delivered')}
-          {actionButton(o, 'CANCELLED', 'Cancel order', true)}
+      {withActions && o.status === 'CONFIRMED' && (
+        <div className="mt-3">
+          <AcceptRejectActions orderId={o.id} api={staffApi} onDone={load} />
+        </div>
+      )}
+      {withActions && o.status === 'ACCEPTED' && !o.rider && (
+        <div className="mt-3">
+          <AcceptRejectActions orderId={o.id} api={staffApi} onDone={load} canAccept={false} />
         </div>
       )}
     </div>
@@ -205,12 +156,6 @@ export function ManagerOrders() {
         </section>
       )}
 
-      <AssignRiderModal
-        order={assigning}
-        api={staffApi}
-        onClose={() => setAssigning(null)}
-        onAssigned={load}
-      />
     </div>
   );
 }

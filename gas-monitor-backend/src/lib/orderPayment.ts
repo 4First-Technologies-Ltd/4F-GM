@@ -1,17 +1,20 @@
 import { prisma } from './prisma';
 import { GatewayError, getGateway } from './gateways';
+import { afterOrderPaid } from './dispatch';
 
 /**
  * Moves a paid order PENDING → CONFIRMED. Only a PENDING order moves (a later
  * verify call can no longer drag a delivered or cancelled order backwards), so
  * it is safe to call from the client verify route, a webhook and the reconcile
- * job at the same time.
+ * job at the same time. Only the call that wins runs the after-payment step
+ * (PIN email, vendor alert, platform orders into the job pool).
  */
-export async function confirmOrder(orderId: string) {
-  await prisma.order.updateMany({
+export async function confirmOrder(orderId: string, paystackStatus = 'success') {
+  const { count } = await prisma.order.updateMany({
     where: { id: orderId, status: 'PENDING' },
-    data: { status: 'CONFIRMED', paystackStatus: 'success' }
+    data: { status: 'CONFIRMED', paystackStatus, confirmedAt: new Date() }
   });
+  if (count > 0) await afterOrderPaid(orderId);
   return prisma.order.findUnique({ where: { id: orderId } });
 }
 

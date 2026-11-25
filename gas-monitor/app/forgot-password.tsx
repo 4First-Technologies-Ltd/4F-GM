@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, ScrollView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi } from '@/lib/api';
@@ -70,7 +70,9 @@ function Field({
 
 export default function ForgotPasswordScreen() {
   const [step, setStep] = useState<Step>('email');
-  const [email, setEmail] = useState('');
+  // Prefilled when opened from Profile → Change password.
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(typeof params.email === 'string' ? params.email : '');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

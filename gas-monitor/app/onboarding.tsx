@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Dimensions, ScrollView, Platform, ImageBackground, useWindowDimensions,
+  ScrollView, Platform, ImageBackground, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -10,7 +10,6 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const heroBg = require('@/assets/images/onboarding-hero.jpg');
 
-const { width: W, height: H } = Dimensions.get('window');
 
 const C = {
   green: '#2D7450',
@@ -157,7 +156,13 @@ export default function OnboardingScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   // Live window size. The module-level value is read once at bundle load, which can be stale on a first launch.
-  const { width: W, height: H } = useWindowDimensions();
+  const win = useWindowDimensions();
+  // Slides must be exactly as big as the scroll view they sit in. The window size can disagree with it on
+  // a first launch (before safe-area/layout settle), and a slide taller than its container pushes the
+  // bottom buttons out of reach, so measure the container and fall back to the window until it reports.
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const W = box?.w ?? win.width;
+  const H = box?.h ?? win.height;
   const isHero = current === SLIDES.length - 1;
 
   function goNext() {
@@ -181,6 +186,12 @@ export default function OnboardingScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          if (width > 0 && height > 0) {
+            setBox((prev) => (prev && prev.w === width && prev.h === height ? prev : { w: width, h: height }));
+          }
+        }}
         onMomentumScrollEnd={(e) => {
           setCurrent(Math.round(e.nativeEvent.contentOffset.x / W));
         }}
@@ -189,7 +200,8 @@ export default function OnboardingScreen() {
         {SLIDES.map((slide, idx) => {
           const dark = slide.hero;
           const pt = insets.top + (dark ? 0 : 8);
-          const pb = insets.bottom + 8;
+          // Keep the buttons clear of the home-indicator zone, where iOS holds back taps for its own swipe gesture.
+          const pb = Math.max(insets.bottom, 10) + 8;
 
           const slideInner = (
             <View
@@ -246,7 +258,7 @@ export default function OnboardingScreen() {
 
               {/* ── Illustration (slides 1 & 2 only) ── */}
               {!dark && (
-                <View style={s.illustrationWrap}>
+                <View style={[s.illustrationWrap, { maxHeight: H * 0.38 }]}>
                   {idx === 0 && <IllustrationMonitor />}
                   {idx === 1 && <IllustrationAlerts />}
                 </View>
@@ -297,7 +309,7 @@ export default function OnboardingScreen() {
                       >
                         <IconSymbol name="storefront.fill" size={26} color={C.greenBright} />
                         <Text style={s.roleCardTitle}>Vendor</Text>
-                        <Text style={s.roleCardSub}>Sell gas cylinders</Text>
+                        <Text style={s.roleCardSub}>Sell gas, cylinders, offer services</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={s.roleCard}
@@ -481,7 +493,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    maxHeight: H * 0.38,
   },
 
   textBlock: {

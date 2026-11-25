@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import React from 'react';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +40,20 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="marketplace"
+        options={{
+          title: 'Marketplace',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="storefront.fill" color={color} />,
+        }}
+        listeners={{
+          // The marketplace lives in its own stack (`/order`), so open it instead of switching tabs.
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/order');
+          },
         }}
       />
       <Tabs.Screen

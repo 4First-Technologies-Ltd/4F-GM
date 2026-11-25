@@ -1,12 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ApprovalBanner } from '@/components/approval-banner';
 import { NotificationBell } from '@/components/notification-bell';
 import { RiderOrderCard } from '@/components/rider-order-card';
+import { RiderJobPool } from '@/components/rider-job-pool';
+import { DeliveryPinModal } from '@/components/delivery-pin-modal';
 import { advanceOrder, useRiderOrders } from '@/hooks/use-rider-orders';
 import { getSavedUser } from '@/lib/storage';
 import { isActiveOrder } from '@/lib/riderOrders';
@@ -21,10 +22,12 @@ const C = {
   red: '#D32F2F',
 };
 
+/** Rider home: the job they are doing now, the online switch and the job pool. */
 export default function RiderDeliveriesScreen() {
   const { orders, loading, refreshing, error, refresh, reload } = useRiderOrders({ poll: true });
   const [firstName, setFirstName] = useState('');
   const [advancingId, setAdvancingId] = useState<string | null>(null);
+  const [pinOrder, setPinOrder] = useState<RiderOrder | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,7 +35,7 @@ export default function RiderDeliveriesScreen() {
     }, []),
   );
 
-  // Out-for-delivery first (already in progress), then oldest assignment first.
+  // Out-for-delivery first (already in progress), then oldest first.
   const active = orders
     .filter(isActiveOrder)
     .sort((a, b) => {
@@ -41,6 +44,11 @@ export default function RiderDeliveriesScreen() {
     });
 
   async function handleAdvance(order: RiderOrder) {
+    // Delivering needs the customer's PIN.
+    if (order.status === 'OUT_FOR_DELIVERY') {
+      setPinOrder(order);
+      return;
+    }
     setAdvancingId(order.id);
     const changed = await advanceOrder(order);
     if (changed) await reload();
@@ -54,14 +62,9 @@ export default function RiderDeliveriesScreen() {
       <View style={s.header}>
         <View>
           <Text style={s.hello}>{firstName ? `Hi, ${firstName}` : 'Hi there'}</Text>
-          <Text style={s.title}>Active deliveries</Text>
+          <Text style={s.title}>{active.length > 0 ? 'Current job' : 'Jobs'}</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <NotificationBell />
-          <View style={s.countBadge}>
-            <Text style={s.countText}>{active.length}</Text>
-          </View>
-        </View>
+        <NotificationBell />
       </View>
 
       <ApprovalBanner kind="rider" />
@@ -71,44 +74,30 @@ export default function RiderDeliveriesScreen() {
           <ActivityIndicator color={C.accent} />
         </View>
       ) : (
-        <FlatList
-          data={active}
-          keyExtractor={(o) => o.id}
+        <ScrollView
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} colors={[C.accent]} />}
-          ListHeaderComponent={
-            error ? (
-              <View style={s.errBox}>
-                <Text style={s.errText}>{error}</Text>
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={
-            <View style={s.empty}>
-              <View style={s.emptyIcon}>
-                <IconSymbol name="shippingbox.fill" size={32} color={C.accent} />
-              </View>
-              <Text style={s.emptyTitle}>No active deliveries</Text>
-              <Text style={s.emptyBody}>
-                New assignments from vendors will show up here. Pull down to refresh.
-              </Text>
-              <TouchableOpacity style={s.refreshBtn} onPress={refresh} activeOpacity={0.8}>
-                <Text style={s.refreshText}>Refresh</Text>
-              </TouchableOpacity>
+        >
+          {!!error && (
+            <View style={s.errBox}>
+              <Text style={s.errText}>{error}</Text>
             </View>
-          }
-          ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
-          renderItem={({ item }) => (
+          )}
+          {active.map((item) => (
             <RiderOrderCard
+              key={item.id}
               order={item}
               onPress={() => router.push({ pathname: '/rider-order/[id]', params: { id: item.id } })}
               onAdvance={() => handleAdvance(item)}
               advancing={advancingId === item.id}
             />
-          )}
-        />
+          ))}
+          <RiderJobPool hasActiveJob={active.length > 0} onTaken={reload} />
+        </ScrollView>
       )}
+
+      <DeliveryPinModal order={pinOrder} onClose={() => setPinOrder(null)} onDelivered={reload} />
     </SafeAreaView>
   );
 }
@@ -136,7 +125,7 @@ const s = StyleSheet.create({
   countText: { color: '#fff', fontSize: 18, fontWeight: '800' },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { paddingHorizontal: 20, paddingBottom: 24, flexGrow: 1 },
+  list: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
 
   errBox: {
     backgroundColor: '#FFF0F0',

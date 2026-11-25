@@ -9,6 +9,7 @@ import { createApp } from './app';
 import { resumeCampaigns } from './lib/marketing';
 import { startOpsBriefingScheduler } from './lib/opsBriefing';
 import { startOrderReconciler } from './lib/orderPayment';
+import { startDispatchWatcher } from './lib/dispatchWatcher';
 
 process.on('uncaughtException', (err) => {
   console.error('uncaught exception', err);
@@ -32,5 +33,6 @@ app.listen(PORT, () => {
   setInterval(prune, 6 * 60 * 60 * 1000).unref();
   startOpsBriefingScheduler();
   startOrderReconciler();
+  startDispatchWatcher();
   resumeCampaigns().catch((err) => console.error('[marketing] resume failed', err));
 });

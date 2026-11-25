@@ -118,6 +118,7 @@ export const NAVIGATION: NavSection[] = [
         permission: 'orders.read',
         badge: { key: 'pendingOrders', tone: 'warning' }
       },
+      { label: 'Dispatch', route: '/dashboard/dispatch', icon: IconBike, permission: 'dispatch.read' },
       { label: 'Listings', route: '/dashboard/listings', icon: IconTag, permission: 'listings.read' },
       {
         label: 'Support inbox',

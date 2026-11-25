@@ -15,7 +15,8 @@ const STATUS_MAP: Record<string, { tone: StatusTone; label: string }> = {
   REJECTED: { tone: 'error', label: 'Rejected' },
 
   // OrderStatus
-  CONFIRMED: { tone: 'info', label: 'Confirmed' },
+  CONFIRMED: { tone: 'warning', label: 'Paid, awaiting vendor' },
+  // ACCEPTED (vendor accepted, in the rider job pool) shares the SMOIS entry below.
   OUT_FOR_DELIVERY: { tone: 'warning', label: 'Out for delivery' },
   DELIVERED: { tone: 'success', label: 'Delivered' },
   CANCELLED: { tone: 'error', label: 'Cancelled' },

@@ -48,7 +48,7 @@ export default function OrderHistoryScreen() {
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
       <StatusBar style="dark" />
 
       <View style={s.header}>

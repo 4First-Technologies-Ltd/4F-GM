@@ -5,16 +5,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { ordersApi, Order } from '@/lib/api';
-import { formatNaira, STATUS_LABEL } from '@/lib/format';
+import { formatNaira, isPaidOrder, STATUS_LABEL } from '@/lib/format';
 import { TiltCard } from '@/components/motion/tilt-card';
 import { HomeBento } from '@/components/dashboard/home/HomeBento';
 import { Package, Bell, Wallet, AlertCircle, ArrowRight } from 'lucide-react';
 
-const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const STATUS_ORDER: Order['status'][] = ['PENDING', 'CONFIRMED', 'ACCEPTED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 const STATUS_COLORS: Record<Order['status'], string> = {
   PENDING: 'bg-amber-100/50 h-1',
   CONFIRMED: 'bg-blue-100/50 h-1',
+  ACCEPTED: 'bg-sky-100/50 h-1',
   OUT_FOR_DELIVERY: 'bg-orange-100/50 h-1',
   DELIVERED: 'bg-green-100/50 h-1',
   CANCELLED: 'bg-red-100/50 h-1'
@@ -59,7 +60,7 @@ function ConsumerOverview() {
 
   const stats = useMemo(() => {
     const totalSpend = orders
-      .filter((o) => o.status === 'CONFIRMED' || o.status === 'DELIVERED')
+      .filter(isPaidOrder)
       .reduce((sum, o) => sum + o.totalAmount, 0);
     const pending = orders.filter((o) => o.status === 'PENDING').length;
     const byStatus = STATUS_ORDER.map((status) => ({
@@ -237,7 +238,7 @@ function ConsumerOverview() {
                       className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${
                         order.status === 'PENDING'
                           ? 'bg-amber-100/50 text-amber-700'
-                          : order.status === 'CONFIRMED'
+                          : order.status === 'CONFIRMED' || order.status === 'ACCEPTED' || order.status === 'OUT_FOR_DELIVERY'
                           ? 'bg-blue-100/50 text-blue-700'
                           : order.status === 'DELIVERED'
                           ? 'bg-green-100/50 text-green-700'

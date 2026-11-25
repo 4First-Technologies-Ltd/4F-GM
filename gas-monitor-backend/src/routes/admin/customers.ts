@@ -1,3 +1,4 @@
+import { PAID_STATUSES } from '../../lib/dispatch';
 import { Router } from 'express';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { requireAdmin } from '../../middleware/requireAdmin';
@@ -8,7 +9,8 @@ import { orderBy, paginated, parseListQuery } from '../../lib/listQuery';
 const router = Router();
 
 /** Only money that actually landed counts towards spend. */
-const REVENUE_STATUSES: OrderStatus[] = ['CONFIRMED', 'DELIVERED'];
+// Every paid order (it used to miss orders out for delivery).
+const REVENUE_STATUSES: OrderStatus[] = PAID_STATUSES;
 
 const SORTABLE = ['createdAt', 'name', 'email'] as const;
 

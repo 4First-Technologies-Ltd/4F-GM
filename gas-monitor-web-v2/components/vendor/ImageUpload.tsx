@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState, type ChangeEvent } from 'react';
-import { vendorApi } from '@/lib/api';
+import { authApi, vendorApi } from '@/lib/api';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -19,7 +19,8 @@ export function ImageUpload({
   onUploaded,
   onError
 }: {
-  kind: 'logo' | 'listing';
+  /** `avatar` is the signed-in user's own profile picture (any account type). */
+  kind: 'logo' | 'listing' | 'avatar';
   label: string;
   disabled?: boolean;
   onUploaded: (result: { key: string; previewUrl: string }) => void;
@@ -42,7 +43,7 @@ export function ImageUpload({
     }
     setUploading(true);
     try {
-      const { key, publicUrl } = await vendorApi.uploadImage(kind, file);
+      const { key, publicUrl } = kind === 'avatar' ? await authApi.uploadAvatar(file) : await vendorApi.uploadImage(kind, file);
       // Preview from the local file: it always renders, so the thumbnail confirms the pick
       // even when the public bucket URL isn't reachable from this page.
       void publicUrl;
